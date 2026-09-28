@@ -18,18 +18,34 @@ import {
   Flame,
   Sparkles,
   Bot,
+  Rocket,
+  TestTube,
 } from 'lucide-react';
 import { testCases } from '../shared/incentive.testcases';
 import { AppConfig, Cycle, RawMainRow, RawQualityRow, SyncLogRecord } from '../shared/types';
 import { formatCurrencyINR, formatNumberINR, normalizeEmail } from '../shared/incentive';
 import { generateDummyData } from '../shared/dummyData';
+import { reloadPage } from '../utils/reload';
 
 interface TestCenterProps {
   userEmail: string;
   getIdToken: () => Promise<string>;
+  /** config/app.testMode. In live mode the demo tools are hidden; the rest of the console stays. */
+  testMode: boolean;
 }
 
-export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken }) => {
+interface ReadinessCheck {
+  id: string;
+  label: string;
+  status: 'ok' | 'warn' | 'fail';
+  detail: string;
+}
+
+/**
+ * The Super Admin console (the "Admin" tab): go-live readiness and the Live / Test switch, health check,
+ * calculation tests, Excel import, AI text, roles, sync logs, and (only in test mode) the demo tools.
+ */
+export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken, testMode }) => {
   // 1. Health check state
   const [healthStatus, setHealthStatus] = useState<{
     loading: boolean;
@@ -121,9 +137,57 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken })
   const [generateAllResult, setGenerateAllResult] = useState<{
     okCount?: number;
     failedCount?: number;
+    pendingCount?: number;
     total?: number;
     error?: string;
   } | null>(null);
+
+  // Go-live readiness and the Live / Test switch
+  const [readiness, setReadiness] = useState<{ checks: ReadinessCheck[] } | null>(null);
+  const [readinessLoading, setReadinessLoading] = useState(false);
+  const [readinessError, setReadinessError] = useState<string | null>(null);
+  const [modeSaving, setModeSaving] = useState(false);
+  const [modeMsg, setModeMsg] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
+
+  const loadReadiness = async () => {
+    setReadinessLoading(true);
+    setReadinessError(null);
+    try {
+      const token = await getIdToken();
+      const res = await fetch('/api/admin/readiness', { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      setReadiness(data);
+    } catch (e: any) {
+      setReadinessError(e?.message || 'Could not run the readiness check');
+    } finally {
+      setReadinessLoading(false);
+    }
+  };
+
+  const switchMode = async (nextTestMode: boolean) => {
+    const question = nextTestMode
+      ? 'Switch back to TEST mode?\n\nThe demo tools open again, and any demo users you create are visible to everyone until you switch to Live again. Real agent data is not changed.'
+      : 'Switch to LIVE mode?\n\nDemo users are hidden from everyone except you, the leaderboards are rebuilt without them, and the demo tools close. Real agent data is not changed.';
+    if (!confirm(question)) return;
+    setModeSaving(true);
+    setModeMsg(null);
+    try {
+      const token = await getIdToken();
+      const res = await fetch('/api/admin/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ testMode: nextTestMode }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      // The session (and every screen) reads the mode at sign-in, so reload to pick up the new mode
+      reloadPage();
+    } catch (e: any) {
+      setModeMsg({ type: 'error', text: e?.message || 'Could not change the mode' });
+      setModeSaving(false);
+    }
+  };
 
   const handleAddManager = async () => {
     if (!newManagerInput.trim() || !appConfig) return;
@@ -182,6 +246,9 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken })
       if (res.ok) {
         setAppConfig({ ...appConfig, managers: updated });
         setManagerSaveMsg({ type: 'ok', text: `Removed Manager access from ${emailToRemove}.` });
+      } else {
+        const d = await res.json().catch(() => ({}));
+        setManagerSaveMsg({ type: 'error', text: d.error || 'Failed to update managers' });
       }
     } catch (e: any) {
       setManagerSaveMsg({ type: 'error', text: e.message || 'Network error' });
@@ -301,6 +368,7 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken })
         setGenerateAllResult({
           okCount: data.okCount,
           failedCount: data.failedCount,
+          pendingCount: data.pendingCount,
           total: data.total,
         });
       } else {
@@ -317,6 +385,7 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken })
 
   useEffect(() => {
     loadConfigAndLogs();
+    loadReadiness();
   }, []);
 
   // 1. Run Health Check
@@ -326,7 +395,14 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken })
       const res = await fetch('/api/health');
       const data = await res.json();
       if (res.ok && data.status === 'ok') {
-        setHealthStatus({ loading: false, result: 'ok', message: 'Admin SDK write/read ping verified successfully.' });
+        setHealthStatus({
+          loading: false,
+          result: 'ok',
+          message:
+            data.storage === 'firestore'
+              ? 'The server wrote a timestamp to Firestore and read it back.'
+              : 'The server answered, but it is using a LOCAL store (DB_MODE=local), not Firestore.',
+        });
       } else {
         setHealthStatus({
           loading: false,
@@ -598,21 +674,35 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken })
         <div>
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-6 h-6 text-emerald-400" />
-            <h1 className="text-xl font-bold tracking-tight">Super Admin Test Center</h1>
+            <h1 className="text-xl font-bold tracking-tight">Admin tools</h1>
           </div>
           <p className="text-xs text-slate-400 mt-1">
-            Logged in as <span className="text-slate-200 font-mono">{userEmail}</span> | Active Cycle:{' '}
-            <span className="font-semibold text-emerald-300">{cycle?.name || 'Diwali 2026'}</span> (
-            {cycle?.startDate} to {cycle?.endDate})
+            Logged in as <span className="text-slate-200 font-mono">{userEmail}</span>
+            {cycle && (
+              <>
+                {' '}| Active Cycle: <span className="font-semibold text-emerald-300">{cycle.name}</span> (
+                {cycle.startDate} to {cycle.endDate})
+              </>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-950 text-emerald-300 border border-emerald-800">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            Test Mode: ACTIVE
-          </span>
+          {testMode ? (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-950 text-amber-300 border border-amber-800">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+              Test Mode: ON
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-950 text-emerald-300 border border-emerald-800">
+              <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+              LIVE
+            </span>
+          )}
           <button
-            onClick={loadConfigAndLogs}
+            onClick={() => {
+              loadConfigAndLogs();
+              loadReadiness();
+            }}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg transition"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${logsLoading ? 'animate-spin' : ''}`} />
@@ -621,16 +711,107 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken })
         </div>
       </div>
 
+      {/* Go-live readiness and the Live / Test switch */}
+      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <Rocket className="w-5 h-5 text-emerald-600" />
+            <h2 className="text-base font-bold text-slate-900">Go-live readiness</h2>
+          </div>
+          <button
+            onClick={loadReadiness}
+            disabled={readinessLoading}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${readinessLoading ? 'animate-spin' : ''}`} />
+            Re-check
+          </button>
+        </div>
+        <p className="text-xs text-slate-600 mb-4">
+          Everything the app can check about itself. Fix every <strong className="text-rose-700">red</strong> row
+          before real agents log in; <strong className="text-amber-700">yellow</strong> rows need a look. Secrets are
+          never shown here, only whether they are set.
+        </p>
+
+        {readinessError && (
+          <div className="p-3 rounded-lg bg-rose-50 text-rose-800 border border-rose-200 text-xs mb-3">{readinessError}</div>
+        )}
+        {!readiness && !readinessError && (
+          <div className="text-xs text-slate-500 py-4">{readinessLoading ? 'Checking...' : 'No result yet.'}</div>
+        )}
+        {readiness && (
+          <ul className="divide-y divide-slate-100 border border-slate-200 rounded-lg overflow-hidden">
+            {readiness.checks.map((c) => (
+              <li key={c.id} className="flex items-start gap-3 px-4 py-2.5 text-xs bg-white">
+                {c.status === 'ok' ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                ) : c.status === 'warn' ? (
+                  <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                ) : (
+                  <XCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                )}
+                <div>
+                  <div className="font-semibold text-slate-900">{c.label}</div>
+                  <div className={c.status === 'fail' ? 'text-rose-700' : 'text-slate-600'}>{c.detail}</div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div className="mt-5 pt-4 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="text-xs text-slate-600">
+            {testMode ? (
+              <>
+                <strong className="text-slate-900">Test mode is ON.</strong> Demo users are visible to everyone.
+                When the checks above are green and the real roster is loaded, switch to Live.
+              </>
+            ) : (
+              <>
+                <strong className="text-slate-900">The app is LIVE.</strong> Demo users are hidden from everyone
+                except you. Switch back to Test mode only if you need the demo tools again.
+              </>
+            )}
+          </div>
+          <button
+            onClick={() => switchMode(!testMode)}
+            disabled={modeSaving}
+            className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 text-white text-xs font-semibold rounded-lg shadow-sm transition disabled:opacity-50 shrink-0 ${
+              testMode ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-slate-700 hover:bg-slate-800'
+            }`}
+          >
+            {modeSaving ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" /> Saving...
+              </>
+            ) : testMode ? (
+              <>
+                <Rocket className="w-4 h-4" /> Go Live (switch test mode off)
+              </>
+            ) : (
+              <>
+                <TestTube className="w-4 h-4" /> Back to Test mode
+              </>
+            )}
+          </button>
+        </div>
+        {modeMsg && (
+          <div className={`mt-3 text-xs font-medium ${modeMsg.type === 'ok' ? 'text-emerald-600' : 'text-rose-600'}`}>
+            {modeMsg.text}
+          </div>
+        )}
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Section 1: Health Check */}
         <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm flex flex-col justify-between">
           <div>
             <div className="flex items-center gap-2 mb-2">
               <Activity className="w-5 h-5 text-indigo-600" />
-              <h2 className="text-base font-bold text-slate-900">1. System Health Check</h2>
+              <h2 className="text-base font-bold text-slate-900">System Health Check</h2>
             </div>
             <p className="text-xs text-slate-600 mb-4">
-              Executes <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-700">/api/health</code> using the Firebase Admin SDK to write a timestamp to <code className="bg-slate-100 px-1 py-0.5 rounded">health/ping</code> and read it back.
+              Runs <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-700">/api/health</code>: the server writes a timestamp to <code className="bg-slate-100 px-1 py-0.5 rounded">health/ping</code> in Firestore and reads it back. If it fails, the message says why.
             </p>
 
             {healthStatus.result && (
@@ -679,7 +860,7 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken })
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <Flame className="w-5 h-5 text-amber-500" />
-                <h2 className="text-base font-bold text-slate-900">2. Calculation Engine Tests</h2>
+                <h2 className="text-base font-bold text-slate-900">Calculation Engine Tests</h2>
               </div>
               {testsRan && (
                 <span
@@ -759,7 +940,7 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken })
       <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
         <div className="flex items-center gap-2 mb-2">
           <FileSpreadsheet className="w-5 h-5 text-teal-600" />
-          <h2 className="text-base font-bold text-slate-900">3. Import Spreadsheet File (.xlsx)</h2>
+          <h2 className="text-base font-bold text-slate-900">Import Spreadsheet File (.xlsx)</h2>
         </div>
         <p className="text-xs text-slate-600 mb-4">
           Upload an Excel workbook containing sheets <span className="font-semibold text-slate-800">MainSheet</span> and optionally <span className="font-semibold text-slate-800">D-1_QualityAudit_Summary</span>. Parsed with SheetJS and sent to <code className="bg-slate-100 px-1 py-0.5 rounded text-teal-700">/api/import</code> with your Firebase ID token.
@@ -847,11 +1028,12 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken })
         )}
       </div>
 
-      {/* Section 4: Demo users */}
+      {/* Section 4: Demo users (test mode only) */}
+      {testMode && (
       <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
         <div className="flex items-center gap-2 mb-2">
           <Database className="w-5 h-5 text-blue-600" />
-          <h2 className="text-base font-bold text-slate-900">4. Demo Users (3)</h2>
+          <h2 className="text-base font-bold text-slate-900">Demo Users (3)</h2>
         </div>
         <p className="text-xs text-slate-600 mb-4">
           Creates exactly <strong>3 demo users</strong>: 1 HO Caller (Dighe), 1 Store Caller (Andheri) and 1 Pre Sales agent (Dighe), with sample data from the cycle start up to the chosen date. All are marked <code className="bg-slate-100 px-1 py-0.5 rounded text-blue-700">isTest = true</code>: once test mode is off they stay out of leaderboards and team totals, and <strong>Clear All Test Data</strong> removes them. A blank login email gets a placeholder that nobody can sign in with; you can still open that demo user from the Team view.
@@ -1016,6 +1198,7 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken })
           </div>
         )}
       </div>
+      )}
 
       {/* Section 5: AI Coaching Suggestions (Gemini Flash) */}
       <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-6">
@@ -1024,7 +1207,7 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken })
             <div className="flex items-center gap-2 mb-1">
               <Sparkles className="w-5 h-5 text-indigo-600" />
               <h2 className="text-base font-bold text-slate-900">
-                5. AI Coaching Suggestions (Gemini Flash)
+                AI Coaching Suggestions (Gemini Flash)
               </h2>
             </div>
             <p className="text-xs text-slate-600">
@@ -1110,7 +1293,8 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken })
             ) : (
               <div className="font-semibold flex items-center gap-1.5">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                Generated AI suggestions: {generateAllResult.okCount} OK, {generateAllResult.failedCount} Failed out of {generateAllResult.total} agents in active cycle. Records saved to Firestore.
+                Generated AI suggestions: {generateAllResult.okCount} OK, {generateAllResult.failedCount} failed
+                {generateAllResult.pendingCount ? `, ${generateAllResult.pendingCount} not reached in time (run it again)` : ''} out of {generateAllResult.total} agents in the active cycle. Saved to Firestore.
               </div>
             )}
           </div>
@@ -1184,13 +1368,14 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken })
         )}
       </div>
 
-      {/* Section 6: Clear Test Data */}
+      {/* Section 6: Clear Test Data (test mode only) */}
+      {testMode && (
       <div className="bg-white border border-rose-200 rounded-xl p-6 shadow-sm">
         <div className="flex items-center justify-between">
           <div>
             <div className="flex items-center gap-2 mb-1">
               <Trash2 className="w-5 h-5 text-rose-600" />
-              <h2 className="text-base font-bold text-slate-900">6. Clear Test Data</h2>
+              <h2 className="text-base font-bold text-slate-900">Clear Test Data</h2>
             </div>
             <p className="text-xs text-slate-600">
               Deletes all agent records, access accounts, and leaderboards entries where <code className="bg-rose-50 text-rose-700 px-1 py-0.5 rounded font-mono">isTest == true</code> in the active cycle. Real imported agents remain untouched.
@@ -1219,13 +1404,14 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken })
           </div>
         )}
       </div>
+      )}
 
-      {/* Section 6: Role & Permissions Access Management */}
+      {/* Roles & access management */}
       <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
         <div className="flex items-center gap-2 mb-1">
           <ShieldAlert className="w-5 h-5 text-indigo-600" />
           <h2 className="text-base font-bold text-slate-900">
-            6. Role & Access Management (Super Admin & Manager Accounts)
+            Roles & Access (Super Admin & Manager accounts)
           </h2>
         </div>
         <p className="text-xs text-slate-600">
@@ -1317,7 +1503,7 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken })
           <div className="flex items-center gap-2">
             <Clock className="w-4 h-4 text-slate-600" />
             <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-              7. Sync Logs (Last 30 Records)
+              Sync Logs (Last 30 Records)
             </h3>
           </div>
           <span className="text-xs font-semibold text-slate-500">

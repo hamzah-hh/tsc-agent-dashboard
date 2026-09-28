@@ -2,16 +2,25 @@ import React from 'react';
 import { Trophy, Sparkles, ChevronRight, Award, Flame, Zap, Crown, CheckCircle2 } from 'lucide-react';
 import { Plan } from '../shared/types';
 import { formatCurrencyINR, formatNumberINR } from '../shared/incentive';
+import { classRank, classSteps } from '../shared/classes';
 import { fireGoldenCelebration } from '../utils/confetti';
 import { soundFx } from '../utils/audio';
 
 interface MilestoneLadderProps {
-  currentClass: 'NQ' | 'A' | 'B' | 'C' | 'D';
+  currentClass: string;
   achievementPct: number;
   sales: number;
   plan: Plan;
   onSimulateTarget?: (targetSales: number) => void;
 }
+
+const ICONS = [Award, Zap, Flame, Crown];
+const BADGE_COLORS = [
+  'from-blue-600 to-indigo-800',
+  'from-emerald-600 to-teal-800',
+  'from-amber-500 to-orange-600',
+  'from-amber-400 via-amber-500 to-yellow-600',
+];
 
 export const MilestoneLadder: React.FC<MilestoneLadderProps> = ({
   currentClass,
@@ -20,64 +29,36 @@ export const MilestoneLadder: React.FC<MilestoneLadderProps> = ({
   plan,
   onSimulateTarget,
 }) => {
-  const getRate = (clsName: string) => {
-    const c = plan.classes.find((item) => item.name === clsName);
-    return c ? Number((c.rate * 100).toFixed(2)) : 0;
-  };
+  // One step for each qualifying class of the plan (limits, rates and names all come from the cycle)
+  const tiers = classSteps(plan).map((s, i) => ({
+    name: `Class ${s.name}`,
+    code: s.name,
+    minPct: s.abovePct,
+    reward: Number(s.ratePct),
+    minSales: s.minSales, // more than the limit: the first rupee that reaches the class
+    desc: s.isFirst
+      ? 'Base Qualification Threshold'
+      : s.isTop
+      ? 'Elite Pinnacle Jackpot'
+      : s.abovePct === 100
+      ? '100% Target Met'
+      : 'High Performer Multiplier',
+    icon: ICONS[Math.min(i, ICONS.length - 1)],
+    badgeColor: BADGE_COLORS[Math.min(i, BADGE_COLORS.length - 1)],
+  }));
+  const topTier = tiers[tiers.length - 1];
 
-  // Official Plan Classes: A (90%), B (100%), C (120%), D (160%)
-  const tiers = [
-    {
-      name: 'Class A',
-      code: 'A' as const,
-      minPct: 90,
-      reward: getRate('A'),
-      minSales: plan.target * 0.9,
-      desc: 'Base Qualification Threshold',
-      icon: Award,
-      badgeColor: 'from-blue-600 to-indigo-800',
-    },
-    {
-      name: 'Class B',
-      code: 'B' as const,
-      minPct: 100,
-      reward: getRate('B'),
-      minSales: plan.target * 1.0,
-      desc: '100% Target Met',
-      icon: Zap,
-      badgeColor: 'from-emerald-600 to-teal-800',
-    },
-    {
-      name: 'Class C',
-      code: 'C' as const,
-      minPct: 120,
-      reward: getRate('C'),
-      minSales: plan.target * 1.2,
-      desc: 'High Performer Multiplier',
-      icon: Flame,
-      badgeColor: 'from-amber-500 to-orange-600',
-    },
-    {
-      name: 'Class D',
-      code: 'D' as const,
-      minPct: 160,
-      reward: getRate('D'),
-      minSales: plan.target * 1.6,
-      desc: 'Elite Pinnacle Jackpot',
-      icon: Crown,
-      badgeColor: 'from-amber-400 via-amber-500 to-yellow-600',
-    },
-  ];
-
-  const classOrder: Record<string, number> = { NQ: 0, A: 1, B: 2, C: 3, D: 4 };
-  const currentRankIndex = classOrder[currentClass] ?? 0;
+  const currentRankIndex = classRank(plan, currentClass);
 
   // Find next tier
-  const nextTier = tiers.find((t) => classOrder[t.code] > currentRankIndex);
+  const nextTier = tiers.find((t) => classRank(plan, t.code) > currentRankIndex);
   const remainingSalesToNext = nextTier ? Math.max(0, nextTier.minSales - sales) : 0;
 
-  // Overall journey progress (scale 0 to 160%)
-  const overallTrackPct = Math.min(100, Math.max(0, (achievementPct / 160) * 100));
+  // Overall journey progress (scale 0 to the top class limit)
+  const overallTrackPct = Math.min(
+    100,
+    Math.max(0, (achievementPct / (topTier?.minPct || 100)) * 100)
+  );
 
   return (
     <div className="relative overflow-hidden rounded-3xl p-6 sm:p-7 border border-amber-500/30 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white shadow-[0_20px_50px_rgba(0,0,0,0.6)]">
@@ -112,7 +93,7 @@ export const MilestoneLadder: React.FC<MilestoneLadderProps> = ({
             ) : (
               <span className="text-amber-300 flex items-center gap-1.5">
                 <Crown className="w-4 h-4 text-amber-400" />
-                Pinnacle Achieved! You have unlocked top-tier Class D commissions!
+                Pinnacle Achieved! You have unlocked top-tier {topTier?.name ?? 'class'} commissions!
               </span>
             )}
           </p>
@@ -142,17 +123,23 @@ export const MilestoneLadder: React.FC<MilestoneLadderProps> = ({
         </div>
         <div className="flex justify-between text-[11px] font-mono text-slate-400 mt-2 px-1">
           <span>0% Start</span>
-          <span className={achievementPct >= 90 ? 'text-amber-400 font-bold' : ''}>90% (Class A)</span>
-          <span className={achievementPct >= 100 ? 'text-amber-400 font-bold' : ''}>100% (Class B)</span>
-          <span className={achievementPct >= 120 ? 'text-amber-400 font-bold' : ''}>120% (Class C)</span>
-          <span className={achievementPct >= 160 ? 'text-amber-300 font-bold' : ''}>160%+ (Class D Pinnacle)</span>
+          {tiers.map((t, i) => (
+            <span
+              key={t.code}
+              className={achievementPct >= t.minPct ? 'text-amber-400 font-bold' : ''}
+            >
+              {i === tiers.length - 1
+                ? `${t.minPct}%+ (${t.name} Pinnacle)`
+                : `${t.minPct}% (${t.name})`}
+            </span>
+          ))}
         </div>
       </div>
 
       {/* Visual Progression Nodes */}
       <div className="relative z-10 grid grid-cols-1 sm:grid-cols-4 gap-3.5">
         {tiers.map((tier) => {
-          const tierIndex = classOrder[tier.code];
+          const tierIndex = classRank(plan, tier.code);
           const isUnlocked = currentRankIndex >= tierIndex;
           const isCurrent = currentClass === tier.code;
           const TierIcon = tier.icon;

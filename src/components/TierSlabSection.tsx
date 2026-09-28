@@ -39,6 +39,8 @@ export const TierSlabSection: React.FC<TierSlabSectionProps> = ({
 
   // Ordered list of classes for display
   const displayClasses = plan.classes || [];
+  // The first limit above 0 (90 in the standard plan), for the "not qualified" row
+  const firstQualifyingPct = displayClasses.find((c) => c.abovePct > 0)?.abovePct ?? 0;
 
   return (
     <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200/90 dark:border-slate-800 rounded-3xl p-6 sm:p-7 shadow-xs space-y-6 relative overflow-hidden transition-colors duration-200">
@@ -189,7 +191,9 @@ export const TierSlabSection: React.FC<TierSlabSectionProps> = ({
                       </td>
 
                       <td className="py-3.5 px-4 font-mono text-slate-600 dark:text-slate-300">
-                        {cls.abovePct === 0 ? 'Below 90% (Not Qualified)' : `>${cls.abovePct}% Target`}
+                        {cls.abovePct === 0
+                          ? `Up to ${firstQualifyingPct}% (Not Qualified)`
+                          : `>${cls.abovePct}% Target`}
                       </td>
 
                       <td className="py-3.5 px-4 text-right font-mono font-bold text-slate-900 dark:text-white tabular-nums">
@@ -301,7 +305,7 @@ export const TierSlabSection: React.FC<TierSlabSectionProps> = ({
                   <div className="flex justify-between items-center p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
                     <div>
                       <span className="font-bold text-amber-600 dark:text-amber-400">Mid Band</span>
-                      <span className="text-[10px] text-slate-400 dark:text-slate-500 block">{plan.bonuses.quality.mid}% to {plan.bonuses.quality.high - 0.1}%</span>
+                      <span className="text-[10px] text-slate-400 dark:text-slate-500 block">{plan.bonuses.quality.mid}% to {plan.bonuses.quality.high - 1}%</span>
                     </div>
                     <span className="font-bold text-slate-900 dark:text-white">
                       {formatCurrencyINR(plan.bonuses.quality.amounts[currentClass]?.[1] || 0)}

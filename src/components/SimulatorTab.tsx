@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Plan, ProcessedMetrics } from '../shared/types';
-import { calculateFromMetrics, formatCurrencyINR, formatNumberINR } from '../shared/incentive';
+import { calculateFromMetrics, formatCurrencyINR, formatNumberINR, roundHalfUp } from '../shared/incentive';
+import { classRank, classSteps } from '../shared/classes';
 import { Calculator, RotateCcw, TrendingUp, Award, Sparkles, Flame, CheckCircle, Zap } from 'lucide-react';
 import { AnimatedCounter } from './AnimatedCounter';
 import { soundFx } from '../utils/audio';
@@ -53,12 +54,13 @@ export function SimulatorTab({
     setVisitsAttributed(initialVisits);
   };
 
-  // Immediate recalculation
+  // Immediate recalculation. The real calculation rounds connects, talk minutes and the quality score to
+  // whole numbers before it looks up a band, so the simulator does the same (a typed 89.6 counts as 90).
   const metrics: ProcessedMetrics = {
     sales: Math.max(0, sales),
-    avgConnects: Math.max(0, avgConnects),
-    avgTalkMinutes: Math.max(0, avgTalkMinutes),
-    qualityScore: qualityScore > 0 ? Math.min(100, Math.max(0, qualityScore)) : null,
+    avgConnects: roundHalfUp(Math.max(0, avgConnects)),
+    avgTalkMinutes: roundHalfUp(Math.max(0, avgTalkMinutes)),
+    qualityScore: qualityScore > 0 ? roundHalfUp(Math.min(100, Math.max(0, qualityScore))) : null,
     visitsAttributed: Math.max(0, visitsAttributed),
     absentDays: null,
   };
@@ -66,11 +68,10 @@ export function SimulatorTab({
   const simResult = calculateFromMetrics(metrics, plan);
   const diffFromActual = simResult.total - actualTotalIncentive;
 
-  // Check if class leveled up
+  // Check if class leveled up (a higher position in the plan's class list = a better class)
   useEffect(() => {
-    const classOrder: Record<string, number> = { NQ: 0, D: 1, C: 2, B: 3, A: 4 };
-    const prevRank = classOrder[prevClassRef.current] ?? 0;
-    const currentRank = classOrder[simResult.className] ?? 0;
+    const prevRank = classRank(plan, prevClassRef.current);
+    const currentRank = classRank(plan, simResult.className);
 
     if (currentRank > prevRank && prevRank > 0) {
       fireMilestoneBurst(0.65, 0.4);
@@ -83,22 +84,28 @@ export function SimulatorTab({
   const cCfg = plan.bonuses.connects;
   const tCfg = plan.bonuses.talkMinutes;
 
-  const applyPreset = (presetName: 'classA' | 'classB' | 'maxBonuses' | 'superJackpot') => {
+  // Class presets come from the plan: each one sets revenue to the first rupee that reaches the class
+  const steps = classSteps(plan);
+  const topVisitTier = [...plan.visitTiers].sort((a, b) => a.min - b.min).at(-1);
+  const simRank = classRank(plan, simResult.className);
+
+  const applyPreset = (presetName: string) => {
     soundFx.playPop();
-    if (presetName === 'classA') {
-      setSales(Math.round(plan.target * 1.2));
-    } else if (presetName === 'classB') {
-      setSales(Math.round(plan.target * 1.1));
+    if (presetName.startsWith('class:')) {
+      const step = steps.find((s) => s.name === presetName.slice('class:'.length));
+      if (step) setSales(step.minSales);
     } else if (presetName === 'maxBonuses') {
       setAvgConnects(cCfg.high);
       setAvgTalkMinutes(tCfg.high);
       setQualityScore(qCfg.high);
     } else if (presetName === 'superJackpot') {
-      setSales(Math.round(plan.target * 1.25));
-      setAvgConnects(cCfg.high + 5);
-      setAvgTalkMinutes(tCfg.high + 10);
-      setQualityScore(qCfg.high + 2);
-      setVisitsAttributed(agentType === 'STORE' ? 320 : 15);
+      // Everything at the top: the top class, all three bonuses High, the top store-visit tier
+      const top = steps[steps.length - 1];
+      if (top) setSales(top.minSales);
+      setAvgConnects(cCfg.high);
+      setAvgTalkMinutes(tCfg.high);
+      setQualityScore(qCfg.high);
+      if (topVisitTier) setVisitsAttributed(topVisitTier.min);
       fireMilestoneBurst();
     }
   };
@@ -138,20 +145,23 @@ export function SimulatorTab({
         <span className="text-xs font-mono font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider shrink-0 flex items-center gap-1.5">
           <Zap className="w-3.5 h-3.5 text-amber-500 animate-subtle-sparkle" /> Presets:
         </span>
-        <button
-          onClick={() => applyPreset('classA')}
-          className="group relative px-3.5 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 dark:bg-amber-500/15 dark:hover:bg-amber-500/25 text-amber-800 dark:text-amber-300 font-bold border border-amber-500/30 whitespace-nowrap transition active:scale-95 shadow-xs flex items-center gap-1.5"
-        >
-          <span>🎯</span>
-          <span>Class A (120% Target)</span>
-        </button>
-        <button
-          onClick={() => applyPreset('classB')}
-          className="group relative px-3.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-bold border border-indigo-200/80 dark:border-indigo-800/60 whitespace-nowrap transition active:scale-95 shadow-xs flex items-center gap-1.5"
-        >
-          <span>🔥</span>
-          <span>Class B (110% Target)</span>
-        </button>
+        {steps.map((s, i) => (
+          <button
+            key={s.name}
+            onClick={() => applyPreset(`class:${s.name}`)}
+            title={`Sets revenue to ${formatCurrencyINR(s.minSales)}, the first rupee above ${s.abovePct}% of the target`}
+            className={`group relative px-3.5 py-1.5 rounded-xl font-bold border whitespace-nowrap transition active:scale-95 shadow-xs flex items-center gap-1.5 ${
+              i % 2 === 0
+                ? 'bg-amber-500/10 hover:bg-amber-500/20 dark:bg-amber-500/15 dark:hover:bg-amber-500/25 text-amber-800 dark:text-amber-300 border-amber-500/30'
+                : 'bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 border-indigo-200/80 dark:border-indigo-800/60'
+            }`}
+          >
+            <span>{i % 2 === 0 ? '🎯' : '🔥'}</span>
+            <span>
+              Class {s.name} (&gt;{s.abovePct}%)
+            </span>
+          </button>
+        ))}
         <button
           onClick={() => applyPreset('maxBonuses')}
           className="group relative px-3.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 font-bold border border-emerald-200/80 dark:border-emerald-800/60 whitespace-nowrap transition active:scale-95 shadow-xs flex items-center gap-1.5"
@@ -351,7 +361,7 @@ export function SimulatorTab({
               />
             </div>
             <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-              High = {qCfg.high}%+ &bull; Mid = {qCfg.mid}% to {qCfg.high - 0.1}% &bull; None &lt; {qCfg.mid}%
+              High = {qCfg.high}%+ &bull; Mid = {qCfg.mid}% to {qCfg.high - 1}% &bull; None &lt; {qCfg.mid}% (rounded to a whole number)
             </p>
           </div>
 
@@ -394,9 +404,9 @@ export function SimulatorTab({
                 Simulated Total Payout
               </span>
               <span className={`text-xs font-mono font-bold px-2.5 py-0.5 rounded-full ${
-                simResult.className === 'A'
+                simRank > 0 && simRank === steps.length
                   ? 'bg-amber-400 text-slate-950 font-black shadow-[0_0_12px_rgba(251,191,36,0.6)]'
-                  : simResult.className === 'B'
+                  : simRank > 0
                   ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                   : 'bg-white/10 text-slate-300 border border-white/10'
               }`}>

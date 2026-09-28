@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
+import React, { lazy, Suspense, useState } from 'react';
 import { TeamView } from './TeamView';
 import { Leaderboards } from './Leaderboards';
 import { SyncStatus } from './SyncStatus';
-import { TestCenter } from './TestCenter';
 import { AgentView } from './AgentView';
+
+// The Admin console (with the Excel reader) is only for the Super Admin, so it is loaded on demand and
+// never slows down the phones of agents, TLs and managers.
+const TestCenter = lazy(() => import('./TestCenter').then((m) => ({ default: m.TestCenter })));
 import {
   Users,
   Trophy,
@@ -19,17 +22,19 @@ interface StaffPortalProps {
   userEmail: string;
   userLocation?: string;
   activeCycleId: string;
+  cycleName?: string;
   testMode?: boolean;
   getIdToken: () => Promise<string>;
 }
 
-type StaffTab = 'team' | 'leaderboards' | 'syncStatus' | 'testCenter';
+type StaffTab = 'team' | 'leaderboards' | 'syncStatus' | 'admin';
 
 export function StaffPortal({
   userRole,
   userEmail,
   userLocation,
   activeCycleId,
+  cycleName,
   testMode = false,
   getIdToken,
 }: StaffPortalProps) {
@@ -51,6 +56,17 @@ export function StaffPortal({
 
   return (
     <div className="space-y-6">
+      {/* Test mode notice: demo users are visible to everyone while it is on */}
+      {testMode && (
+        <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800/70 text-amber-900 dark:text-amber-200 px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 shadow-xs">
+          <TestTube className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+          <span>
+            TEST MODE: demo users are visible to everyone.
+            {userRole === 'superAdmin' ? ' Switch to Live in the Admin tab before real agents log in.' : ''}
+          </span>
+        </div>
+      )}
+
       {/* Top Role Header & Tab Navigation */}
       <div className="bg-white/95 dark:bg-slate-900/90 backdrop-blur-sm border border-slate-200/90 dark:border-slate-800 rounded-2xl p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -116,17 +132,18 @@ export function StaffPortal({
             </button>
           )}
 
-          {userRole === 'superAdmin' && testMode && (
+          {/* The Admin tab stays for the Super Admin in live mode too: roles, go-live switch, health */}
+          {userRole === 'superAdmin' && (
             <button
-              onClick={() => setActiveTab('testCenter')}
+              onClick={() => setActiveTab('admin')}
               className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                activeTab === 'testCenter'
+                activeTab === 'admin'
                   ? 'bg-white dark:bg-slate-800 text-slate-950 dark:text-white shadow-xs font-bold'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              <TestTube className="w-3.5 h-3.5" />
-              Test Center
+              <ShieldCheck className="w-3.5 h-3.5" />
+              Admin
             </button>
           )}
         </div>
@@ -148,6 +165,7 @@ export function StaffPortal({
           userRole={userRole}
           userLocation={userLocation}
           activeCycleId={activeCycleId}
+          cycleName={cycleName}
         />
       )}
 
@@ -155,8 +173,14 @@ export function StaffPortal({
         <SyncStatus getIdToken={getIdToken} />
       )}
 
-      {activeTab === 'testCenter' && userRole === 'superAdmin' && testMode && (
-        <TestCenter userEmail={userEmail} getIdToken={getIdToken} />
+      {activeTab === 'admin' && userRole === 'superAdmin' && (
+        <Suspense
+          fallback={
+            <div className="py-16 text-center text-xs text-slate-500 dark:text-slate-400">Loading the Admin console...</div>
+          }
+        >
+          <TestCenter userEmail={userEmail} getIdToken={getIdToken} testMode={testMode} />
+        </Suspense>
       )}
     </div>
   );

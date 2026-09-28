@@ -17,6 +17,7 @@ import {
 } from '../shared/incentive';
 import { calculateRemainingWorkingDays } from '../shared/planning';
 import { buildPreSalesSuggestions } from '../shared/suggestions';
+import { aiTextIsCurrent } from '../shared/aiText';
 import { AnimatedCounter } from './AnimatedCounter';
 import { fireMilestoneBurst } from '../utils/confetti';
 import { soundFx } from '../utils/audio';
@@ -207,8 +208,7 @@ export function PreSalesActualTab({ agentRecord, plan, cycle, onNavigateToSimula
 
   // Suggestions (rule text, or the verified AI text when it matches the latest data)
   const rawSuggestions = buildPreSalesSuggestions(agentRecord, plan, cycle);
-  const aiMatches =
-    agentRecord.aiSuggestions && agentRecord.aiSuggestions.lastDataDate === agentRecord.lastDataDate;
+  const aiMatches = aiTextIsCurrent(agentRecord);
   const suggestions: ShownSuggestion[] = rawSuggestions.map((s) => {
     if (s.type === 'headline' && aiMatches && agentRecord.aiSuggestions?.headline) {
       return { ...s, defaultText: agentRecord.aiSuggestions.headline, isAiText: true };

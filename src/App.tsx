@@ -21,6 +21,7 @@ interface SessionData {
   name?: string;
   location?: string;
   activeCycleId?: string;
+  activeCycleName?: string;
   testMode?: boolean;
 }
 
@@ -33,38 +34,50 @@ export default function App() {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(soundFx.enabled);
+  // A server problem (for example the database is not reachable) is not the same as "no access"
+  const [sessionProblem, setSessionProblem] = useState<string | null>(null);
+
+  const loadSession = async (currentUser: User) => {
+    setCheckLoading(true);
+    setSessionProblem(null);
+    try {
+      const token = await currentUser.getIdToken();
+      const res = await fetch('/api/auth/session', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (res.ok) {
+        const data: SessionData = await res.json();
+        setSession(data);
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        setSession({ email: currentUser.email || '', role: null });
+        if (res.status === 403) {
+          // Signed in, but this email has no access
+          if (errData?.error) setLoginError(errData.error);
+        } else {
+          setSessionProblem(errData?.error || `The server answered with HTTP ${res.status}.`);
+        }
+      }
+    } catch (e: any) {
+      console.error('Failed to verify session role:', e);
+      setSession({ email: currentUser.email || '', role: null });
+      setSessionProblem(e?.message || 'The server could not be reached.');
+    } finally {
+      setCheckLoading(false);
+    }
+  };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
         setLoginError(null);
-        setCheckLoading(true);
-        try {
-          const token = await currentUser.getIdToken();
-          const res = await fetch('/api/auth/session', {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          });
-          if (res.ok) {
-            const data: SessionData = await res.json();
-            setSession(data);
-          } else {
-            const errData = await res.json().catch(() => ({}));
-            setSession({ email: currentUser.email || '', role: null });
-            if (errData?.error) {
-              setLoginError(errData.error);
-            }
-          }
-        } catch (e) {
-          console.error('Failed to verify session role:', e);
-          setSession({ email: currentUser.email || '', role: null });
-        } finally {
-          setCheckLoading(false);
-        }
+        await loadSession(currentUser);
       } else {
         setSession(null);
+        setSessionProblem(null);
       }
       setAuthLoading(false);
     });
@@ -130,7 +143,7 @@ export default function App() {
 
       {/* Top Navigation */}
       <header className="bg-white/90 dark:bg-slate-950/90 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 sticky top-0 z-30 shadow-xs transition-colors duration-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-15 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 min-h-15 py-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-slate-950 dark:bg-slate-900 border border-transparent dark:border-slate-700 flex items-center justify-center text-white font-mono font-bold text-xs tracking-wider shadow-xs ring-1 ring-amber-500/30">
               TSC
@@ -140,9 +153,11 @@ export default function App() {
                 Incentive Portal
               </span>
               <span className="text-slate-300 dark:text-slate-700 text-xs" aria-hidden="true">·</span>
-              <span className="text-xs font-semibold text-amber-700 dark:text-amber-300 bg-amber-50/80 dark:bg-amber-500/10 border border-amber-200/60 dark:border-amber-500/30 px-2 py-0.5 rounded-full font-mono">
-                Diwali 2026
-              </span>
+              {session?.activeCycleName && (
+                <span className="text-xs font-semibold text-amber-700 dark:text-amber-300 bg-amber-50/80 dark:bg-amber-500/10 border border-amber-200/60 dark:border-amber-500/30 px-2 py-0.5 rounded-full font-mono">
+                  {session.activeCycleName}
+                </span>
+              )}
               <span className="text-slate-300 dark:text-slate-700 text-xs hidden lg:inline" aria-hidden="true">·</span>
               <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 hidden lg:inline">
                 Created by Hamza Agha, with Gemini
@@ -157,7 +172,7 @@ export default function App() {
                 onClick={() => {
                   fireGoldenCelebration();
                 }}
-                title="Celebrate Diwali Payout"
+                title="Celebrate your payout"
                 className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-500/15 hover:bg-amber-100 dark:hover:bg-amber-500/25 border border-amber-200/80 dark:border-amber-500/30 rounded-lg transition active:scale-95 shadow-xs"
               >
                 <Sparkles className="w-3.5 h-3.5 text-amber-500 animate-subtle-sparkle" />
@@ -181,11 +196,11 @@ export default function App() {
                     <Sun className="w-3.5 h-3.5 text-amber-600 fill-amber-600/20 transition-transform duration-200 group-hover:rotate-45" />
                   )}
                 </div>
-                <span className="font-mono text-[11px] font-semibold tracking-tight">
+                <span className="hidden sm:inline font-mono text-[11px] font-semibold tracking-tight">
                   {isDark ? 'Dark' : 'Light'}
                 </span>
                 <span
-                  className={`w-1.5 h-1.5 rounded-full transition-colors ${
+                  className={`hidden sm:inline-block w-1.5 h-1.5 rounded-full transition-colors ${
                     isDark ? 'bg-amber-400 ring-2 ring-amber-400/20 animate-pulse' : 'bg-slate-400'
                   }`}
                   aria-hidden="true"
@@ -314,9 +329,38 @@ export default function App() {
             userEmail={user.email || ''}
             userLocation={session.location}
             activeCycleId={session.activeCycleId || 'diwali-2026'}
+            cycleName={session.activeCycleName}
             testMode={session.testMode}
             getIdToken={getIdToken}
           />
+        ) : sessionProblem ? (
+          // The server could not check the access (not the same as "no access"): say so and let the user retry
+          <div className="max-w-md mx-auto my-12 bg-white/95 dark:bg-slate-900/90 backdrop-blur-md border border-amber-200 dark:border-amber-900/50 rounded-2xl p-8 shadow-xl text-center">
+            <div className="w-12 h-12 bg-amber-50 dark:bg-amber-950/40 border border-amber-100 dark:border-amber-900/50 rounded-xl flex items-center justify-center text-amber-600 dark:text-amber-400 mx-auto mb-4">
+              <AlertCircle className="w-6 h-6" />
+            </div>
+            <h2 className="text-base font-bold text-slate-900 dark:text-white mb-1">The portal could not check your access</h2>
+            <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">
+              This is a problem on our side, not with your account. Please try again in a minute.
+            </p>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono break-words mb-6">{sessionProblem}</p>
+            <div className="flex items-center justify-center gap-3">
+              <button
+                onClick={() => user && loadSession(user)}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-xl shadow transition"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Try again
+              </button>
+              <button
+                onClick={handleLogout}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 text-white text-xs font-bold rounded-xl shadow transition"
+              >
+                <LogOut className="w-4 h-4" />
+                Sign Out
+              </button>
+            </div>
+          </div>
         ) : (
           // 5. No match -> show "Access denied. Contact your TL." and a Sign out button.
           <div className="max-w-md mx-auto my-12 bg-white/95 dark:bg-slate-900/90 backdrop-blur-md border border-rose-200 dark:border-rose-900/50 rounded-2xl p-8 shadow-xl text-center">
@@ -343,7 +387,7 @@ export default function App() {
 
       {/* Footer */}
       <footer className="border-t border-slate-200/80 dark:border-slate-800/80 bg-white/80 dark:bg-slate-950/80 backdrop-blur-sm py-4 text-center text-[11px] text-slate-400 dark:text-slate-500 font-mono transition-colors duration-200">
-        TSC Agent Incentive Portal &bull; Diwali 2026 Cycle
+        TSC Agent Incentive Portal{session?.activeCycleName ? <> &bull; {session.activeCycleName} Cycle</> : null}
       </footer>
     </div>
   );

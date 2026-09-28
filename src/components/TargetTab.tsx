@@ -25,6 +25,7 @@ import {
   minSalesForClass,
   requiredPerDay,
 } from '../shared/planning';
+import { classSteps, scaleMaxPct } from '../shared/classes';
 import { soundFx } from '../utils/audio';
 import { fireGoldenCelebration, fireMilestoneBurst } from '../utils/confetti';
 
@@ -43,6 +44,10 @@ export const TargetTab: React.FC<TargetTabProps> = ({
   onNavigateToSimulator,
   onNavigateToActual,
 }) => {
+  // Hooks stay above every early return (a record that arrives later must not change the hook order).
+  // null = the agent has not touched the slider yet, so it follows the live numbers.
+  const [chosenDailyTarget, setCustomDailyTarget] = useState<number | null>(null);
+
   if (!agentRecord || !agentRecord.totals) {
     return (
       <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-2xl p-12 text-center max-w-xl mx-auto my-8 shadow-xs">
@@ -87,10 +92,15 @@ export const TargetTab: React.FC<TargetTabProps> = ({
       ? plan.classes[currentClassIdx + 1]
       : null;
 
-  // Interactive Target Pace Calculator state
-  const [customDailyTarget, setCustomDailyTarget] = useState<number>(
-    Math.round(reqDailyFor100 > 0 ? reqDailyFor100 : currentDailyAvg)
-  );
+  // Interactive Target Pace Calculator
+  const customDailyTarget =
+    chosenDailyTarget ?? Math.round(reqDailyFor100 > 0 ? reqDailyFor100 : currentDailyAvg);
+
+  // Class limits, rates and scale come from the cycle's plan, never from fixed numbers
+  const steps = classSteps(plan);
+  const scaleMax = scaleMaxPct(plan);
+  const visitTiers = [...plan.visitTiers].sort((a, b) => a.min - b.min);
+  const topVisitTier = visitTiers[visitTiers.length - 1];
 
   const simulatedAdditionalSales = Math.max(0, customDailyTarget * remainingWorkingDays);
   const simulatedTotalSales = salesAchieved + simulatedAdditionalSales;
@@ -125,7 +135,11 @@ export const TargetTab: React.FC<TargetTabProps> = ({
             </h2>
 
             <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
-              Assigned sales target for the <strong>{cycle.name}</strong> cycle. Reach 90% (Class A) to qualify for base commission, 100% (Class B) for target delivery, 120% (Class C) for high performer multipliers, and 160% (Class D) for pinnacle jackpot payouts.
+              Assigned sales target for the <strong>{cycle.name}</strong> cycle. Beat{' '}
+              {steps
+                .map((s) => `${s.abovePct}% of it for Class ${s.name} (${s.ratePct}% commission)`)
+                .join(', ')}
+              .
             </p>
           </div>
 
@@ -187,17 +201,14 @@ export const TargetTab: React.FC<TargetTabProps> = ({
             <div className="w-full h-3.5 bg-slate-800/90 rounded-full overflow-visible p-0.5 border border-white/10">
               <div
                 className="h-full bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-300 rounded-full transition-all duration-700 shadow-[0_0_12px_rgba(251,191,36,0.5)]"
-                style={{ width: `${Math.min(100, (targetAchievedPct / 180) * 100)}%` }}
+                style={{ width: `${Math.min(100, (targetAchievedPct / scaleMax) * 100)}%` }}
               />
 
-              {/* Threshold Indicators: Alternating top & bottom to prevent any collision */}
-              {[
-                { pct: 90, label: '90% Class A', sales: Math.floor(targetSales * 0.9), isTop: true },
-                { pct: 100, label: '100% Target (B)', sales: targetSales, isTop: false },
-                { pct: 120, label: '120% Class C', sales: Math.floor(targetSales * 1.2), isTop: true },
-                { pct: 160, label: '160% Class D', sales: Math.floor(targetSales * 1.6), isTop: false },
-              ].map((m) => {
-                const posPct = (m.pct / 180) * 100;
+              {/* Threshold Indicators (one for each class limit): alternating top & bottom to prevent any collision */}
+              {steps
+                .map((s, i) => ({ pct: s.abovePct, label: `${s.abovePct}% Class ${s.name}`, isTop: i % 2 === 0 }))
+                .map((m) => {
+                const posPct = (m.pct / scaleMax) * 100;
                 const isMet = targetAchievedPct >= m.pct;
 
                 return (
@@ -257,7 +268,7 @@ export const TargetTab: React.FC<TargetTabProps> = ({
 
           <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10">
             <span className="text-[11px] font-mono text-slate-400 block mb-1">
-              Required for {nextClass ? `Class ${nextClass.name} Target` : 'Champion Class A'}
+              Required for {nextClass ? `Class ${nextClass.name} Target` : 'the top class'}
             </span>
             <div className="text-lg font-black font-mono text-white">
               {nextClass ? (
@@ -530,7 +541,7 @@ export const TargetTab: React.FC<TargetTabProps> = ({
                 Visits Rider Target
               </span>
               <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-950/80 text-blue-800 dark:text-blue-300 border border-blue-200/60 dark:border-blue-800/60">
-                Tier 4 (≥{plan.visitTiers[3]?.min || 350})
+                Tier {topVisitTier?.tier ?? '-'} (≥{topVisitTier?.min ?? '-'})
               </span>
             </div>
 
@@ -539,7 +550,7 @@ export const TargetTab: React.FC<TargetTabProps> = ({
               <span className="text-xs font-normal text-slate-500 dark:text-slate-400 font-sans"> visits</span>
             </div>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
-              T1: {plan.visitTiers[0]?.min} · T2: {plan.visitTiers[1]?.min} · T3: {plan.visitTiers[2]?.min}
+              {visitTiers.slice(0, -1).map((t) => `T${t.tier}: ${t.min}`).join(' · ')}
             </p>
 
             <div className="pt-2 border-t border-slate-200 dark:border-slate-800 text-[11px] font-mono flex justify-between">

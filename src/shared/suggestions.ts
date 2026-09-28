@@ -380,22 +380,21 @@ export function buildSuggestions(
     }
   }
 
-  // Quality score exactly at a band limit
+  // Quality score within 1 point of a band limit (design section 8.1): at the limit or 1 point above it
   if (currentMetrics.qualityScore !== null) {
-    if (
-      currentMetrics.qualityScore === plan.bonuses.quality.high ||
-      currentMetrics.qualityScore === plan.bonuses.quality.mid
-    ) {
-      const bandName =
-        currentMetrics.qualityScore === plan.bonuses.quality.high ? 'High' : 'Mid';
+    const q = currentMetrics.qualityScore;
+    const { high, mid } = plan.bonuses.quality;
+    const bandName: 'High' | 'Mid' | null =
+      q >= high ? (q - high <= 1 ? 'High' : null) : q >= mid && q - mid <= 1 ? 'Mid' : null;
+    if (bandName) {
       const lowerBand = bandName === 'High' ? 'Mid' : 'None';
       suggestions.push({
         id: 'warning-quality',
         type: 'warning',
         priority: 1000,
         gainRupees: 0,
-        numbers: { score: currentMetrics.qualityScore },
-        defaultText: `Warning: your Quality score (${currentMetrics.qualityScore}) is right on the edge of the ${bandName} band. One low score will drop you to ${lowerBand}.`,
+        numbers: { score: q },
+        defaultText: `Warning: your Quality score (${q}) is right on the edge of the ${bandName} band. One low score will drop you to ${lowerBand}.`,
         difficult: false,
       });
     }

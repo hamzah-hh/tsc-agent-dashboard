@@ -7,7 +7,7 @@ import {
   getPreSalesPlan,
   getRevenuePlan,
 } from '../shared/plans';
-import { preSalesMetricsFromTotals } from '../shared/incentive';
+import { metricsFromTotals, preSalesMetricsFromTotals } from '../shared/incentive';
 import { ActualTab } from './ActualTab';
 import { TargetTab } from './TargetTab';
 import { SimulatorTab } from './SimulatorTab';
@@ -171,19 +171,23 @@ export function AgentView({ officialEmail, getIdToken, onBack }: AgentViewProps)
     activeCycle.workingDaysPerWeek
   );
 
+  // The same rounding as the real calculation (whole numbers, quality rounded), so the Simulator starts
+  // exactly where the Actual tab is. With no data yet, it starts at the top of the plan's bands.
+  const actualMetrics = metricsFromTotals(totals, quality, agentRecord?.absentDays ?? null);
+
   const initialSales = totals.activeDays > 0
     ? Math.round(calculateProjection(totals.sales, totals.activeDays, remainingWorkingDays))
     : plan.target;
 
   const initialAvgConnects = totals.activeDays > 0
-    ? Math.round(totals.connects / totals.activeDays)
-    : 145;
+    ? actualMetrics.avgConnects
+    : plan.bonuses.connects.high;
 
   const initialAvgTalkMinutes = totals.activeDays > 0
-    ? Math.round(totals.talkSeconds / 60 / totals.activeDays)
-    : 170;
+    ? actualMetrics.avgTalkMinutes
+    : plan.bonuses.talkMinutes.high;
 
-  const initialQualityScore = quality.audits > 0 ? quality.score : 0;
+  const initialQualityScore = actualMetrics.qualityScore ?? 0;
 
   const initialVisits = totals.activeDays > 0
     ? Math.round(
@@ -193,7 +197,7 @@ export function AgentView({ officialEmail, getIdToken, onBack }: AgentViewProps)
           remainingWorkingDays
         )
       )
-    : 200;
+    : [...plan.visitTiers].sort((a, b) => a.min - b.min)[0]?.min ?? 0;
 
   // Pre Sales simulator starting values (current averages, or the first tier / gate before any data)
   const psMetrics = preSalesMetricsFromTotals(totals, quality, preSalesPlan);
@@ -278,7 +282,8 @@ export function AgentView({ officialEmail, getIdToken, onBack }: AgentViewProps)
                 }`}
               >
                 <Target className="w-3.5 h-3.5" />
-                Target & Goals
+                <span className="sm:hidden">Target</span>
+                <span className="hidden sm:inline">Target & Goals</span>
               </button>
             )}
             <button

@@ -12,11 +12,12 @@ interface LeaderboardsProps {
   userRole: 'superAdmin' | 'manager' | 'tl';
   userLocation?: string;
   activeCycleId: string;
+  cycleName?: string;
 }
 
 const ALL_LOCATIONS = ['Dighe', 'Andheri', 'Bangalore'];
 
-export function Leaderboards({ userRole, userLocation, activeCycleId }: LeaderboardsProps) {
+export function Leaderboards({ userRole, userLocation, activeCycleId, cycleName }: LeaderboardsProps) {
   const allowedLocations =
     userRole === 'tl' && userLocation
       ? [userLocation]
@@ -80,7 +81,7 @@ export function Leaderboards({ userRole, userLocation, activeCycleId }: Leaderbo
           <div className="flex items-center gap-2 mb-1">
             <Trophy className="w-5 h-5 text-amber-500 animate-subtle-sparkle" />
             <h1 className="text-xl font-bold text-slate-950 dark:text-white tracking-tight">
-              Diwali Sales Leaderboards
+              {cycleName ? `${cycleName} Leaderboards` : 'Sales Leaderboards'}
             </h1>
             <span className="text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">
               · Branch Rankings

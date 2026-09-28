@@ -7,7 +7,55 @@ import {
   resolveAgentType,
 } from './incentive';
 import { defaultHOPlan, defaultPreSalesPlan, defaultSTOREPlan } from './plans';
-import { AgentTotals, AgentType, Plan, ProcessedMetrics } from './types';
+import { AgentRecord, AgentTotals, AgentType, Cycle, Plan, ProcessedMetrics } from './types';
+import { buildSuggestions } from './suggestions';
+import { calculateRemainingWorkingDays } from './planning';
+import { classRank, classSteps, scaleMaxPct } from './classes';
+import { aiFingerprint, aiTextIsCurrent } from './aiText';
+
+// --- helpers for cases 25-28 ---
+const testCycle: Cycle = {
+  name: 'Test cycle',
+  startDate: '2026-10-01',
+  endDate: '2026-11-30',
+  status: 'active',
+  workingDaysPerWeek: 6,
+  plans: { HO: defaultHOPlan, STORE: defaultSTOREPlan },
+};
+
+/** An HO agent with 10 steady days (Class NQ) and the given average audit score. */
+function hoRecordWithQuality(score: number): AgentRecord {
+  const rows = Array.from({ length: 10 }, (_, i) => ({
+    Date: `2026-10-${String(i + 1).padStart(2, '0')}`,
+    Agent_Email_Official: 'a@test.local',
+    Agent_Location: 'Dighe',
+    Agent_Tier: 'HO Callers',
+    Sales: 200000,
+    Count_of_Orders: 4,
+    Unique_Connects: 150,
+    'Talk_Time_(seconds)': 11000,
+    Store_Visits_Attributed: 3,
+    Day: 1,
+  }));
+  const agg = aggregateAgent(rows, { Agent_Email_Official: 'a@test.local', Total_Audits: 5, Average_Audit_Score: score });
+  const result = calculateFromMetrics(metricsFromTotals(agg.totals, agg.quality, null), defaultHOPlan);
+  return {
+    name: 'A',
+    officialEmail: 'a@test.local',
+    personalEmail: '',
+    location: 'Dighe',
+    agentType: 'HO',
+    tlOfficialEmail: '',
+    tlPersonalEmail: '',
+    totals: agg.totals,
+    daily: agg.daily,
+    quality: agg.quality,
+    absentDays: null,
+    lastDataDate: agg.lastDataDate,
+    result,
+    updatedAt: '',
+  };
+}
 
 // --- Pre Sales helpers (cases 17-24) ---
 function psTotal(avgCalls: number, avgTalkSeconds: number, qualityScore: number | null): number {
@@ -663,6 +711,104 @@ export const testCases: TestCaseDefinition[] = [
         resolveAgentType(map, ''),
       ];
       const want = ['PRE_SALES', 'PRE_SALES', 'PRE_SALES', 'HO', 'STORE', null, null];
+      return {
+        passed: got.every((v, i) => v === want[i]),
+        expected: want.join(', '),
+        actual: got.join(', '),
+      };
+    },
+  },
+
+  // 25. Quality warning: "within 1 point of a band limit" (design section 8.1), not only exactly at it
+  {
+    id: 25,
+    description: 'Quality warning shows at a band limit and 1 point above it (85, 86, 90, 91), not at 84, 87, 89 or 92',
+    run: () => {
+      const warns = (score: number) =>
+        buildSuggestions(hoRecordWithQuality(score), defaultHOPlan, testCycle).some((s) => s.id === 'warning-quality');
+      const got: Record<number, boolean> = {};
+      for (const s of [84, 85, 86, 87, 89, 90, 91, 92]) got[s] = warns(s);
+      const want: Record<number, boolean> = { 84: false, 85: true, 86: true, 87: false, 89: false, 90: true, 91: true, 92: false };
+      return {
+        passed: Object.keys(want).every((k) => got[+k] === want[+k]),
+        expected: JSON.stringify(want),
+        actual: JSON.stringify(got),
+      };
+    },
+  },
+
+  // 26. Working days left with no data yet: 61 calendar days x 6 / 7, the same in every time zone
+  {
+    id: 26,
+    description: 'No data yet: remaining working days from 30 Sep to 30 Nov = 61 x 6/7 = 52.3',
+    run: () => {
+      const days = calculateRemainingWorkingDays('', '2026-10-01', '2026-11-30', 6);
+      const afterData = calculateRemainingWorkingDays('2026-11-15', '2026-10-01', '2026-11-30', 6);
+      return {
+        passed: days === 52.3 && afterData === 12.9,
+        expected: '52.3 and 12.9',
+        actual: `${days} and ${afterData}`,
+      };
+    },
+  },
+
+  // 27. Screens read the class ladder from the plan (limits, rates, first rupee of each class)
+  {
+    id: 27,
+    description: 'Class ladder from the plan: A/B/C/D at 90/100/120/160%, rates 0.15/0.30/0.45/0.60%, HO class A starts at Rs 81,00,001',
+    run: () => {
+      const steps = classSteps(defaultHOPlan);
+      const custom: Plan = {
+        ...defaultHOPlan,
+        classes: [
+          { name: 'NQ', abovePct: 0, rate: 0 },
+          { name: 'S', abovePct: 95, rate: 0.002 },
+          { name: 'G', abovePct: 130, rate: 0.005 },
+        ],
+      };
+      const cs = classSteps(custom);
+      const passed =
+        steps.map((s) => `${s.name}${s.abovePct}`).join() === 'A90,B100,C120,D160' &&
+        steps.map((s) => s.ratePct).join() === '0.15,0.30,0.45,0.60' &&
+        steps[0].minSales === 8100001 &&
+        steps[3].isTop === true &&
+        scaleMaxPct(defaultHOPlan) === 180 &&
+        classRank(defaultHOPlan, 'NQ') === 0 &&
+        classRank(defaultHOPlan, 'D') === 4 &&
+        cs.map((s) => `${s.name}${s.abovePct}`).join() === 'S95,G130' &&
+        cs[1].isTop === true &&
+        classRank(custom, 'G') === 2;
+      return {
+        passed,
+        expected: 'A90,B100,C120,D160 | 0.15,0.30,0.45,0.60 | 8100001 | scale 180 | custom plan S95,G130',
+        actual: `${steps.map((s) => `${s.name}${s.abovePct}`).join()} | ${steps.map((s) => s.ratePct).join()} | ${steps[0]?.minSales} | scale ${scaleMaxPct(defaultHOPlan)} | ${cs.map((s) => `${s.name}${s.abovePct}`).join()}`,
+      };
+    },
+  },
+
+  // 28. AI text is only shown for the exact numbers it was written for
+  {
+    id: 28,
+    description: 'AI text fingerprint: valid for the same numbers, dropped when sales or the audit score change',
+    run: () => {
+      const a = hoRecordWithQuality(88);
+      const withText: AgentRecord = {
+        ...a,
+        aiSuggestions: { lastDataDate: a.lastDataDate, fingerprint: aiFingerprint(a), headline: 'Keep going' },
+      };
+      const changedSales: AgentRecord = { ...withText, totals: { ...withText.totals, sales: withText.totals.sales + 1000 } };
+      const changedQuality: AgentRecord = { ...withText, quality: { ...withText.quality, score: 90 } };
+      const oldStyle: AgentRecord = { ...a, aiSuggestions: { lastDataDate: a.lastDataDate, headline: 'x' } };
+      const oldStyleNewDate: AgentRecord = { ...oldStyle, lastDataDate: '2026-10-11' };
+      const got = [
+        aiTextIsCurrent(withText),
+        aiTextIsCurrent(changedSales),
+        aiTextIsCurrent(changedQuality),
+        aiTextIsCurrent(a),
+        aiTextIsCurrent(oldStyle),
+        aiTextIsCurrent(oldStyleNewDate),
+      ];
+      const want = [true, false, false, false, true, false];
       return {
         passed: got.every((v, i) => v === want[i]),
         expected: want.join(', '),

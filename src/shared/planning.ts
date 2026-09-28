@@ -30,9 +30,9 @@ export function calculateRemainingWorkingDays(
     // calendar days from lastDataDate to endDate
     calendarDays = calculateCalendarDays(lastDataDate, endDate);
   } else {
-    // calendar days from startDate - 1 to endDate
+    // calendar days from startDate - 1 to endDate (UTC methods: the result must not depend on the time zone)
     const start = new Date(startDate + 'T00:00:00Z');
-    start.setDate(start.getDate() - 1);
+    start.setUTCDate(start.getUTCDate() - 1);
     const dayBeforeStart = start.toISOString().split('T')[0];
     calendarDays = calculateCalendarDays(dayBeforeStart, endDate);
   }

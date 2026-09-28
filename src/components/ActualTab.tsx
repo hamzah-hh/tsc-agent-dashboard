@@ -16,6 +16,8 @@ import {
   requiredPerDay,
 } from '../shared/planning';
 import { buildSuggestions } from '../shared/suggestions';
+import { classSteps, scaleMaxPct } from '../shared/classes';
+import { aiTextIsCurrent } from '../shared/aiText';
 import {
   TrendingUp,
   Award,
@@ -46,6 +48,10 @@ interface ActualTabProps {
 }
 
 export function ActualTab({ agentRecord, plan, cycle, onNavigateToSimulator, onNavigateToTarget }: ActualTabProps) {
+  // Hooks stay above every early return: when the first sync arrives and the agent taps Refresh, this
+  // component goes from "No data yet" to the full screen, and a hook after the return would crash it.
+  const [completedItems, setCompletedItems] = React.useState<Record<string, boolean>>({});
+
   if (!agentRecord || !agentRecord.totals || agentRecord.totals.activeDays === 0) {
     return (
       <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center max-w-xl mx-auto my-8 shadow-sm">
@@ -75,7 +81,11 @@ export function ActualTab({ agentRecord, plan, cycle, onNavigateToSimulator, onN
   const currentDailyAvgSales =
     totals.activeDays > 0 ? totals.sales / totals.activeDays : 0;
 
-  const [completedItems, setCompletedItems] = React.useState<Record<string, boolean>>({});
+  // Class limits, rates and scale come from the cycle's plan, never from fixed numbers
+  const steps = classSteps(plan);
+  const firstStep = steps[0];
+  const topStep = steps[steps.length - 1];
+  const scaleMax = scaleMaxPct(plan);
 
   const toggleItem = (id: string) => {
     soundFx.playPop();
@@ -108,10 +118,8 @@ export function ActualTab({ agentRecord, plan, cycle, onNavigateToSimulator, onN
 
   // Suggestions
   const rawSuggestions = buildSuggestions(agentRecord, plan, cycle);
-  // Match with AI suggestions if present and dates match
-  const aiMatches =
-    agentRecord.aiSuggestions &&
-    agentRecord.aiSuggestions.lastDataDate === agentRecord.lastDataDate;
+  // Use the AI text only when it was written for these exact numbers
+  const aiMatches = aiTextIsCurrent(agentRecord);
 
   const suggestions = rawSuggestions.map((s) => {
     if (s.type === 'headline' && aiMatches && agentRecord.aiSuggestions?.headline) {
@@ -256,7 +264,11 @@ export function ActualTab({ agentRecord, plan, cycle, onNavigateToSimulator, onN
               </button>
             </div>
             <p className="text-[11px] text-slate-300 mt-2 font-medium">
-              {result.total > 0 ? 'Accumulated earnings to date based on current run-rate' : 'Reach 90% target (Class A) to unlock payout'}
+              {result.total > 0
+                ? 'Accumulated earnings to date based on current run-rate'
+                : firstStep
+                ? `Reach ${firstStep.abovePct}% target (Class ${firstStep.name}) to unlock payout`
+                : 'Keep going to unlock payout'}
             </p>
           </div>
 
@@ -392,7 +404,11 @@ export function ActualTab({ agentRecord, plan, cycle, onNavigateToSimulator, onN
                       {nextClass ? `Next Milestone: Class ${nextClass.name}` : 'Highest Class'}
                     </span>
                     <span className="font-bold text-slate-900 dark:text-white">
-                      {nextClass ? `${formatCurrencyINR(nextClassMinSales || 0)} (${nextClass.abovePct}%)` : 'Class D (160%+)'}
+                      {nextClass
+                        ? `${formatCurrencyINR(nextClassMinSales || 0)} (${nextClass.abovePct}%)`
+                        : topStep
+                        ? `Class ${topStep.name} (${topStep.abovePct}%+)`
+                        : 'Highest class'}
                     </span>
                   </div>
                 </div>
@@ -422,13 +438,13 @@ export function ActualTab({ agentRecord, plan, cycle, onNavigateToSimulator, onN
                 <div
                   className="h-full bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-300 rounded-full transition-all duration-700 shadow-[0_0_14px_rgba(251,191,36,0.5)]"
                   style={{
-                    width: `${Math.min(100, (result.achievementPct / 180) * 100)}%`,
+                    width: `${Math.min(100, (result.achievementPct / scaleMax) * 100)}%`,
                   }}
                 />
 
-                {/* 1. Dynamic 'Target' Threshold Marker (100% target = pos 55.55%) */}
+                {/* 1. Dynamic 'Target' Threshold Marker (100% of the target) */}
                 {(() => {
-                  const targetPosPct = (100 / 180) * 100;
+                  const targetPosPct = (100 / scaleMax) * 100;
                   const isMet = result.achievementPct >= 100;
 
                   return (
@@ -455,8 +471,8 @@ export function ActualTab({ agentRecord, plan, cycle, onNavigateToSimulator, onN
 
                 {/* 2. Dynamic 'Next Class' Requirement Marker */}
                 {(() => {
-                  const nextPct = nextClass ? nextClass.abovePct : 160;
-                  const nextPosPct = (nextPct / 180) * 100;
+                  const nextPct = nextClass ? nextClass.abovePct : topStep?.abovePct ?? 100;
+                  const nextPosPct = (nextPct / scaleMax) * 100;
                   const isMet = result.achievementPct >= nextPct;
 
                   return (
@@ -470,21 +486,18 @@ export function ActualTab({ agentRecord, plan, cycle, onNavigateToSimulator, onN
                       <div className="absolute -top-7 -translate-x-1/2 whitespace-nowrap">
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black font-mono shadow-md bg-amber-500 text-slate-950 dark:bg-amber-400 dark:text-slate-950 border-2 border-amber-300">
                           <Sparkles className="w-2.5 h-2.5 shrink-0" />
-                          <span>{nextClass ? `Next: Class ${nextClass.name}` : 'Pinnacle: Class D'}</span>
+                          <span>{nextClass ? `Next: Class ${nextClass.name}` : `Pinnacle: Class ${topStep?.name ?? ''}`}</span>
                         </span>
                       </div>
                     </div>
                   );
                 })()}
 
-                {/* Milestone Reference Ticks at 90% (A), 100% (B), 120% (C), 160% (D) */}
-                {[
-                  { pct: 90, label: '90% (Class A)' },
-                  { pct: 100, label: '100% (Base Target)' },
-                  { pct: 120, label: '120% (Class C)' },
-                  { pct: 160, label: '160% (Class D)' },
-                ].map((m) => {
-                  const posPct = (m.pct / 180) * 100;
+                {/* Milestone reference ticks: one for each class limit of the plan */}
+                {steps
+                  .map((s) => ({ pct: s.abovePct, label: `${s.abovePct}% (Class ${s.name})` }))
+                  .map((m) => {
+                  const posPct = (m.pct / scaleMax) * 100;
                   const isReached = result.achievementPct >= m.pct;
 
                   return (
@@ -514,12 +527,15 @@ export function ActualTab({ agentRecord, plan, cycle, onNavigateToSimulator, onN
 
               {/* Clean 4-card Milestone Breakdown Grid underneath */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-8 pt-1">
-                {[
-                  { code: 'A', name: 'Class A', pct: 90, rate: '0.15%', minSales: plan.target * 0.9, desc: '90% Min Threshold' },
-                  { code: 'B', name: 'Class B', pct: 100, rate: '0.30%', minSales: plan.target * 1.0, desc: '100% Base Target' },
-                  { code: 'C', name: 'Class C', pct: 120, rate: '0.45%', minSales: plan.target * 1.2, desc: '120% Stretch' },
-                  { code: 'D', name: 'Class D', pct: 160, rate: '0.60%', minSales: plan.target * 1.6, desc: '160% Pinnacle' },
-                ].map((m) => {
+                {steps
+                  .map((s) => ({
+                    code: s.name,
+                    name: `Class ${s.name}`,
+                    pct: s.abovePct,
+                    rate: `${s.ratePct}%`,
+                    minSales: s.minSales, // the class needs MORE than the limit, so this is 1 rupee above it
+                  }))
+                  .map((m) => {
                   const isReached = result.achievementPct >= m.pct;
                   const isCurrent = result.className === m.code;
 
