@@ -31,11 +31,12 @@ Built on v2 (below). Verified by: type-check (0 errors), 28 calculation test cas
 16. **Admin tab:** always there for the Super Admin (roles, AI, health, Live / Test switch); before, it disappeared in live mode together with the only place to manage Managers. New **Go-live readiness** panel (database write test, sync key, mode, people, agents, last sync, warnings, AI key). The demo tools show only in Test mode. A failed "remove Manager" now shows the error.
 17. **Faster on phones:** the Admin console and its Excel reader load only for the Super Admin (the first download for everyone else is about 25% smaller).
 18. A working-days calculation used the local time zone (`setDate`); it now uses UTC.
+19. **Stale-data banner** ("Data last updated on <date>", latest data more than 2 days old) was only on the agent screens. The Design Document asks for it on every screen, so the Team view and the Leaderboards show it too (one shared component).
 
 ### Fixed: Google Sheet script and build
 
-19. **Apps Script:** every daily-trigger run ended with an error (a trigger cannot open a dialog), so a real failure looked like a good run. A success is now a success, a failure marks the run as failed (so Apps Script can email you), and the trigger is set for about 1:30 PM (was "1 to 2 PM").
-20. **`npm install` failed** (`esbuild@^0.25` conflicted with vite 8). The unused `esbuild` devDependency is removed and `bun.lock` was regenerated; `bun install --frozen-lockfile` and a plain `npm install` both resolve.
+20. **Apps Script:** every daily-trigger run ended with an error (a trigger cannot open a dialog), so a real failure looked like a good run. A success is now a success, a failure marks the run as failed (so Apps Script can email you), and the trigger is set for about 1:30 PM (was "1 to 2 PM").
+21. **`npm install` failed** (`esbuild@^0.25` conflicted with vite 8). The unused `esbuild` devDependency is removed and `bun.lock` was regenerated; `bun install --frozen-lockfile` and a plain `npm install` both resolve.
 
 ### Added
 

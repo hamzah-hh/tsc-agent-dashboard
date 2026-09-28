@@ -7,6 +7,7 @@ import { Trophy, Medal, Award, MapPin, RefreshCw, Calendar, TrendingUp, Sparkles
 import { soundFx } from '../utils/audio';
 import { fireGoldenCelebration, fireMilestoneBurst } from '../utils/confetti';
 import { AnimatedCounter } from './AnimatedCounter';
+import { StaleBanner } from './StaleBanner';
 
 interface LeaderboardsProps {
   userRole: 'superAdmin' | 'manager' | 'tl';
@@ -75,6 +76,9 @@ export function Leaderboards({ userRole, userLocation, activeCycleId, cycleName 
 
   return (
     <div className="space-y-6">
+      {/* The board is rewritten by every sync, so an old update time means the sync is not running */}
+      {rows.length > 0 && <StaleBanner date={currentBoard?.updatedAt} label="Leaderboard last updated on" />}
+
       {/* Header with Title & Location Tabs */}
       <div className="bg-white/95 dark:bg-slate-900/90 backdrop-blur-sm border border-slate-200/90 dark:border-slate-800 rounded-2xl p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>

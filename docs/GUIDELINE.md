@@ -46,6 +46,7 @@ How the totals are made up:
    - HO Caller login, Store Caller login, Pre Sales login
    - Dighe TL login (this TL sees the HO and Pre Sales demo users), Andheri TL login (sees the Store demo user)
    - Test Manager login (this one is **added to the real Manager list**; you remove it at go-live)
+   - Use Gmail addresses that do **not** belong to real agents or TLs. A demo login that is also a real person's login replaces that person's mapping until the next sync.
 3. Click **Reset: Clear Test Data + Create 3**. It removes every earlier demo record and creates the 3 demo users again. Real agents are never touched.
 4. Check: **Team** shows 3 rows with a **Demo** badge and the totals above.
 5. Open a second browser profile (or a private window) per demo login you want to show live. **You do not need this if you demo as Super Admin only**: from **Team** you can open any demo user and see exactly what they see.
@@ -107,7 +108,7 @@ For each step: **Click**, **Show**, **Say**.
 ## A3. After the demo
 
 - To demo again: **Admin > Reset: Clear Test Data + Create 3**.
-- To finish: leave the demo users as they are (they are hidden once you go live), or clear them (Part B, step 8).
+- To finish: leave the demo users as they are (they are hidden once you go live), or clear them (Part B6).
 
 ## A4. Questions you may get
 
@@ -116,7 +117,7 @@ For each step: **Click**, **Show**, **Say**.
 | How is the class decided? | Total sales must be **more than** the class limit: over 90% of target = A, over 100% = B, over 120% = C, over 160% = D. Exactly 90.00% is not a class. |
 | Where does the rate apply? | To **all** the agent's sales, not only the sales above the limit: 0.15%, 0.30%, 0.45%, 0.60%. |
 | Do NQ agents get anything? | Yes: the quality, connects and talk-time bonuses (smaller amounts), and the store-visit rider. Only the revenue incentive is ₹0. |
-| How old can the data be? | The sheet syncs daily at about 1:30 PM. A yellow banner shows when the latest data date is more than 2 days old. |
+| How old can the data be? | The sheet syncs daily at about 1:30 PM. A yellow banner ("Data last updated on <date>") shows on every screen when the latest data date is more than 2 days old. |
 | Can an agent see others? | No. Agents see only their own record. TLs see only their team. |
 | What does AI do? | Optional: it rewords the coaching text. Numbers are checked; if a number differs, the plain text is shown. It never touches a payout. |
 
@@ -189,9 +190,10 @@ Do these in this order:
 
 1. **Admin > Roles & Access:** remove the **Test Manager** you added for the demo (it is a real Manager entry).
 2. **Admin > Clear Test Data** (only visible in Test mode): removes the demo users, their access records and the test sync log entries.
-3. **Admin > Go-live readiness > Go Live.** The page reloads. The banner "TEST MODE" disappears, the header says **LIVE**, the demo tools close, and the leaderboards are rebuilt without demo users.
-4. Check **Go-live readiness** again: **Mode** green, no red rows. Sign in as a Manager and a TL and check the lists show only real people.
-5. Send the link to the agents.
+3. Run **Sync Now** from the sheet once. It restores any real login that a demo login happened to share, and refreshes the leaderboards.
+4. **Admin > Go-live readiness > Go Live.** The page reloads. The banner "TEST MODE" disappears, the header says **LIVE**, the demo tools close, and the leaderboards are rebuilt without demo users.
+5. Check **Go-live readiness** again: **Mode** green, no red rows. Sign in as a Manager and a TL and check the lists show only real people.
+6. Send the link to the agents.
 
 ## B7. Every day after that
 

@@ -8,6 +8,7 @@ import {
 import { db } from '../shared/firebase-client';
 import { AgentRecord, AgentType } from '../shared/types';
 import { formatCurrencyINR, formatNumberINR } from '../shared/incentive';
+import { StaleBanner } from './StaleBanner';
 import {
   Users,
   Search,
@@ -192,6 +193,13 @@ export function TeamView({
   // 1. Summary Cards calculation. Demo agents do not count once the app is live, and Pre Sales agents
   // (no revenue, no achievement %) are left out of Total Revenue, Avg Achievement and the class counts.
   const statAgents = filteredAgents.filter(countsInStats);
+  // Latest data date of the agents that count (demo agents do not decide whether real data is stale)
+  const latestDataDate = agents
+    .filter(countsInStats)
+    .map((a) => a.lastDataDate || '')
+    .filter(Boolean)
+    .sort()
+    .pop();
   const revenueAgents = statAgents.filter((a) => a.agentType !== 'PRE_SALES');
   const preSalesCount = statAgents.length - revenueAgents.length;
   const totalAgentsCount = statAgents.length;
@@ -231,6 +239,8 @@ export function TeamView({
 
   return (
     <div className="space-y-6">
+      {!loading && !error && <StaleBanner date={latestDataDate} />}
+
       {/* 1. Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Agents */}

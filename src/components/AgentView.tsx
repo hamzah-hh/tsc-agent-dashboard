@@ -13,6 +13,7 @@ import { TargetTab } from './TargetTab';
 import { SimulatorTab } from './SimulatorTab';
 import { PreSalesActualTab } from './PreSalesActualTab';
 import { PreSalesSimulatorTab } from './PreSalesSimulatorTab';
+import { StaleBanner } from './StaleBanner';
 import { calculateProjection, calculateRemainingWorkingDays } from '../shared/planning';
 import {
   RotateCcw,
@@ -137,21 +138,7 @@ export function AgentView({ officialEmail, getIdToken, onBack }: AgentViewProps)
   const plan: Plan = getRevenuePlan(activeCycle, agentType === 'HO' ? 'HO' : 'STORE');
   const preSalesPlan: PreSalesPlan = getPreSalesPlan(activeCycle);
 
-  // Check if lastDataDate is more than 2 days before today in IST
-  // IST is UTC+5:30
-  const nowIST = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
-  const todayISTStr = nowIST.toISOString().split('T')[0];
   const lastDataDate = agentRecord?.lastDataDate || '';
-
-  let isOutdated = false;
-  if (lastDataDate) {
-    const lastDateMs = new Date(lastDataDate + 'T00:00:00Z').getTime();
-    const todayMs = new Date(todayISTStr + 'T00:00:00Z').getTime();
-    const daysDiff = Math.round((todayMs - lastDateMs) / (1000 * 60 * 60 * 24));
-    if (daysDiff > 2) {
-      isOutdated = true;
-    }
-  }
 
   // Simulator starting values
   const totals = agentRecord?.totals || {
@@ -210,16 +197,8 @@ export function AgentView({ officialEmail, getIdToken, onBack }: AgentViewProps)
 
   return (
     <div className="space-y-6">
-      {/* Outdated Data Warning Banner */}
-      {isOutdated && (
-        <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-300 px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center justify-between shadow-xs">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
-            <span>Data last updated on {lastDataDate}.</span>
-          </div>
-          <span className="text-[11px] text-amber-700 dark:text-amber-400 font-mono">Sync pending from Ops sheet</span>
-        </div>
-      )}
+      {/* Outdated data warning: latest data date more than 2 days old */}
+      <StaleBanner date={lastDataDate} />
 
       {/* HEADER (both tabs) */}
       <div className="bg-white/95 dark:bg-slate-900/90 backdrop-blur-sm border border-slate-200/90 dark:border-slate-800 rounded-2xl p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
