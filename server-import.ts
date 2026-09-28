@@ -1,4 +1,5 @@
 import { adminDb } from './server-firebase-admin';
+import { loadEnv } from './server-env';
 import {
   aggregateAgent,
   calculateFromMetrics,
@@ -16,6 +17,7 @@ import {
   getPreSalesPlan,
 } from './src/shared/plans';
 import { buildLocationRows } from './src/shared/leaderboard';
+import { aiFingerprint, aiTextIsCurrent } from './src/shared/aiText';
 import {
   AgentRecord,
   AppConfig,
@@ -26,7 +28,7 @@ import {
   RawQualityRow,
   SyncLogRecord,
 } from './src/shared/types';
-import { runBatchAiGeneration } from './server-ai';
+import { isAiConfigured, runBatchAiGeneration } from './server-ai';
 
 const REQUIRED_MAIN_HEADERS = [
   'Date',
@@ -58,8 +60,45 @@ const REQUIRED_QUALITY_HEADERS = [
 // but a Pre Sales agent cannot be calculated without them, so a missing column gives a warning.
 const PRE_SALES_HEADERS = ['Inbound_Calls', 'Avg_TT_per_day'];
 
+// The first Super Admin of a brand-new project. Override with SUPER_ADMIN_EMAILS (comma separated).
+const DEFAULT_SUPER_ADMIN = 'agha.h489@gmail.com';
+
+/** No new AI call is started after this long in a sync, so Gemini can never hold up a sync. */
+const DEFAULT_AI_SYNC_BUDGET_MS = 35000;
+
+function envEmails(name: string): string[] {
+  loadEnv();
+  return (process.env[name] || '')
+    .split(/[,;\s]+/)
+    .map(normalizeEmail)
+    .filter(Boolean);
+}
+
+function defaultTierMap(): AppConfig['tierMap'] {
+  return { 'HO Callers': 'HO', 'Store Callers': 'STORE', PreSales: 'PRE_SALES' };
+}
+
+/** config/app of a brand-new project. Managers are added in the Admin tab (or with MANAGER_EMAILS). */
+export function defaultAppConfig(): AppConfig {
+  const superAdmins = envEmails('SUPER_ADMIN_EMAILS');
+  return {
+    superAdmins: superAdmins.length > 0 ? superAdmins : [DEFAULT_SUPER_ADMIN],
+    managers: envEmails('MANAGER_EMAILS'),
+    activeCycleId: 'diwali-2026',
+    tierMap: defaultTierMap(),
+    locations: ['Dighe', 'Andheri', 'Bangalore'],
+    testMode: true,
+    aiEnabled: false,
+    aiTone: 'english',
+  };
+}
+
 /**
- * Ensure seed data exists in config/app and cycles/diwali-2026
+ * Makes sure config/app and the active cycle exist.
+ * - A missing config/app is created once. After that, nobody's access is changed behind their back:
+ *   a manager who is removed stays removed. Only an empty Super Admin list is repaired, so the
+ *   app can never be left without an administrator.
+ * - Documents from an older version are upgraded in place (Pre Sales tier and plan). Safe to repeat.
  */
 export async function ensureSeedData(): Promise<{ appConfig: AppConfig; cycle: Cycle }> {
   const configRef = adminDb.collection('config').doc('app');
@@ -68,45 +107,39 @@ export async function ensureSeedData(): Promise<{ appConfig: AppConfig; cycle: C
   let appConfig: AppConfig;
 
   if (!configSnap.exists) {
-    appConfig = {
-      superAdmins: ['YOUR_PERSONAL_GMAIL', 'agha.h489@gmail.com'],
-      managers: ['anirban.tsc@gmail.com'],
-      activeCycleId: 'diwali-2026',
-      tierMap: {
-        'HO Callers': 'HO',
-        'Store Callers': 'STORE',
-        PreSales: 'PRE_SALES',
-      },
-      locations: ['Dighe', 'Andheri', 'Bangalore'],
-      testMode: true,
-      aiEnabled: false,
-      aiTone: 'english',
-    };
+    appConfig = defaultAppConfig();
     await configRef.set(appConfig);
   } else {
     appConfig = configSnap.data() as AppConfig;
-    if (!appConfig.superAdmins) appConfig.superAdmins = [];
-    if (!appConfig.managers) appConfig.managers = [];
-    let modified = false;
-    if (!appConfig.superAdmins.includes('agha.h489@gmail.com')) {
-      appConfig.superAdmins.push('agha.h489@gmail.com');
-      modified = true;
+    const patch: Partial<AppConfig> = {};
+
+    if (!Array.isArray(appConfig.superAdmins) || appConfig.superAdmins.length === 0) {
+      appConfig.superAdmins = defaultAppConfig().superAdmins;
+      patch.superAdmins = appConfig.superAdmins;
     }
-    if (!appConfig.managers.includes('anirban.tsc@gmail.com')) {
-      appConfig.managers.push('anirban.tsc@gmail.com');
-      modified = true;
+    if (!Array.isArray(appConfig.managers)) {
+      appConfig.managers = [];
+      patch.managers = appConfig.managers;
     }
-    // Older config documents: make sure the Pre Sales tier is mapped
+    if (!appConfig.activeCycleId) {
+      appConfig.activeCycleId = 'diwali-2026';
+      patch.activeCycleId = appConfig.activeCycleId;
+    }
+    if (!Array.isArray(appConfig.locations) || appConfig.locations.length === 0) {
+      appConfig.locations = ['Dighe', 'Andheri', 'Bangalore'];
+      patch.locations = appConfig.locations;
+    }
     if (!appConfig.tierMap) {
       appConfig.tierMap = { 'HO Callers': 'HO', 'Store Callers': 'STORE' };
-      modified = true;
+      patch.tierMap = appConfig.tierMap;
     }
+    // Older config documents: make sure the Pre Sales tier is mapped
     if (!Object.values(appConfig.tierMap).includes('PRE_SALES')) {
       appConfig.tierMap['PreSales'] = 'PRE_SALES';
-      modified = true;
+      patch.tierMap = appConfig.tierMap;
     }
-    if (modified) {
-      await configRef.set(appConfig, { merge: true });
+    if (Object.keys(patch).length > 0) {
+      await configRef.set(patch, { merge: true });
     }
   }
 
@@ -140,6 +173,80 @@ export async function ensureSeedData(): Promise<{ appConfig: AppConfig; cycle: C
   return { appConfig, cycle };
 }
 
+/** All agents of a cycle. */
+export async function loadAgents(cycleId: string): Promise<AgentRecord[]> {
+  const snap = await adminDb.collection('cycles').doc(cycleId).collection('agents').get();
+  return snap.docs.map((d) => d.data() as AgentRecord);
+}
+
+/**
+ * One leaderboard per location: sorted by total desc, then achievementPct desc, then name A-Z.
+ * Pre Sales agents are not revenue-ranked, and demo/test agents only rank while test mode is on
+ * (see buildLocationRows).
+ */
+export function buildLeaderboardDocs(agents: AgentRecord[], appConfig: AppConfig): LeaderboardRecord[] {
+  const updatedAt = new Date().toISOString();
+  return appConfig.locations.map((location) => ({
+    location,
+    updatedAt,
+    rows: buildLocationRows(agents, location, Boolean(appConfig.testMode)),
+  }));
+}
+
+/** Rewrites the location leaderboards from the agents now stored (after a mode change or a clean-up). */
+export async function rebuildLeaderboards(appConfig: AppConfig): Promise<void> {
+  const cycleId = appConfig.activeCycleId;
+  const agents = await loadAgents(cycleId);
+  const col = adminDb.collection('cycles').doc(cycleId).collection('leaderboards');
+  const batch = adminDb.batch();
+  for (const doc of buildLeaderboardDocs(agents, appConfig)) {
+    batch.set(col.doc(doc.location), doc);
+  }
+  await batch.commit();
+}
+
+/**
+ * Deletes every test record of the active cycle: demo agents, their access records and the sync log
+ * entries written by test runs. Real agents and real sync logs are not touched.
+ */
+export async function clearTestData(
+  appConfig: AppConfig
+): Promise<{ deletedAgents: number; deletedAccess: number; deletedSyncLogs: number }> {
+  const cycleId = appConfig.activeCycleId;
+
+  const [agentsSnap, accessSnap, logsSnap] = await Promise.all([
+    adminDb.collection('cycles').doc(cycleId).collection('agents').where('isTest', '==', true).get(),
+    adminDb.collection('access').where('isTest', '==', true).get(),
+    adminDb.collection('syncLogs').where('source', '==', 'test').get(),
+  ]);
+
+  const batch = adminDb.batch();
+  agentsSnap.forEach((d) => batch.delete(d.ref));
+  accessSnap.forEach((d) => batch.delete(d.ref));
+  logsSnap.forEach((d) => batch.delete(d.ref));
+  await batch.commit();
+
+  await rebuildLeaderboards(appConfig);
+
+  return {
+    deletedAgents: agentsSnap.size,
+    deletedAccess: accessSnap.size,
+    deletedSyncLogs: logsSnap.size,
+  };
+}
+
+/** Saves new AI text on the agent records. Only the aiSuggestions field is written. */
+export async function saveAiText(cycleId: string, agents: AgentRecord[]): Promise<void> {
+  const col = adminDb.collection('cycles').doc(cycleId).collection('agents');
+  const batch = adminDb.batch();
+  for (const agent of agents) {
+    if (agent.aiSuggestions) {
+      batch.set(col.doc(agent.officialEmail), { aiSuggestions: agent.aiSuggestions }, { merge: true });
+    }
+  }
+  await batch.commit();
+}
+
 export interface ProcessImportResult {
   result: 'ok' | 'error';
   rows?: number;
@@ -149,12 +256,20 @@ export interface ProcessImportResult {
   error?: string;
   aiOk?: number;
   aiFailed?: number;
+  aiSkipped?: number;
+  aiPending?: number;
+}
+
+export interface ProcessImportOptions {
+  /** How long the sync may spend on AI text after the data is saved. */
+  aiBudgetMs?: number;
 }
 
 export async function processImport(
   source: 'apps-script' | 'import' | 'test',
   mainRows: RawMainRow[],
-  qualityRows: RawQualityRow[] = []
+  qualityRows: RawQualityRow[] = [],
+  options: ProcessImportOptions = {}
 ): Promise<ProcessImportResult> {
   const warnings: string[] = [];
 
@@ -196,6 +311,13 @@ export async function processImport(
     const cycleId = appConfig.activeCycleId;
     const startDate = cycle.startDate;
     const endDate = cycle.endDate;
+
+    // Demo users can only be created while test mode is on, so they never end up in a live database by accident
+    if (source === 'test' && !appConfig.testMode) {
+      const err = 'Test mode is off. Demo users can only be created while test mode is on (Admin tab > Go live / test mode).';
+      await logSync(source, 'error', 0, 0, '', [err], err);
+      return { result: 'error', warnings: [err], error: err };
+    }
 
     // Build quality lookup map
     const qualityMap = new Map<string, RawQualityRow>();
@@ -244,7 +366,7 @@ export async function processImport(
       };
     }
 
-    // Fetch existing agents in cycle to preserve absentDays
+    // Fetch existing agents in cycle to preserve absentDays and still-valid AI text
     const existingAgentsSnap = await adminDb
       .collection('cycles')
       .doc(cycleId)
@@ -347,6 +469,15 @@ export async function processImport(
         updatedAt: new Date().toISOString(),
       };
 
+      // Keep the AI text of an agent whose numbers did not change (the record is rewritten in full below)
+      if (
+        appConfig.aiEnabled &&
+        existing?.aiSuggestions?.fingerprint &&
+        existing.aiSuggestions.fingerprint === aiFingerprint(agentRecord)
+      ) {
+        agentRecord.aiSuggestions = existing.aiSuggestions;
+      }
+
       updatedAgents.push(agentRecord);
 
       // Access records
@@ -377,60 +508,26 @@ export async function processImport(
       }
     }
 
-    // 6. If AI is enabled, generate AI suggestions for each updated agent
-    let aiOkCount = 0;
-    let aiFailedCount = 0;
+    // 6. Save the data FIRST. AI text comes afterwards (step 7), so Gemini can never delay or fail a sync.
+    const batch = adminDb.batch();
 
-    if (appConfig.aiEnabled && updatedAgents.length > 0) {
-      try {
-        const aiResult = await runBatchAiGeneration(updatedAgents, cycle, appConfig);
-        aiOkCount = aiResult.okCount;
-        aiFailedCount = aiResult.failedCount;
-      } catch (aiErr: any) {
-        console.error('Error running AI generation in import:', aiErr);
-        warnings.push(`AI text generation failed: ${aiErr?.message || String(aiErr)}`);
-      }
-    }
-
-    // 7. Write with batched writes (max 400 each)
-    const batches: any[] = [adminDb.batch()];
-    let opCount = 0;
-
-    function addBatchOp(fn: (batch: any) => void) {
-      if (opCount >= 400) {
-        batches.push(adminDb.batch());
-        opCount = 0;
-      }
-      const currentBatch = batches[batches.length - 1];
-      fn(currentBatch);
-      opCount++;
-    }
-
-    // Write agent records
     const agentsCollection = adminDb
       .collection('cycles')
       .doc(cycleId)
       .collection('agents');
 
     for (const agent of updatedAgents) {
-      const ref = agentsCollection.doc(agent.officialEmail);
-      addBatchOp((b) => b.set(ref, agent));
+      batch.set(agentsCollection.doc(agent.officialEmail), agent);
     }
 
-    // Write access records
     for (const entry of agentAccessEntries) {
-      const ref = adminDb.collection('access').doc(entry.email);
-      addBatchOp((b) => b.set(ref, entry.doc, { merge: true }));
+      batch.set(adminDb.collection('access').doc(entry.email), entry.doc, { merge: true });
     }
-
     for (const entry of tlAccessEntries) {
-      const ref = adminDb.collection('access').doc(entry.email);
-      addBatchOp((b) => b.set(ref, entry.doc, { merge: true }));
+      batch.set(adminDb.collection('access').doc(entry.email), entry.doc, { merge: true });
     }
 
-    // Build 1 leaderboard for each location from all current agents in the cycle (existing + updated):
-    // sorted by total desc, then achievementPct desc, then name A-Z. Pre Sales agents are not
-    // revenue-ranked, and demo/test agents only rank while test mode is on (see buildLocationRows).
+    // One leaderboard per location from all current agents in the cycle (existing + updated)
     const allAgentsMap = new Map<string, AgentRecord>();
     existingAgentData.forEach((data, email) => {
       allAgentsMap.set(email, data as AgentRecord);
@@ -438,25 +535,16 @@ export async function processImport(
     for (const agent of updatedAgents) {
       allAgentsMap.set(agent.officialEmail, agent);
     }
-    const allAgents = Array.from(allAgentsMap.values());
 
     const leaderboardCollection = adminDb
       .collection('cycles')
       .doc(cycleId)
       .collection('leaderboards');
-
-    for (const location of appConfig.locations) {
-      const leaderboardDoc: LeaderboardRecord = {
-        location,
-        updatedAt: new Date().toISOString(),
-        rows: buildLocationRows(allAgents, location, Boolean(appConfig.testMode)),
-      };
-
-      const ref = leaderboardCollection.doc(location);
-      addBatchOp((b) => b.set(ref, leaderboardDoc));
+    for (const doc of buildLeaderboardDocs(Array.from(allAgentsMap.values()), appConfig)) {
+      batch.set(leaderboardCollection.doc(doc.location), doc);
     }
 
-    // Sync log doc
+    // Sync log doc (completed with the AI numbers below when AI is on)
     const syncLogRef = adminDb.collection('syncLogs').doc();
     const syncLogDoc: SyncLogRecord = {
       time: new Date().toISOString(),
@@ -466,14 +554,49 @@ export async function processImport(
       agents: updatedAgents.length,
       lastDataDate: overallLastDate,
       warnings,
-      aiOk: appConfig.aiEnabled ? aiOkCount : undefined,
-      aiFailed: appConfig.aiEnabled ? aiFailedCount : undefined,
     };
-    addBatchOp((b) => b.set(syncLogRef, syncLogDoc));
+    batch.set(syncLogRef, syncLogDoc);
 
-    // Commit all batches
-    for (const b of batches) {
-      await b.commit();
+    await batch.commit();
+
+    // 7. AI text, best effort, within a time budget. The data above is already saved.
+    const ai = { ok: 0, failed: 0, skipped: 0, pending: 0 };
+    if (appConfig.aiEnabled && updatedAgents.length > 0) {
+      const need = updatedAgents.filter((a) => !aiTextIsCurrent(a));
+      ai.skipped = updatedAgents.length - need.length;
+
+      if (need.length > 0) {
+        if (!isAiConfigured()) {
+          ai.failed = need.length;
+          warnings.push(
+            'AI text is switched on, but GEMINI_API_KEY is not set on the server. Agents see the rule-based text.'
+          );
+        } else {
+          try {
+            const budget =
+              options.aiBudgetMs ?? (Number(process.env.AI_SYNC_BUDGET_MS) || DEFAULT_AI_SYNC_BUDGET_MS);
+            const run = await runBatchAiGeneration(need, cycle, appConfig, { budgetMs: budget });
+            ai.ok = run.okCount;
+            ai.failed = run.failedCount;
+            ai.pending = run.pendingCount;
+            await saveAiText(cycleId, run.generatedAgents);
+          } catch (aiErr: any) {
+            console.error('AI text step failed after the data was saved:', aiErr);
+            warnings.push(`AI text generation failed: ${aiErr?.message || String(aiErr)}`);
+            ai.failed = need.length - ai.ok;
+          }
+        }
+      }
+
+      // Complete the sync log entry (its warnings array is the same one the response returns)
+      try {
+        await syncLogRef.set(
+          { warnings, aiOk: ai.ok, aiFailed: ai.failed, aiSkipped: ai.skipped, aiPending: ai.pending },
+          { merge: true }
+        );
+      } catch (logErr) {
+        console.error('Failed to complete the sync log entry:', logErr);
+      }
     }
 
     return {
@@ -482,8 +605,9 @@ export async function processImport(
       agents: updatedAgents.length,
       lastDataDate: overallLastDate,
       warnings,
-      aiOk: appConfig.aiEnabled ? aiOkCount : undefined,
-      aiFailed: appConfig.aiEnabled ? aiFailedCount : undefined,
+      ...(appConfig.aiEnabled
+        ? { aiOk: ai.ok, aiFailed: ai.failed, aiSkipped: ai.skipped, aiPending: ai.pending }
+        : {}),
     };
   } catch (err: any) {
     const errorMsg = err?.message || String(err);

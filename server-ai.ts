@@ -2,11 +2,39 @@ import { GoogleGenAI, Type } from '@google/genai';
 import { AgentRecord, AppConfig, Cycle, Suggestion } from './src/shared/types';
 import { buildAgentSuggestions } from './src/shared/suggestions';
 import { calculateRemainingWorkingDays } from './src/shared/planning';
-
-const apiKey = process.env.GEMINI_API_KEY || '';
-const genAI = apiKey ? new GoogleGenAI({ apiKey }) : null;
+import { aiFingerprint } from './src/shared/aiText';
+import { loadEnv } from './server-env';
 
 export const GEMINI_MODEL = 'gemini-2.5-flash';
+
+// The key is read when it is first needed (not when this file loads), so a .env file or a secret that
+// the host sets later is always seen.
+let genAI: GoogleGenAI | null = null;
+let genAIKey = '';
+
+function getGenAI(): GoogleGenAI | null {
+  loadEnv();
+  const key = process.env.GEMINI_API_KEY || '';
+  if (!key) return null;
+  if (!genAI || genAIKey !== key) {
+    genAI = new GoogleGenAI({ apiKey: key });
+    genAIKey = key;
+  }
+  return genAI;
+}
+
+/** True when the server has a Gemini API key. Without one, the app shows the rule-based text. */
+export function isAiConfigured(): boolean {
+  loadEnv();
+  return Boolean(process.env.GEMINI_API_KEY);
+}
+
+// Automated tests replace the Gemini call with a fake one.
+type GeminiCall = (payloadString: string) => Promise<{ text?: string }>;
+let geminiOverride: GeminiCall | null = null;
+export function setGeminiForTests(fn: GeminiCall | null): void {
+  geminiOverride = fn;
+}
 
 /**
  * Extract numbers from text according to specifications:
@@ -57,6 +85,7 @@ export interface GenerateAiResult {
     lastDataDate: string;
     generatedAt: string;
     model: string;
+    fingerprint: string;
     headline?: string;
     items?: Array<{ id: string; text: string }>;
   };
@@ -71,7 +100,10 @@ const SYSTEM_INSTRUCTION =
  * Call Gemini Flash with 10 second timeout and 1 retry
  */
 async function callGeminiWithTimeoutAndRetry(payloadString: string): Promise<any> {
-  if (!genAI) {
+  if (geminiOverride) return geminiOverride(payloadString);
+
+  const client = getGenAI();
+  if (!client) {
     throw new Error('GEMINI_API_KEY is not configured on server.');
   }
 
@@ -84,7 +116,7 @@ async function callGeminiWithTimeoutAndRetry(payloadString: string): Promise<any
     });
 
     try {
-      const responsePromise = genAI.models.generateContent({
+      const responsePromise = client.models.generateContent({
         model: GEMINI_MODEL,
         contents: payloadString,
         config: {
@@ -316,6 +348,7 @@ export async function generateAiText(
       lastDataDate: agentRecord.lastDataDate,
       generatedAt: new Date().toISOString(),
       model: GEMINI_MODEL,
+      fingerprint: aiFingerprint(agentRecord),
       ...(validHeadline ? { headline: validHeadline } : {}),
       items: validItems,
     },
@@ -323,18 +356,35 @@ export async function generateAiText(
   };
 }
 
+export interface BatchAiOptions {
+  /** No new agent is started after this many milliseconds (agents already started still finish). */
+  budgetMs?: number;
+  onProgress?: (completed: number, total: number) => void;
+}
+
 /**
- * Concurrency runner for processing multiple agents with max 3 parallel calls
+ * Concurrency runner for processing multiple agents with max 3 parallel calls.
+ * An agent that got new text has `aiSuggestions` set (the same object is returned in `updatedAgents`).
+ * Agents not reached within the time budget are counted in `pendingCount`; they keep their old text.
  */
 export async function runBatchAiGeneration(
   agents: AgentRecord[],
   cycle: Cycle,
   appConfig: AppConfig,
-  onProgress?: (completed: number, total: number) => void
-): Promise<{ okCount: number; failedCount: number; updatedAgents: AgentRecord[] }> {
+  options: BatchAiOptions = {}
+): Promise<{
+  okCount: number;
+  failedCount: number;
+  pendingCount: number;
+  updatedAgents: AgentRecord[];
+  generatedAgents: AgentRecord[];
+}> {
   let okCount = 0;
   let failedCount = 0;
+  let pendingCount = 0;
   const updatedAgents: AgentRecord[] = [...agents];
+  const generatedAgents: AgentRecord[] = []; // the ones that got new text in this run
+  const deadline = options.budgetMs !== undefined ? Date.now() + options.budgetMs : Infinity;
 
   let currentIndex = 0;
   let completed = 0;
@@ -344,10 +394,16 @@ export async function runBatchAiGeneration(
       const idx = currentIndex++;
       const agent = updatedAgents[idx];
 
+      if (Date.now() >= deadline) {
+        pendingCount++;
+        continue;
+      }
+
       try {
         const result = await generateAiText(agent, cycle, appConfig);
         if (result.success && result.aiSuggestions) {
           agent.aiSuggestions = result.aiSuggestions;
+          generatedAgents.push(agent);
           okCount++;
         } else {
           failedCount++;
@@ -356,7 +412,7 @@ export async function runBatchAiGeneration(
         failedCount++;
       } finally {
         completed++;
-        if (onProgress) onProgress(completed, updatedAgents.length);
+        if (options.onProgress) options.onProgress(completed, updatedAgents.length);
       }
     }
   }
@@ -366,5 +422,5 @@ export async function runBatchAiGeneration(
   const workers = Array.from({ length: concurrency }, () => worker());
   await Promise.all(workers);
 
-  return { okCount, failedCount, updatedAgents };
+  return { okCount, failedCount, pendingCount, updatedAgents, generatedAgents };
 }

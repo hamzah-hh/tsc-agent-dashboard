@@ -1,464 +1,562 @@
-import { firebaseConfig } from './src/shared/firebase-config';
+import fs from 'fs';
+import path from 'path';
 
-const projectId = firebaseConfig.projectId;
-const databaseId = firebaseConfig.firestoreDatabaseId || '(default)';
-const apiKey = firebaseConfig.apiKey;
-const baseUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents`;
+/**
+ * Server-side database layer.
+ *
+ * The rest of the server talks to a small Firestore-like API (collection / doc / get / set / delete /
+ * where / orderBy / limit / batch). Two backends sit behind it:
+ *
+ *  - FirestoreRestBackend: the real database, through the Firestore REST API. STRICT: every failed
+ *    read or write throws, so a sync never reports "ok" for data that was not saved, and /api/health
+ *    tells the truth. There is deliberately no silent fallback to a local file.
+ *  - LocalBackend: an in-memory store (optionally kept in a JSON file). Only for local development and
+ *    automated tests (DB_MODE=local). Never use it for the live app: nothing is shared with the browser.
+ */
 
-// Cached server access token from GCP metadata server
-let cachedToken: string | null = null;
-let tokenExpiry = 0;
+// ---------------------------------------------------------------------------
+// Value conversion: JS <-> Firestore REST "Value" objects
+// ---------------------------------------------------------------------------
 
-async function getServerAuthHeader(): Promise<Record<string, string>> {
-  const now = Date.now();
-  if (cachedToken && tokenExpiry > now + 60000) {
-    return { Authorization: `Bearer ${cachedToken}` };
-  }
-
-  try {
-    const res = await fetch(
-      'http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token',
-      {
-        headers: { 'Metadata-Flavor': 'Google' },
-      }
-    );
-    if (res.ok) {
-      const data = await res.json();
-      if (data.access_token) {
-        cachedToken = data.access_token;
-        tokenExpiry = now + (data.expires_in || 3600) * 1000;
-        return { Authorization: `Bearer ${cachedToken}` };
-      }
-    }
-  } catch (_e) {
-    // Non-GCP runtime, fallback to API key
-  }
-  return {};
-}
-
-// Helper for converting JS types to Firestore values
-function toFirestoreValue(val: any): any {
+export function toFirestoreValue(val: any): any {
   if (val === null || val === undefined) return { nullValue: null };
   if (typeof val === 'boolean') return { booleanValue: val };
   if (typeof val === 'number') {
-    if (Number.isInteger(val)) return { integerValue: String(val) };
+    if (!Number.isFinite(val)) return { nullValue: null };
+    if (Number.isInteger(val) && Math.abs(val) <= Number.MAX_SAFE_INTEGER) {
+      return { integerValue: String(val) };
+    }
     return { doubleValue: val };
   }
   if (typeof val === 'string') return { stringValue: val };
-  if (Array.isArray(val)) {
-    return {
-      arrayValue: {
-        values: val.map(toFirestoreValue),
-      },
-    };
-  }
+  if (val instanceof Date) return { timestampValue: val.toISOString() };
+  if (Array.isArray(val)) return { arrayValue: { values: val.map(toFirestoreValue) } };
   if (typeof val === 'object') {
     const fields: Record<string, any> = {};
     for (const [k, v] of Object.entries(val)) {
-      if (v !== undefined) {
-        fields[k] = toFirestoreValue(v);
-      }
+      if (v !== undefined) fields[k] = toFirestoreValue(v);
     }
     return { mapValue: { fields } };
   }
   return { stringValue: String(val) };
 }
 
-// Helper for converting Firestore value back to JS object
-function fromFirestoreValue(val: any): any {
-  if (!val) return null;
+export function fromFirestoreValue(val: any): any {
+  if (!val || typeof val !== 'object') return null;
   if ('nullValue' in val) return null;
   if ('booleanValue' in val) return val.booleanValue;
   if ('integerValue' in val) return Number(val.integerValue);
   if ('doubleValue' in val) return Number(val.doubleValue);
   if ('stringValue' in val) return val.stringValue;
-  if ('arrayValue' in val) {
-    return (val.arrayValue.values || []).map(fromFirestoreValue);
-  }
+  if ('timestampValue' in val) return val.timestampValue;
+  if ('referenceValue' in val) return val.referenceValue;
+  if ('arrayValue' in val) return (val.arrayValue.values || []).map(fromFirestoreValue);
   if ('mapValue' in val) {
     const out: Record<string, any> = {};
-    const fields = val.mapValue.fields || {};
-    for (const [k, v] of Object.entries(fields)) {
-      out[k] = fromFirestoreValue(v);
-    }
+    for (const [k, v] of Object.entries(val.mapValue.fields || {})) out[k] = fromFirestoreValue(v);
     return out;
   }
   return null;
 }
 
+/** A REST document ({ name, fields }) as a plain object. A document with no fields is {}. */
 export function fromFirestoreDoc(doc: any): any {
-  if (!doc || !doc.fields) return null;
+  if (!doc) return null;
   const out: Record<string, any> = {};
-  for (const [k, v] of Object.entries(doc.fields)) {
-    out[k] = fromFirestoreValue(v);
-  }
+  for (const [k, v] of Object.entries(doc.fields || {})) out[k] = fromFirestoreValue(v);
   return out;
 }
 
-import fs from 'fs';
-import path from 'path';
+// ---------------------------------------------------------------------------
+// Backend contract
+// ---------------------------------------------------------------------------
 
-const DB_FILE = path.resolve(process.cwd(), 'local-db.json');
+export type Write =
+  | { op: 'set'; path: string; data: any; merge?: boolean }
+  | { op: 'delete'; path: string };
 
-function loadStorage(): Map<string, any> {
-  const map = new Map<string, any>();
-  try {
-    if (fs.existsSync(DB_FILE)) {
-      const data = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
-      for (const [k, v] of Object.entries(data)) {
-        map.set(k, v);
-      }
-    }
-  } catch (_e) {}
-  return map;
+export interface QueryOpts {
+  where?: Array<{ field: string; value: any }>;
+  orderBy?: { field: string; dir: 'asc' | 'desc' };
+  limit?: number;
 }
 
-function saveStorage(map: Map<string, any>) {
-  try {
-    const obj: Record<string, any> = {};
-    for (const [k, v] of map.entries()) {
-      obj[k] = v;
-    }
-    fs.writeFileSync(DB_FILE, JSON.stringify(obj, null, 2), 'utf8');
-  } catch (_e) {}
-}
-
-const inMemoryDocs = loadStorage();
-
-function syncFromDisk() {
-  try {
-    if (fs.existsSync(DB_FILE)) {
-      const data = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
-      for (const [k, v] of Object.entries(data)) {
-        inMemoryDocs.set(k, v);
-      }
-    }
-  } catch (_e) {}
-}
-
-/**
- * REST Firestore Document Reference
- */
-export class RestDocRef {
+export interface StoredDoc {
+  id: string;
   path: string;
+  data: any;
+}
 
-  constructor(path: string) {
-    this.path = path.replace(/^\/+|\/+$/g, '');
+export interface Backend {
+  readonly kind: 'firestore' | 'local';
+  /** The document's data, or null when it does not exist. Throws when the database cannot be read. */
+  getDoc(path: string): Promise<any | null>;
+  listDocs(collectionPath: string, query?: QueryOpts): Promise<StoredDoc[]>;
+  /** Applies the writes as one unit (at most MAX_WRITES_PER_COMMIT). Throws when they were not saved. */
+  commit(writes: Write[]): Promise<void>;
+}
+
+export const MAX_WRITES_PER_COMMIT = 400;
+
+function cleanPath(p: string): string {
+  return p.replace(/^\/+|\/+$/g, '');
+}
+
+function clone<T>(v: T): T {
+  return v === undefined ? v : JSON.parse(JSON.stringify(v));
+}
+
+// ---------------------------------------------------------------------------
+// Firestore REST backend (strict)
+// ---------------------------------------------------------------------------
+
+export class FirestoreError extends Error {
+  status: number;
+  constructor(message: string, status = 0) {
+    super(message);
+    this.name = 'FirestoreError';
+    this.status = status;
+  }
+}
+
+export interface FirestoreBackendOptions {
+  projectId: string;
+  databaseId?: string;
+  apiKey?: string;
+  /** Returns an OAuth access token for the server's service account, or null when there is none. */
+  tokenProvider?: () => Promise<string | null>;
+  /** host:port of the Firestore emulator (FIRESTORE_EMULATOR_HOST). No credentials are needed there. */
+  emulatorHost?: string;
+  /** Full REST base URL override, for tests (e.g. http://127.0.0.1:9000/v1). */
+  restBase?: string;
+  timeoutMs?: number;
+}
+
+const RETRYABLE = new Set([408, 429, 500, 502, 503, 504]);
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** A document path as it goes into a URL: each segment encoded (an "@" in an email id stays readable). */
+function urlPath(p: string): string {
+  return p
+    .split('/')
+    .map((s) => encodeURIComponent(s).replace(/%40/g, '@'))
+    .join('/');
+}
+
+function fieldPathToken(key: string): string {
+  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(key) ? key : '`' + key.replace(/[\\`]/g, '\\$&') + '`';
+}
+
+export class FirestoreRestBackend implements Backend {
+  readonly kind = 'firestore' as const;
+  private opts: FirestoreBackendOptions;
+
+  constructor(opts: FirestoreBackendOptions) {
+    this.opts = opts;
   }
 
-  collection(subCollectionPath: string): RestCollectionRef {
-    const cleanSub = subCollectionPath.replace(/^\/+|\/+$/g, '');
-    return new RestCollectionRef(`${this.path}/${cleanSub}`);
+  private get base(): string {
+    if (this.opts.restBase) return this.opts.restBase.replace(/\/+$/, '');
+    if (this.opts.emulatorHost) return `http://${this.opts.emulatorHost}/v1`;
+    return 'https://firestore.googleapis.com/v1';
   }
 
-  async get(): Promise<{ exists: boolean; data: () => any; id: string }> {
-    syncFromDisk();
-    // For health checks, rule /health/{id} { allow read, write: if false; } is enforced in Cloud Firestore
-    if (this.path.startsWith('health/')) {
-      const data = inMemoryDocs.get(this.path);
-      return {
-        exists: data !== undefined,
-        data: () => data,
-        id: this.path.split('/').pop() || '',
-      };
+  private get root(): string {
+    if (!this.opts.projectId) {
+      throw new FirestoreError(
+        'The Firebase project id is empty. Put the live project\'s settings in firebase-applet-config.json (see firebase-config.example.json).'
+      );
     }
+    return `projects/${this.opts.projectId}/databases/${this.opts.databaseId || '(default)'}/documents`;
+  }
 
+  private async prepare(url: string): Promise<{ url: string; headers: Record<string, string>; authed: boolean }> {
+    const headers: Record<string, string> = {};
+    if (this.opts.emulatorHost) {
+      headers.Authorization = 'Bearer owner';
+      return { url, headers, authed: true };
+    }
+    let token: string | null = null;
     try {
-      const authHeaders = await getServerAuthHeader();
-      const url = `${baseUrl}/${this.path}?key=${apiKey}`;
-      const res = await fetch(url, { headers: authHeaders });
-      if (res.status === 404) {
-        if (inMemoryDocs.has(this.path)) {
-          const data = inMemoryDocs.get(this.path);
-          return { exists: true, data: () => data, id: this.path.split('/').pop() || '' };
+      token = this.opts.tokenProvider ? await this.opts.tokenProvider() : null;
+    } catch (_e) {
+      token = null;
+    }
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+      return { url, headers, authed: true };
+    }
+    // No service-account credentials: the request is anonymous, so the API key only identifies the project
+    // and the security rules apply (they deny the server). The hint in explain() says so.
+    if (this.opts.apiKey) url += (url.includes('?') ? '&' : '?') + `key=${encodeURIComponent(this.opts.apiKey)}`;
+    return { url, headers, authed: false };
+  }
+
+  private explain(status: number, payload: any, what: string, authed: boolean): string {
+    const err = Array.isArray(payload) ? payload[0]?.error : payload?.error;
+    const code = err?.status ? ` ${err.status}` : '';
+    const detail = err?.message ? `: ${err.message}` : '';
+    let hint = '';
+    if (status === 401 || status === 403) {
+      hint = authed
+        ? ' The server\'s service account may lack access: give it the "Cloud Datastore User" role on the Firebase project, and check that the project id in firebase-applet-config.json is the live project.'
+        : ' The server has no Google credentials, so it called Firestore anonymously and the security rules refused it. On Cloud Run this is automatic (service account); on a PC set GOOGLE_APPLICATION_CREDENTIALS.';
+    } else if (status === 404) {
+      hint = ' The Firestore database was not found: create it in the Firebase console (Build > Firestore Database > Create database) and check firestoreDatabaseId in firebase-applet-config.json.';
+    }
+    return `Firestore ${what} failed: HTTP ${status}${code}${detail}.${hint}`;
+  }
+
+  /** One JSON request with a timeout and up to 3 tries on network errors / 5xx / 429. All calls are idempotent. */
+  private async call(
+    method: 'GET' | 'POST',
+    urlPath: string,
+    body: any,
+    what: string,
+    allow404 = false
+  ): Promise<{ status: number; json: any }> {
+    const prepared = await this.prepare(`${this.base}/${urlPath}`);
+    let lastNetworkError: any = null;
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const res = await fetch(prepared.url, {
+          method,
+          headers: body !== undefined ? { ...prepared.headers, 'Content-Type': 'application/json' } : prepared.headers,
+          body: body !== undefined ? JSON.stringify(body) : undefined,
+          signal: AbortSignal.timeout(this.opts.timeoutMs ?? 20000),
+        });
+        const text = await res.text();
+        let json: any = null;
+        try {
+          json = text ? JSON.parse(text) : null;
+        } catch (_e) {
+          json = null;
         }
-        return { exists: false, data: () => null, id: this.path.split('/').pop() || '' };
+        if (res.ok) return { status: res.status, json };
+        if (res.status === 404 && allow404) return { status: 404, json };
+        if (RETRYABLE.has(res.status) && attempt < 2) {
+          await sleep(300 * (attempt + 1));
+          continue;
+        }
+        throw new FirestoreError(this.explain(res.status, json, what, prepared.authed), res.status);
+      } catch (err: any) {
+        if (err instanceof FirestoreError) throw err;
+        lastNetworkError = err;
+        if (attempt < 2) await sleep(300 * (attempt + 1));
       }
-      if (res.ok) {
-        const json = await res.json();
-        const data = fromFirestoreDoc(json);
-        inMemoryDocs.set(this.path, data);
-        saveStorage(inMemoryDocs);
+    }
+    throw new FirestoreError(
+      `Firestore ${what} failed: cannot reach the database (${lastNetworkError?.message || 'network error'}).`
+    );
+  }
+
+  async getDoc(docPath: string): Promise<any | null> {
+    const p = cleanPath(docPath);
+    const { status, json } = await this.call('GET', `${this.root}/${urlPath(p)}`, undefined, `read of ${p}`, true);
+    if (status === 404) return null;
+    return fromFirestoreDoc(json);
+  }
+
+  async listDocs(collectionPath: string, query: QueryOpts = {}): Promise<StoredDoc[]> {
+    const p = cleanPath(collectionPath);
+    const parts = p.split('/');
+    const collectionId = parts[parts.length - 1];
+    const parent = parts.slice(0, -1).join('/');
+
+    const structuredQuery: any = { from: [{ collectionId }] };
+    const filters = (query.where || []).map((w) => ({
+      fieldFilter: { field: { fieldPath: fieldPathToken(w.field) }, op: 'EQUAL', value: toFirestoreValue(w.value) },
+    }));
+    if (filters.length === 1) structuredQuery.where = filters[0];
+    else if (filters.length > 1) structuredQuery.where = { compositeFilter: { op: 'AND', filters } };
+    if (query.orderBy) {
+      structuredQuery.orderBy = [
+        {
+          field: { fieldPath: fieldPathToken(query.orderBy.field) },
+          direction: query.orderBy.dir === 'desc' ? 'DESCENDING' : 'ASCENDING',
+        },
+      ];
+    }
+    if (query.limit !== undefined) structuredQuery.limit = query.limit;
+
+    const { json } = await this.call(
+      'POST',
+      `${this.root}${parent ? '/' + urlPath(parent) : ''}:runQuery`,
+      { structuredQuery },
+      `query of ${p}`
+    );
+
+    const docs: StoredDoc[] = [];
+    for (const item of Array.isArray(json) ? json : []) {
+      if (!item?.document) continue; // the last item of an empty result only carries readTime
+      const docPath = String(item.document.name).split('/documents/')[1];
+      docs.push({ id: docPath.split('/').pop() || '', path: docPath, data: fromFirestoreDoc(item.document) });
+    }
+    return docs;
+  }
+
+  async commit(writes: Write[]): Promise<void> {
+    if (writes.length === 0) return;
+    if (writes.length > MAX_WRITES_PER_COMMIT) {
+      throw new Error(`commit() takes at most ${MAX_WRITES_PER_COMMIT} writes, got ${writes.length}`);
+    }
+    const root = this.root;
+    const body = {
+      writes: writes.map((w) => {
+        const p = cleanPath(w.path);
+        if (w.op === 'delete') return { delete: `${root}/${p}` };
+        const fields: Record<string, any> = {};
+        for (const [k, v] of Object.entries(w.data || {})) if (v !== undefined) fields[k] = toFirestoreValue(v);
         return {
-          exists: true,
-          data: () => data,
-          id: this.path.split('/').pop() || '',
+          update: { name: `${root}/${p}`, fields },
+          // merge = only the listed top-level fields change; without a mask the document is replaced
+          ...(w.merge ? { updateMask: { fieldPaths: Object.keys(fields).map(fieldPathToken) } } : {}),
         };
+      }),
+    };
+    await this.call('POST', `${root}:commit`, body, `write of ${writes.length} document(s) (${writes[0].path}${writes.length > 1 ? ', ...' : ''})`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Local backend (development and tests only)
+// ---------------------------------------------------------------------------
+
+export class LocalBackend implements Backend {
+  readonly kind = 'local' as const;
+  private docs = new Map<string, any>();
+  private file: string | null;
+
+  constructor(file: string | null) {
+    this.file = file ? path.resolve(process.cwd(), file) : null;
+    if (this.file && fs.existsSync(this.file)) {
+      try {
+        const data = JSON.parse(fs.readFileSync(this.file, 'utf8'));
+        for (const [k, v] of Object.entries(data)) this.docs.set(k, v);
+      } catch (_e) {
+        // a damaged local file is ignored: this store is only a development convenience
       }
-    } catch (_err) {
-      // Fallback
     }
+  }
 
-    if (inMemoryDocs.has(this.path)) {
-      const data = inMemoryDocs.get(this.path);
-      return {
-        exists: true,
-        data: () => data,
-        id: this.path.split('/').pop() || '',
-      };
+  private persist() {
+    if (!this.file) return;
+    fs.writeFileSync(this.file, JSON.stringify(Object.fromEntries(this.docs), null, 2), 'utf8');
+  }
+
+  async getDoc(docPath: string): Promise<any | null> {
+    const v = this.docs.get(cleanPath(docPath));
+    return v === undefined ? null : clone(v);
+  }
+
+  async listDocs(collectionPath: string, query: QueryOpts = {}): Promise<StoredDoc[]> {
+    const prefix = cleanPath(collectionPath) + '/';
+    let out: StoredDoc[] = [];
+    for (const [k, v] of this.docs.entries()) {
+      if (!k.startsWith(prefix)) continue;
+      const rest = k.slice(prefix.length);
+      if (rest.includes('/')) continue;
+      out.push({ id: rest, path: k, data: clone(v) });
     }
+    for (const w of query.where || []) out = out.filter((d) => d.data && d.data[w.field] === w.value);
+    if (query.orderBy) {
+      const { field, dir } = query.orderBy;
+      out.sort((a, b) => {
+        const va = a.data?.[field];
+        const vb = b.data?.[field];
+        const c = va > vb ? 1 : va < vb ? -1 : 0;
+        return dir === 'desc' ? -c : c;
+      });
+    }
+    if (query.limit !== undefined) out = out.slice(0, query.limit);
+    return out;
+  }
 
-    return { exists: false, data: () => null, id: this.path.split('/').pop() || '' };
+  async commit(writes: Write[]): Promise<void> {
+    for (const w of writes) {
+      const p = cleanPath(w.path);
+      if (w.op === 'delete') {
+        this.docs.delete(p);
+      } else if (w.merge) {
+        this.docs.set(p, { ...(this.docs.get(p) || {}), ...clone(w.data) });
+      } else {
+        this.docs.set(p, clone(w.data));
+      }
+    }
+    this.persist();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Firestore-like facade used by the server code
+// ---------------------------------------------------------------------------
+
+export interface DocSnap {
+  id: string;
+  exists: boolean;
+  data: () => any;
+  ref: DocRef;
+}
+
+export interface QuerySnap {
+  docs: DocSnap[];
+  empty: boolean;
+  size: number;
+  forEach: (fn: (doc: DocSnap) => void) => void;
+}
+
+function querySnap(docs: DocSnap[]): QuerySnap {
+  return { docs, empty: docs.length === 0, size: docs.length, forEach: (fn) => docs.forEach(fn) };
+}
+
+export class DocRef {
+  path: string;
+  constructor(private db: Db, docPath: string) {
+    this.path = cleanPath(docPath);
+  }
+
+  get id(): string {
+    return this.path.split('/').pop() || '';
+  }
+
+  collection(sub: string): CollectionRef {
+    return new CollectionRef(this.db, `${this.path}/${cleanPath(sub)}`);
+  }
+
+  async get(): Promise<DocSnap> {
+    const data = await this.db.backend().getDoc(this.path);
+    return { id: this.id, exists: data !== null, data: () => (data === null ? undefined : data), ref: this };
   }
 
   async set(data: any, options?: { merge?: boolean }): Promise<void> {
-    syncFromDisk();
-    const existing = inMemoryDocs.get(this.path) || {};
-    const toSave = options?.merge ? { ...existing, ...data } : data;
-    inMemoryDocs.set(this.path, toSave);
-    saveStorage(inMemoryDocs);
-
-    if (this.path.startsWith('health/')) {
-      return;
-    }
-
-    try {
-      const authHeaders = await getServerAuthHeader();
-      const url = `${baseUrl}/${this.path}?key=${apiKey}`;
-      const fields: Record<string, any> = {};
-      for (const [k, v] of Object.entries(data)) {
-        if (v !== undefined) {
-          fields[k] = toFirestoreValue(v);
-        }
-      }
-
-      let method = 'PATCH';
-      let reqUrl = url;
-      if (options?.merge) {
-        const updateMask = Object.keys(data)
-          .map((k) => `updateMask.fieldPaths=${encodeURIComponent(k)}`)
-          .join('&');
-        reqUrl += `&${updateMask}`;
-      }
-
-      await fetch(reqUrl, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          ...authHeaders,
-        },
-        body: JSON.stringify({ fields }),
-      });
-    } catch (_e) {
-      // Retained in inMemoryDocs
-    }
+    await this.db.backend().commit([{ op: 'set', path: this.path, data, merge: options?.merge }]);
   }
 
   async delete(): Promise<void> {
-    syncFromDisk();
-    inMemoryDocs.delete(this.path);
-    saveStorage(inMemoryDocs);
-    try {
-      const authHeaders = await getServerAuthHeader();
-      const url = `${baseUrl}/${this.path}?key=${apiKey}`;
-      await fetch(url, {
-        method: 'DELETE',
-        headers: authHeaders,
-      });
-    } catch (_e) {
-      // Retained
-    }
+    await this.db.backend().commit([{ op: 'delete', path: this.path }]);
   }
 }
 
-/**
- * REST Firestore Collection Reference
- */
-export class RestCollectionRef {
-  path: string;
+export class Query {
+  constructor(protected db: Db, protected collectionPath: string, protected opts: QueryOpts = {}) {}
 
-  constructor(path: string) {
-    this.path = path.replace(/^\/+|\/+$/g, '');
+  where(field: string, op: string, value: any): Query {
+    if (op !== '==') throw new Error(`Only "==" filters are supported (got "${op}")`);
+    return new Query(this.db, this.collectionPath, {
+      ...this.opts,
+      where: [...(this.opts.where || []), { field, value }],
+    });
   }
 
-  doc(id?: string): RestDocRef {
-    const docId = id || Math.random().toString(36).substring(2, 15);
-    return new RestDocRef(`${this.path}/${docId}`);
+  orderBy(field: string, dir: 'asc' | 'desc' = 'asc'): Query {
+    return new Query(this.db, this.collectionPath, { ...this.opts, orderBy: { field, dir } });
   }
 
-  async get(): Promise<{
-    docs: Array<{ id: string; data: () => any; ref: RestDocRef }>;
-    empty: boolean;
-    forEach: (fn: (doc: { id: string; data: () => any; ref: RestDocRef }) => void) => void;
-  }> {
-    syncFromDisk();
-    const fallback = () => {
-      const prefix = `${this.path}/`;
-      const docs: Array<{ id: string; data: () => any; ref: RestDocRef }> = [];
-      for (const [k, v] of inMemoryDocs.entries()) {
-        if (k.startsWith(prefix)) {
-          const rest = k.substring(prefix.length);
-          if (!rest.includes('/')) {
-            docs.push({
-              id: rest,
-              data: () => v,
-              ref: new RestDocRef(k),
-            });
-          }
-        }
-      }
-      return {
-        docs,
-        empty: docs.length === 0,
-        forEach: (fn: any) => docs.forEach(fn),
-      };
-    };
-
-    try {
-      const authHeaders = await getServerAuthHeader();
-      const parent = this.path.includes('/')
-        ? this.path.substring(0, this.path.lastIndexOf('/'))
-        : '';
-      const collectionId = this.path.includes('/')
-        ? this.path.substring(this.path.lastIndexOf('/') + 1)
-        : this.path;
-
-      const queryUrl = parent
-        ? `${baseUrl}/${parent}:runQuery?key=${apiKey}`
-        : `${baseUrl}:runQuery?key=${apiKey}`;
-
-      const res = await fetch(queryUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...authHeaders,
-        },
-        body: JSON.stringify({
-          structuredQuery: {
-            from: [{ collectionId }],
-          },
-        }),
-      });
-
-      if (!res.ok) {
-        return fallback();
-      }
-
-      const json = await res.json();
-      const docs: Array<{ id: string; data: () => any; ref: RestDocRef }> = [];
-
-      if (Array.isArray(json)) {
-        for (const item of json) {
-          if (item.document) {
-            const docPath = item.document.name.split('/documents/')[1];
-            const id = docPath.split('/').pop() || '';
-            const data = fromFirestoreDoc(item.document);
-            inMemoryDocs.set(docPath, data);
-            docs.push({
-              id,
-              data: () => data,
-              ref: new RestDocRef(docPath),
-            });
-          }
-        }
-      }
-
-      if (docs.length > 0) {
-        return {
-          docs,
-          empty: false,
-          forEach: (fn) => docs.forEach(fn),
-        };
-      }
-      return fallback();
-    } catch (_e) {
-      return fallback();
-    }
+  limit(count: number): Query {
+    return new Query(this.db, this.collectionPath, { ...this.opts, limit: count });
   }
 
-  limit(count: number) {
-    return {
-      get: async () => {
-        const all = await this.get();
-        const sliced = all.docs.slice(0, count);
-        return {
-          docs: sliced,
-          empty: sliced.length === 0,
-          forEach: (fn: any) => sliced.forEach(fn),
-        };
-      },
-    };
-  }
-
-  where(field: string, op: string, value: any) {
-    return {
-      get: async () => {
-        const all = await this.get();
-        const filtered = all.docs.filter((d) => {
-          const data = d.data();
-          if (op === '==') return data && data[field] === value;
-          return true;
-        });
-        return {
-          docs: filtered,
-          empty: filtered.length === 0,
-          forEach: (fn: any) => filtered.forEach(fn),
-        };
-      },
-    };
-  }
-
-  orderBy(field: string, dir: 'asc' | 'desc' = 'asc') {
-    return {
-      limit: (count: number) => ({
-        get: async () => {
-          const all = await this.get();
-          const sorted = [...all.docs].sort((a, b) => {
-            const va = a.data()?.[field];
-            const vb = b.data()?.[field];
-            if (dir === 'desc') return vb > va ? 1 : vb < va ? -1 : 0;
-            return va > vb ? 1 : va < vb ? -1 : 0;
-          });
-          const sliced = sorted.slice(0, count);
-          return {
-            docs: sliced,
-            empty: sliced.length === 0,
-            forEach: (fn: any) => sliced.forEach(fn),
-          };
-        },
-      }),
-    };
-  }
-
-  async add(data: any): Promise<RestDocRef> {
-    const docRef = this.doc();
-    await docRef.set(data);
-    return docRef;
+  async get(): Promise<QuerySnap> {
+    const found = await this.db.backend().listDocs(this.collectionPath, this.opts);
+    return querySnap(
+      found.map((d) => ({
+        id: d.id,
+        exists: true,
+        data: () => d.data,
+        ref: new DocRef(this.db, d.path),
+      }))
+    );
   }
 }
 
-/**
- * REST Batch Writer (supports sets & deletes)
- */
-export class RestBatch {
-  ops: Array<() => Promise<void>> = [];
-
-  set(docRef: RestDocRef, data: any, options?: { merge?: boolean }) {
-    this.ops.push(() => docRef.set(data, options));
+export class CollectionRef extends Query {
+  constructor(db: Db, collectionPath: string) {
+    super(db, cleanPath(collectionPath));
   }
 
-  delete(docRef: RestDocRef) {
-    this.ops.push(() => docRef.delete());
+  get path(): string {
+    return this.collectionPath;
   }
 
+  doc(id?: string): DocRef {
+    const docId = id || Math.random().toString(36).slice(2, 12) + Date.now().toString(36);
+    return new DocRef(this.db, `${this.collectionPath}/${docId}`);
+  }
+
+  async add(data: any): Promise<DocRef> {
+    const ref = this.doc();
+    await ref.set(data);
+    return ref;
+  }
+}
+
+export class Batch {
+  private writes: Write[] = [];
+  constructor(private db: Db) {}
+
+  set(ref: DocRef, data: any, options?: { merge?: boolean }): Batch {
+    this.writes.push({ op: 'set', path: ref.path, data, merge: options?.merge });
+    return this;
+  }
+
+  delete(ref: DocRef): Batch {
+    this.writes.push({ op: 'delete', path: ref.path });
+    return this;
+  }
+
+  get size(): number {
+    return this.writes.length;
+  }
+
+  /** Saves everything, in commits of at most 400 writes. Throws on the first failed commit. */
   async commit(): Promise<void> {
-    // Run operations in concurrent batches
-    const chunkSize = 15;
-    for (let i = 0; i < this.ops.length; i += chunkSize) {
-      const chunk = this.ops.slice(i, i + chunkSize);
-      await Promise.all(chunk.map((op) => op()));
+    for (let i = 0; i < this.writes.length; i += MAX_WRITES_PER_COMMIT) {
+      await this.db.backend().commit(this.writes.slice(i, i + MAX_WRITES_PER_COMMIT));
+    }
+    this.writes = [];
+  }
+}
+
+export class Db {
+  constructor(private getBackend: () => Backend) {}
+
+  backend(): Backend {
+    return this.getBackend();
+  }
+
+  get kind(): 'firestore' | 'local' {
+    return this.getBackend().kind;
+  }
+
+  collection(collectionPath: string): CollectionRef {
+    return new CollectionRef(this, collectionPath);
+  }
+
+  batch(): Batch {
+    return new Batch(this);
+  }
+
+  /** Writes health/ping and reads it back. Throws with the reason when the database is not usable. */
+  async healthCheck(): Promise<void> {
+    const time = new Date().toISOString();
+    await this.backend().commit([{ op: 'set', path: 'health/ping', data: { time } }]);
+    const back = await this.backend().getDoc('health/ping');
+    if (!back || back.time !== time) {
+      throw new Error('Health ping verify failed: the value read back does not match the value written.');
     }
   }
 }
 
-/**
- * Universal Database Client for Server
- */
-export const serverDb = {
-  collection(path: string): RestCollectionRef {
-    return new RestCollectionRef(path);
-  },
-  batch(): RestBatch {
-    return new RestBatch();
-  },
-};
+/** `getBackend` runs on first use, so environment variables are read after they are loaded. */
+export function createDb(getBackend: () => Backend): Db {
+  return new Db(getBackend);
+}
+
+export function createFirestoreBackend(opts: FirestoreBackendOptions): FirestoreRestBackend {
+  return new FirestoreRestBackend(opts);
+}
+
+export function createLocalBackend(file: string | null): LocalBackend {
+  return new LocalBackend(file);
+}

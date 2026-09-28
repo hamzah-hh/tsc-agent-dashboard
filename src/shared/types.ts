@@ -196,6 +196,11 @@ export interface AgentRecord {
     lastDataDate: string;
     headline?: string;
     items?: Array<{ id: string; text: string }>;
+    // Set by the server. `fingerprint` ties the text to the exact numbers it was written for
+    // (see aiFingerprint in aiText.ts); text whose fingerprint no longer matches is not shown.
+    generatedAt?: string;
+    model?: string;
+    fingerprint?: string;
   };
 }
 
@@ -245,6 +250,8 @@ export interface SyncLogRecord {
   error?: string;
   aiOk?: number;
   aiFailed?: number;
+  aiSkipped?: number; // text already current for these agents
+  aiPending?: number; // not reached within the time budget (the next sync or "Generate AI text" continues)
 }
 
 export interface RawMainRow {
