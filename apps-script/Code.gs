@@ -11,13 +11,48 @@ function onOpen() {
     .addToUi();
 }
 
-function syncNow() {
-  var isInteractive = true;
+/** True when a person started the script from the sheet (menu), false in a time-driven trigger. */
+function isInteractive_() {
   try {
-    SpreadsheetApp.getActiveSpreadsheet();
+    SpreadsheetApp.getUi();
+    return true;
   } catch (e) {
-    isInteractive = false;
+    return false;
   }
+}
+
+/**
+ * Tells whoever ran the sync what happened.
+ * - From the menu: a dialog.
+ * - From the daily trigger nobody is watching: a toast, and a FAILURE is thrown only when the sync
+ *   really failed. The run then shows as "Failed" under Executions, and Apps Script can email the owner
+ *   (Triggers > Failure notification settings). Before, every daily run ended with an error (a trigger
+ *   cannot open a dialog), so a real failure looked exactly like a good run.
+ */
+function report_(interactive, ss, title, message, isError) {
+  if (isError) {
+    console.error(title + ': ' + message);
+  } else {
+    console.log(title + ': ' + message);
+  }
+  if (interactive) {
+    var ui = SpreadsheetApp.getUi();
+    ui.alert(title, message, ui.ButtonSet.OK);
+    return;
+  }
+  try {
+    ss.toast(message, title, isError ? 8 : 5);
+  } catch (e) {
+    // a toast is only a courtesy
+  }
+  if (isError) {
+    throw new Error(title + ': ' + message);
+  }
+}
+
+function syncNow() {
+  var interactive = isInteractive_();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
 
   var scriptProperties = PropertiesService.getScriptProperties();
   var syncUrl = scriptProperties.getProperty('SYNC_URL');
@@ -26,35 +61,23 @@ function syncNow() {
   var cycleEnd = scriptProperties.getProperty('CYCLE_END');
 
   if (!syncUrl || !syncKey) {
-    var errorMsg = 'Missing Script Properties: SYNC_URL or SYNC_KEY not set. Check Project Settings > Script Properties.';
-    console.error(errorMsg);
-    if (isInteractive) {
-      SpreadsheetApp.getUi().alert('Configuration Error', errorMsg, SpreadsheetApp.getUi().ButtonSet.OK);
-    }
+    report_(interactive, ss, 'Configuration Error',
+      'Missing Script Properties: SYNC_URL or SYNC_KEY not set. Check Project Settings > Script Properties.', true);
     return;
   }
 
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
   var mainSheet = ss.getSheetByName('MainSheet');
   var qualitySheet = ss.getSheetByName('D-1_QualityAudit_Summary');
 
   if (!mainSheet) {
-    var notFoundMsg = "Sheet 'MainSheet' was not found.";
-    console.error(notFoundMsg);
-    if (isInteractive) {
-      SpreadsheetApp.getUi().alert('Error', notFoundMsg, SpreadsheetApp.getUi().ButtonSet.OK);
-    }
+    report_(interactive, ss, 'Error', "Sheet 'MainSheet' was not found.", true);
     return;
   }
 
   // 1. Read MainSheet
   var mainData = mainSheet.getDataRange().getValues();
   if (mainData.length < 2) {
-    var emptyMsg = "'MainSheet' is empty.";
-    console.error(emptyMsg);
-    if (isInteractive) {
-      SpreadsheetApp.getUi().alert('Notice', emptyMsg, SpreadsheetApp.getUi().ButtonSet.OK);
-    }
+    report_(interactive, ss, 'Notice', "'MainSheet' is empty.", true);
     return;
   }
 
@@ -122,44 +145,31 @@ function syncNow() {
     muteHttpExceptions: true,
   };
 
+  var response;
   try {
-    var response = UrlFetchApp.fetch(endpoint, options);
-    var responseCode = response.getResponseCode();
-    var responseText = response.getContentText();
-    var json = {};
-    try {
-      json = JSON.parse(responseText);
-    } catch (e) {
-      json = { error: responseText };
-    }
-
-    if (responseCode >= 200 && responseCode < 300 && json.result === 'ok') {
-      var successMsg = 'Sync successful! Rows: ' + (json.rows || 0) + ', Agents: ' + (json.agents || 0) + (json.lastDataDate ? ' (Data up to ' + json.lastDataDate + ')' : '');
-      if (json.warnings && json.warnings.length > 0) {
-        successMsg += '\nWarnings: ' + json.warnings.join('; ');
-      }
-      console.log(successMsg);
-      if (isInteractive) {
-        SpreadsheetApp.getUi().alert('Sync Complete', successMsg, SpreadsheetApp.getUi().ButtonSet.OK);
-      } else {
-        ss.toast(successMsg, 'Sync Complete', 5);
-      }
-    } else {
-      var failMsg = 'Sync failed (' + responseCode + '): ' + (json.error || responseText);
-      console.error(failMsg);
-      if (isInteractive) {
-        SpreadsheetApp.getUi().alert('Sync Failed', failMsg, SpreadsheetApp.getUi().ButtonSet.OK);
-      } else {
-        ss.toast(failMsg, 'Sync Error', 8);
-      }
-    }
+    response = UrlFetchApp.fetch(endpoint, options);
   } catch (err) {
-    console.error('Fetch error during sync:', err);
-    if (isInteractive) {
-      SpreadsheetApp.getUi().alert('Network Error', String(err), SpreadsheetApp.getUi().ButtonSet.OK);
-    } else {
-      ss.toast(String(err), 'Network Error', 8);
+    report_(interactive, ss, 'Network Error', String(err), true);
+    return;
+  }
+
+  var responseCode = response.getResponseCode();
+  var responseText = response.getContentText();
+  var json = {};
+  try {
+    json = JSON.parse(responseText);
+  } catch (e) {
+    json = { error: responseText };
+  }
+
+  if (responseCode >= 200 && responseCode < 300 && json.result === 'ok') {
+    var successMsg = 'Sync successful! Rows: ' + (json.rows || 0) + ', Agents: ' + (json.agents || 0) + (json.lastDataDate ? ' (Data up to ' + json.lastDataDate + ')' : '');
+    if (json.warnings && json.warnings.length > 0) {
+      successMsg += '\nWarnings: ' + json.warnings.join('; ');
     }
+    report_(interactive, ss, 'Sync Complete', successMsg, false);
+  } else {
+    report_(interactive, ss, 'Sync Failed', 'Sync failed (' + responseCode + '): ' + (json.error || responseText), true);
   }
 }
 
@@ -172,16 +182,18 @@ function installDailyTrigger() {
     }
   }
 
-  // Create daily trigger at hour 13 (1 PM - 2 PM in script time zone)
+  // Daily at about 1:30 PM in the script time zone (Project Settings must say Asia/Kolkata)
   ScriptApp.newTrigger('syncNow')
     .timeBased()
     .atHour(13)
+    .nearMinute(30)
     .everyDays(1)
     .create();
 
   SpreadsheetApp.getUi().alert(
     'Trigger Installed',
-    'Daily sync trigger scheduled between 1:00 PM and 2:00 PM IST.',
+    'Daily sync trigger scheduled for about 1:30 PM IST (Apps Script may start it up to 15 minutes either side). ' +
+      'In the Triggers page, set "Failure notification settings" to notify you immediately, so a failed daily sync is never silent.',
     SpreadsheetApp.getUi().ButtonSet.OK
   );
 }

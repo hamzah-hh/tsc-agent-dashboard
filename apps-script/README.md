@@ -51,4 +51,5 @@ Click **Save script properties**.
 
 ### 7. Install Daily Trigger
 1. Click **Incentive App** > **Install daily trigger**.
-2. This configures an automatic trigger to run daily between 1:00 PM and 2:00 PM IST.
+2. This configures an automatic trigger that runs daily at about 1:30 PM IST (Apps Script may start it up to 15 minutes early or late).
+3. Open the **Triggers** page (clock icon in the Apps Script sidebar), click the trigger, and set **Failure notification settings** to **Notify me immediately**. When the daily sync fails (wrong key, server down, headers changed), the run is marked as Failed and you get an email. A successful daily run is now marked as successful (before this fix, every daily run ended with an error, because a trigger cannot open a dialog, so a real failure looked like a good run).
