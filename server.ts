@@ -5,7 +5,7 @@ import { adminAuth, adminDb } from './server-firebase-admin';
 import { ensureSeedData, processImport } from './server-import';
 import { normalizeEmail } from './src/shared/incentive';
 import { generateAiText, runBatchAiGeneration } from './server-ai';
-import { defaultHOPlan, defaultSTOREPlan } from './src/shared/plans';
+import { buildLocationRows } from './src/shared/leaderboard';
 import { AgentRecord } from './src/shared/types';
 
 dotenv.config();
@@ -169,6 +169,18 @@ app.post(['/api/clear-test', '/api/admin/clear-test-data'], async (req, res) => 
       deletedAccessCount++;
     });
 
+    // 2b. Delete the sync log entries written by test runs (real Apps Script syncs are kept)
+    const testLogsSnap = await adminDb
+      .collection('syncLogs')
+      .where('source', '==', 'test')
+      .get();
+
+    let deletedSyncLogsCount = 0;
+    testLogsSnap.forEach((doc: any) => {
+      batch.delete(doc.ref);
+      deletedSyncLogsCount++;
+    });
+
     // 3. Clear/recalculate leaderboards
     // Re-read remaining non-test agents
     const remainingAgentsSnap = await adminDb
@@ -182,17 +194,6 @@ app.post(['/api/clear-test', '/api/admin/clear-test-data'], async (req, res) => 
       .filter((a) => !a.isTest);
 
     for (const loc of appConfig.locations) {
-      const locAgents = remainingNonTestAgents.filter((a) => a.location === loc);
-      locAgents.sort((a, b) => {
-        if (b.result.total !== a.result.total) {
-          return b.result.total - a.result.total;
-        }
-        if (b.result.achievementPct !== a.result.achievementPct) {
-          return b.result.achievementPct - a.result.achievementPct;
-        }
-        return a.name.localeCompare(b.name);
-      });
-
       const lbRef = adminDb
         .collection('cycles')
         .doc(cycleId)
@@ -202,15 +203,7 @@ app.post(['/api/clear-test', '/api/admin/clear-test-data'], async (req, res) => 
       batch.set(lbRef, {
         location: loc,
         updatedAt: new Date().toISOString(),
-        rows: locAgents.map((a, idx) => ({
-          rank: idx + 1,
-          name: a.name,
-          officialEmail: a.officialEmail,
-          sales: a.totals.sales,
-          achievementPct: a.result.achievementPct,
-          className: a.result.className,
-          totalIncentive: a.result.total,
-        })),
+        rows: buildLocationRows(remainingNonTestAgents as AgentRecord[], loc, false),
       });
     }
 
@@ -220,6 +213,7 @@ app.post(['/api/clear-test', '/api/admin/clear-test-data'], async (req, res) => 
       status: 'ok',
       deletedAgents: deletedAgentsCount,
       deletedAccess: deletedAccessCount,
+      deletedSyncLogs: deletedSyncLogsCount,
     });
   } catch (err: any) {
     console.error('Error in /api/admin/clear-test-data:', err);
@@ -388,12 +382,8 @@ app.post('/api/admin/test-ai', async (req, res) => {
       });
     }
 
-    const plan =
-      cycle.plans?.[targetAgent.agentType] ||
-      (targetAgent.agentType === 'HO' ? defaultHOPlan : defaultSTOREPlan);
-
-    // Call generateAiText
-    const aiResult = await generateAiText(targetAgent, plan, cycle, appConfig);
+    // Call generateAiText (it picks the HO, Store or Pre Sales rules from the agent's type)
+    const aiResult = await generateAiText(targetAgent, cycle, appConfig);
 
     return res.json({
       agentName: targetAgent.name,
@@ -446,8 +436,6 @@ app.post('/api/admin/generate-ai-all', async (req, res) => {
 
     const { okCount, failedCount, updatedAgents } = await runBatchAiGeneration(
       agents,
-      cycle.plans.HO || defaultHOPlan,
-      cycle.plans.STORE || defaultSTOREPlan,
       cycle,
       appConfig
     );

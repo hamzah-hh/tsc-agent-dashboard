@@ -1,11 +1,20 @@
-import { AgentRecord, Cycle, Plan, Suggestion } from './types';
-import { calculateFromMetrics, formatCurrencyINR, formatNumberINR, metricsFromTotals } from './incentive';
+import { AgentRecord, Cycle, Plan, PreSalesPlan, Suggestion } from './types';
+import {
+  calculateFromMetrics,
+  calculatePreSales,
+  formatCurrencyINR,
+  formatNumberINR,
+  metricsFromTotals,
+  pickPreSalesTier,
+  preSalesMetricsFromTotals,
+} from './incentive';
 import {
   calculateRemainingWorkingDays,
   minSalesForClass,
   requiredPerDay,
   calculateProjection,
 } from './planning';
+import { getPreSalesPlan, getRevenuePlan } from './plans';
 
 /**
  * Pure function: buildSuggestions(agentRecord, plan, cycle) returns Suggestion[]
@@ -468,4 +477,191 @@ export function buildSuggestions(
 
   // Return headline first or topSuggestions with headline included
   return [headlineSuggestion, ...topSuggestions];
+}
+
+/**
+ * Pre Sales suggestions: quality gate, next calls tier, next talk-time tier, streak.
+ * Same shape as buildSuggestions: headline first, then warnings, then the rest by rupee gain (max 5).
+ */
+export function buildPreSalesSuggestions(
+  agentRecord: AgentRecord | null | undefined,
+  plan: PreSalesPlan,
+  cycle: Cycle
+): Suggestion[] {
+  if (!agentRecord || !agentRecord.totals || agentRecord.totals.activeDays <= 0) {
+    return [];
+  }
+
+  const { totals, quality, daily, lastDataDate } = agentRecord;
+  const activeDays = totals.activeDays;
+  const metrics = preSalesMetricsFromTotals(totals, quality, plan);
+  const calc = calculatePreSales(metrics, plan);
+  const ps = calc.preSales;
+  if (!ps) return [];
+
+  const remaining = calculateRemainingWorkingDays(
+    lastDataDate,
+    cycle.startDate,
+    cycle.endDate,
+    cycle.workingDaysPerWeek
+  );
+  const gate = plan.qualityGate;
+  const callsTiers = [...plan.calls].sort((a, b) => a.min - b.min);
+  const talkTiers = [...plan.talkSeconds].sort((a, b) => a.min - b.min);
+  const totalCalls = totals.calls ?? 0;
+  const suggestions: Suggestion[] = [];
+
+  // --- Headline: Day X of Y ---
+  const startMs = new Date(cycle.startDate + 'T00:00:00Z').getTime();
+  const endMs = new Date(cycle.endDate + 'T00:00:00Z').getTime();
+  const totalDays = Math.max(1, Math.round((endMs - startMs) / (1000 * 60 * 60 * 24)) + 1);
+  const lastMs = lastDataDate ? new Date(lastDataDate + 'T00:00:00Z').getTime() : startMs;
+  const elapsed = Math.max(
+    1,
+    Math.min(totalDays, Math.round((lastMs - startMs) / (1000 * 60 * 60 * 24)) + 1)
+  );
+
+  let headlineText: string;
+  if (ps.eligible) {
+    headlineText = `Day ${elapsed} of ${totalDays}: you have earned ${formatCurrencyINR(calc.total)} so far.`;
+  } else if (ps.potentialTotal > 0) {
+    headlineText = `Day ${elapsed} of ${totalDays}: reach a Quality Score of ${gate}% to unlock ${formatCurrencyINR(ps.potentialTotal)}.`;
+  } else {
+    headlineText = `Day ${elapsed} of ${totalDays}: keep going. Your first payout starts at ${callsTiers[0]?.min ?? 0} calls a day.`;
+  }
+
+  const headlineSuggestion: Suggestion = {
+    id: 'headline',
+    type: 'headline',
+    priority: 100,
+    gainRupees: 0,
+    numbers: { day: elapsed, totalDays, total: calc.total },
+    defaultText: headlineText,
+    difficult: false,
+  };
+
+  // --- Quality gate (both incentives need the minimum Quality Score) ---
+  const score = metrics.qualityScore;
+  if (score === null) {
+    suggestions.push({
+      id: 'warning-quality-gate',
+      type: 'warning',
+      priority: 1000,
+      gainRupees: 0,
+      numbers: { gate, potential: ps.potentialTotal },
+      defaultText: `No Quality audit yet. You need a Quality Score of ${gate}% or more to receive your Calls and Talk Time incentives.`,
+      difficult: false,
+    });
+  } else if (score < gate) {
+    suggestions.push({
+      id: 'warning-quality-gate',
+      type: 'warning',
+      priority: 1000,
+      gainRupees: 0,
+      numbers: { score, gate, potential: ps.potentialTotal },
+      defaultText:
+        ps.potentialTotal > 0
+          ? `Your Quality Score is ${score}%. Reach ${gate}% to unlock ${formatCurrencyINR(ps.potentialTotal)}.`
+          : `Your Quality Score is ${score}%. You need ${gate}% or more to receive your incentives.`,
+      difficult: false,
+    });
+  } else if (score - gate <= 1 && ps.potentialTotal > 0) {
+    suggestions.push({
+      id: 'warning-quality-gate',
+      type: 'warning',
+      priority: 1000,
+      gainRupees: 0,
+      numbers: { score, gate, potential: ps.potentialTotal },
+      defaultText: `Warning: your Quality Score (${score}) is right on the edge of the ${gate}% you need. One low audit can lock ${formatCurrencyINR(ps.potentialTotal)}.`,
+      difficult: false,
+    });
+  }
+
+  // --- Next calls tier ---
+  const nextCalls = callsTiers.find((t) => t.min > metrics.avgCalls);
+  if (nextCalls && remaining > 0) {
+    const extra =
+      (nextCalls.min * (activeDays + remaining) - totalCalls) / remaining - metrics.avgCalls;
+    if (extra > 0) {
+      const gain = nextCalls.payout - pickPreSalesTier(plan.calls, metrics.avgCalls).payout;
+      suggestions.push({
+        id: 'fastestBonus-calls',
+        type: 'fastestBonus',
+        priority: 60,
+        gainRupees: gain,
+        numbers: { extraPerDay: Math.ceil(extra), gain, nextLimit: nextCalls.min },
+        defaultText: `The next calls tier starts at ${nextCalls.min} calls a day. You need ${Math.ceil(extra)} more calls each day (+${formatCurrencyINR(gain)}).`,
+        difficult: metrics.avgCalls > 0 && extra > metrics.avgCalls,
+      });
+    }
+  }
+
+  // --- Next talk-time tier (talk time is an average per call, so the maths follows the plan's method) ---
+  const nextTalk = talkTiers.find((t) => t.min > metrics.avgTalkSeconds);
+  if (nextTalk && remaining > 0 && metrics.avgTalkSeconds > 0) {
+    const weightCalls = totals.ttWeightCalls ?? 0;
+    const futureCalls = (totalCalls / activeDays) * remaining;
+    let neededAvg: number;
+    if (plan.talkMethod === 'weighted' && weightCalls > 0 && futureCalls > 0) {
+      neededAvg =
+        (nextTalk.min * (weightCalls + futureCalls) - (totals.ttWeightedSum ?? 0)) / futureCalls;
+    } else {
+      neededAvg =
+        (nextTalk.min * ((totals.ttRows ?? 0) + remaining) - (totals.ttSum ?? 0)) / remaining;
+    }
+    const extra = neededAvg - metrics.avgTalkSeconds;
+    if (extra > 0) {
+      const gain = nextTalk.payout - pickPreSalesTier(plan.talkSeconds, metrics.avgTalkSeconds).payout;
+      suggestions.push({
+        id: 'fastestBonus-talk',
+        type: 'fastestBonus',
+        priority: 55,
+        gainRupees: gain,
+        numbers: { extraSeconds: Math.ceil(extra), gain, nextLimit: nextTalk.min },
+        defaultText: `The next talk time tier starts at ${nextTalk.min} seconds. You need about ${Math.ceil(extra)} more seconds on each call from now on (+${formatCurrencyINR(gain)}).`,
+        difficult: extra > metrics.avgTalkSeconds,
+      });
+    }
+  }
+
+  // --- Streak: most recent active days in a row at or above the first calls tier ---
+  const activeEntries = (daily || []).filter((d) => d.day > 0);
+  if (activeEntries.length >= 3 && callsTiers.length > 0) {
+    const limit = callsTiers[0].min;
+    let streak = 0;
+    for (let i = activeEntries.length - 1; i >= 0; i--) {
+      if ((activeEntries[i].calls ?? 0) >= limit) streak++;
+      else break;
+    }
+    if (streak >= 3) {
+      suggestions.push({
+        id: 'streak-calls',
+        type: 'streak',
+        priority: 35,
+        gainRupees: 0,
+        numbers: { streak, limit },
+        defaultText: `${streak} days in a row at ${limit}+ calls. Keep the streak alive!`,
+        difficult: false,
+      });
+    }
+  }
+
+  // --- Sort and limit: warnings first, then by rupee gain ---
+  const warnings = suggestions.filter((s) => s.type === 'warning');
+  const others = suggestions.filter((s) => s.type !== 'warning');
+  others.sort((a, b) => b.gainRupees - a.gainRupees || b.priority - a.priority);
+
+  return [headlineSuggestion, ...[...warnings, ...others].slice(0, 5)];
+}
+
+/** Suggestions for any agent: picks the Pre Sales or the revenue rules from the agent's type. */
+export function buildAgentSuggestions(
+  agentRecord: AgentRecord | null | undefined,
+  cycle: Cycle
+): Suggestion[] {
+  if (!agentRecord) return [];
+  if (agentRecord.agentType === 'PRE_SALES') {
+    return buildPreSalesSuggestions(agentRecord, getPreSalesPlan(cycle), cycle);
+  }
+  return buildSuggestions(agentRecord, getRevenuePlan(cycle, agentRecord.agentType), cycle);
 }

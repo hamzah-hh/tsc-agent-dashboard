@@ -36,11 +36,54 @@ export interface Plan {
   deductionRules: DeductionRule[];
 }
 
+export type AgentType = 'HO' | 'STORE' | 'PRE_SALES';
+
+/** One payout step of a Pre Sales incentive. The value must be at least `min` (inclusive). */
+export interface PreSalesTier {
+  min: number;
+  payout: number;
+}
+
+/**
+ * Pre Sales plan: two incentives (inbound calls per day, average talk time in seconds).
+ * Both are paid only when the Quality Score is at least `qualityGate`.
+ */
+export interface PreSalesPlan {
+  qualityGate: number;
+  calls: PreSalesTier[];
+  talkSeconds: PreSalesTier[];
+  // 'weighted' = total talk time / total calls (Inbound_Calls weights each day's average)
+  // 'simple'   = plain average of the daily values
+  talkMethod: 'weighted' | 'simple';
+}
+
+export interface PreSalesMetrics {
+  avgCalls: number;
+  avgTalkSeconds: number;
+  qualityScore: number | null;
+}
+
+export interface PreSalesLineResult {
+  value: number; // whole-number metric used to pick the tier
+  tier: number; // 0 = below the first tier
+  payout: number; // tier payout before the quality gate
+  amount: number; // amount actually paid (0 when the quality gate is not met)
+}
+
+export interface PreSalesResult {
+  qualityScore: number | null;
+  qualityGate: number;
+  eligible: boolean;
+  calls: PreSalesLineResult;
+  talk: PreSalesLineResult;
+  potentialTotal: number; // what both tiers would pay if the quality gate were met
+}
+
 export interface AppConfig {
   superAdmins: string[];
   managers: string[];
   activeCycleId: string;
-  tierMap: Record<string, 'HO' | 'STORE'>;
+  tierMap: Record<string, AgentType>;
   locations: string[];
   testMode: boolean;
   aiEnabled: boolean;
@@ -64,6 +107,7 @@ export interface Cycle {
   plans: {
     HO: Plan;
     STORE: Plan;
+    PRE_SALES?: PreSalesPlan;
   };
 }
 
@@ -76,6 +120,9 @@ export interface AgentDailyEntry {
   visitsBooked: number;
   visitsAttributed: number;
   day: number;
+  // Pre Sales only
+  calls?: number;
+  avgTalkSec?: number;
 }
 
 export interface AgentTotals {
@@ -86,6 +133,12 @@ export interface AgentTotals {
   visitsBooked: number;
   visitsAttributed: number;
   activeDays: number;
+  // Pre Sales only (optional, so existing HO / Store records stay valid)
+  calls?: number; // sum of Inbound_Calls
+  ttWeightedSum?: number; // sum of Avg_TT_per_day x Inbound_Calls
+  ttWeightCalls?: number; // sum of Inbound_Calls on rows that have an Avg_TT_per_day value
+  ttSum?: number; // sum of Avg_TT_per_day over worked days
+  ttRows?: number; // number of worked days that have an Avg_TT_per_day value
 }
 
 export interface QualitySummary {
@@ -119,6 +172,8 @@ export interface IncentiveResult {
     amount: number;
   };
   total: number;
+  // Present only for Pre Sales agents (className is 'PS' and the revenue fields are 0)
+  preSales?: PreSalesResult;
 }
 
 export interface AgentRecord {
@@ -126,7 +181,7 @@ export interface AgentRecord {
   officialEmail: string;
   personalEmail: string;
   location: string;
-  agentType: 'HO' | 'STORE';
+  agentType: AgentType;
   tlOfficialEmail: string;
   tlPersonalEmail: string;
   totals: AgentTotals;
@@ -210,6 +265,8 @@ export interface RawMainRow {
   Store_Visits_Booked?: any;
   Store_Visits_Attributed?: any;
   Day?: any;
+  Inbound_Calls?: any; // Pre Sales
+  Avg_TT_per_day?: any; // Pre Sales (average talk time, seconds)
   [key: string]: any;
 }
 

@@ -2,17 +2,26 @@ import { adminDb } from './server-firebase-admin';
 import {
   aggregateAgent,
   calculateFromMetrics,
+  calculatePreSales,
   metricsFromTotals,
   normalizeEmail,
   parseToISTDateString,
+  preSalesMetricsFromTotals,
+  resolveAgentType,
 } from './src/shared/incentive';
-import { defaultHOPlan, defaultSTOREPlan } from './src/shared/plans';
+import {
+  defaultHOPlan,
+  defaultPreSalesPlan,
+  defaultSTOREPlan,
+  getPreSalesPlan,
+} from './src/shared/plans';
+import { buildLocationRows } from './src/shared/leaderboard';
 import {
   AgentRecord,
   AppConfig,
   Cycle,
+  IncentiveResult,
   LeaderboardRecord,
-  LeaderboardRow,
   RawMainRow,
   RawQualityRow,
   SyncLogRecord,
@@ -45,6 +54,10 @@ const REQUIRED_QUALITY_HEADERS = [
   'Average_Audit_Score',
 ];
 
+// Pre Sales columns. Not required for the sheet as a whole (HO and Store rows leave them blank),
+// but a Pre Sales agent cannot be calculated without them, so a missing column gives a warning.
+const PRE_SALES_HEADERS = ['Inbound_Calls', 'Avg_TT_per_day'];
+
 /**
  * Ensure seed data exists in config/app and cycles/diwali-2026
  */
@@ -62,6 +75,7 @@ export async function ensureSeedData(): Promise<{ appConfig: AppConfig; cycle: C
       tierMap: {
         'HO Callers': 'HO',
         'Store Callers': 'STORE',
+        PreSales: 'PRE_SALES',
       },
       locations: ['Dighe', 'Andheri', 'Bangalore'],
       testMode: true,
@@ -80,6 +94,15 @@ export async function ensureSeedData(): Promise<{ appConfig: AppConfig; cycle: C
     }
     if (!appConfig.managers.includes('anirban.tsc@gmail.com')) {
       appConfig.managers.push('anirban.tsc@gmail.com');
+      modified = true;
+    }
+    // Older config documents: make sure the Pre Sales tier is mapped
+    if (!appConfig.tierMap) {
+      appConfig.tierMap = { 'HO Callers': 'HO', 'Store Callers': 'STORE' };
+      modified = true;
+    }
+    if (!Object.values(appConfig.tierMap).includes('PRE_SALES')) {
+      appConfig.tierMap['PreSales'] = 'PRE_SALES';
       modified = true;
     }
     if (modified) {
@@ -101,11 +124,17 @@ export async function ensureSeedData(): Promise<{ appConfig: AppConfig; cycle: C
       plans: {
         HO: defaultHOPlan,
         STORE: defaultSTOREPlan,
+        PRE_SALES: defaultPreSalesPlan,
       },
     };
     await cycleRef.set(cycle);
   } else {
     cycle = cycleSnap.data() as Cycle;
+    // Older cycle documents: add the default Pre Sales plan
+    if (cycle.plans && !cycle.plans.PRE_SALES) {
+      cycle.plans.PRE_SALES = defaultPreSalesPlan;
+      await cycleRef.set({ plans: cycle.plans }, { merge: true });
+    }
   }
 
   return { appConfig, cycle };
@@ -145,6 +174,9 @@ export async function processImport(
       await logSync(source, 'error', 0, 0, '', [err], err);
       return { result: 'error', warnings: [err], error: err };
     }
+
+    const preSalesColumnsMissing = PRE_SALES_HEADERS.filter((h) => !mainKeys.includes(h));
+    let preSalesColumnsWarned = false;
 
     if (qualityRows && qualityRows.length > 0) {
       const sampleQuality = qualityRows[0] || {};
@@ -224,7 +256,6 @@ export async function processImport(
       existingAgentData.set(doc.id, doc.data());
     });
 
-    const isTestBatch = source === 'test' || mainRows.some((r) => r.isTest);
     const updatedAgents: AgentRecord[] = [];
     let overallLastDate = '';
 
@@ -240,8 +271,8 @@ export async function processImport(
         overallLastDate = aggregated.lastDataDate;
       }
 
-      // Check tier mapping
-      const mappedType = appConfig.tierMap[aggregated.profile.agentTierRaw];
+      // Check tier mapping ("PreSales", "Pre Sales" and "pre-sales" all match the same tier)
+      const mappedType = resolveAgentType(appConfig.tierMap, aggregated.profile.agentTierRaw);
       if (!mappedType) {
         warnings.push(
           `Agent ${aggregated.profile.name} (${officialEmail}): Unknown tier '${aggregated.profile.agentTierRaw}'. Skipped.`
@@ -264,21 +295,39 @@ export async function processImport(
           ? existing.absentDays
           : null;
 
-      // Select plan
-      const plan = cycle.plans[mappedType];
-      if (!plan) {
-        warnings.push(
-          `Agent ${aggregated.profile.name} (${officialEmail}): No plan found for tier '${mappedType}'. Skipped.`
-        );
-        continue;
-      }
+      // A row flagged isTest marks only that agent as a test agent, never the whole batch
+      const agentIsTest = source === 'test' || agentRows.some((r) => r.isTest);
 
-      const metrics = metricsFromTotals(
-        aggregated.totals,
-        aggregated.quality,
-        absentDays
-      );
-      const result = calculateFromMetrics(metrics, plan);
+      // Calculate with the plan for this Agent Type
+      let result: IncentiveResult;
+      if (mappedType === 'PRE_SALES') {
+        if (preSalesColumnsMissing.length > 0 && !preSalesColumnsWarned) {
+          warnings.push(
+            `MainSheet is missing Pre Sales columns: ${preSalesColumnsMissing.join(', ')}. Pre Sales incentives stay at 0 until they are added.`
+          );
+          preSalesColumnsWarned = true;
+        }
+        if ((aggregated.totals.calls ?? 0) === 0 && aggregated.totals.activeDays > 0) {
+          warnings.push(
+            `Agent ${aggregated.profile.name} (${officialEmail}): Pre Sales agent has no Inbound_Calls in this cycle.`
+          );
+        }
+        const psPlan = getPreSalesPlan(cycle);
+        result = calculatePreSales(
+          preSalesMetricsFromTotals(aggregated.totals, aggregated.quality, psPlan),
+          psPlan
+        );
+      } else {
+        const plan = cycle.plans[mappedType];
+        if (!plan) {
+          warnings.push(
+            `Agent ${aggregated.profile.name} (${officialEmail}): No plan found for tier '${mappedType}'. Skipped.`
+          );
+          continue;
+        }
+        const metrics = metricsFromTotals(aggregated.totals, aggregated.quality, absentDays);
+        result = calculateFromMetrics(metrics, plan);
+      }
 
       const agentRecord: AgentRecord = {
         name: aggregated.profile.name,
@@ -294,7 +343,7 @@ export async function processImport(
         absentDays,
         lastDataDate: aggregated.lastDataDate,
         result,
-        isTest: isTestBatch,
+        isTest: agentIsTest,
         updatedAt: new Date().toISOString(),
       };
 
@@ -309,7 +358,7 @@ export async function processImport(
             officialEmail,
             name: agentRecord.name,
             location: agentRecord.location,
-            isTest: isTestBatch,
+            isTest: agentIsTest,
           },
         });
       }
@@ -322,7 +371,7 @@ export async function processImport(
             officialEmail: agentRecord.tlOfficialEmail,
             name: 'Team Leader',
             location: agentRecord.location,
-            isTest: isTestBatch,
+            isTest: agentIsTest,
           },
         });
       }
@@ -334,13 +383,7 @@ export async function processImport(
 
     if (appConfig.aiEnabled && updatedAgents.length > 0) {
       try {
-        const aiResult = await runBatchAiGeneration(
-          updatedAgents,
-          cycle.plans.HO || defaultHOPlan,
-          cycle.plans.STORE || defaultSTOREPlan,
-          cycle,
-          appConfig
-        );
+        const aiResult = await runBatchAiGeneration(updatedAgents, cycle, appConfig);
         aiOkCount = aiResult.okCount;
         aiFailedCount = aiResult.failedCount;
       } catch (aiErr: any) {
@@ -385,14 +428,9 @@ export async function processImport(
       addBatchOp((b) => b.set(ref, entry.doc, { merge: true }));
     }
 
-    // Build 1 leaderboard for each location: sorted by total desc, then achievementPct desc, then name A-Z
-    const locationAgentsMap = new Map<string, AgentRecord[]>();
-    for (const loc of appConfig.locations) {
-      locationAgentsMap.set(loc, []);
-    }
-
-    // Fetch all current agents in the cycle to have a complete leaderboard
-    // (combining existing + updated)
+    // Build 1 leaderboard for each location from all current agents in the cycle (existing + updated):
+    // sorted by total desc, then achievementPct desc, then name A-Z. Pre Sales agents are not
+    // revenue-ranked, and demo/test agents only rank while test mode is on (see buildLocationRows).
     const allAgentsMap = new Map<string, AgentRecord>();
     existingAgentData.forEach((data, email) => {
       allAgentsMap.set(email, data as AgentRecord);
@@ -400,44 +438,18 @@ export async function processImport(
     for (const agent of updatedAgents) {
       allAgentsMap.set(agent.officialEmail, agent);
     }
-
-    for (const agent of allAgentsMap.values()) {
-      if (locationAgentsMap.has(agent.location)) {
-        locationAgentsMap.get(agent.location)!.push(agent);
-      }
-    }
+    const allAgents = Array.from(allAgentsMap.values());
 
     const leaderboardCollection = adminDb
       .collection('cycles')
       .doc(cycleId)
       .collection('leaderboards');
 
-    for (const [location, agents] of locationAgentsMap.entries()) {
-      // Sort agents
-      agents.sort((a, b) => {
-        if (b.result.total !== a.result.total) {
-          return b.result.total - a.result.total;
-        }
-        if (b.result.achievementPct !== a.result.achievementPct) {
-          return b.result.achievementPct - a.result.achievementPct;
-        }
-        return a.name.localeCompare(b.name);
-      });
-
-      const rows: LeaderboardRow[] = agents.map((a, index) => ({
-        rank: index + 1,
-        name: a.name,
-        officialEmail: a.officialEmail,
-        sales: a.totals.sales,
-        achievementPct: a.result.achievementPct,
-        className: a.result.className,
-        totalIncentive: a.result.total,
-      }));
-
+    for (const location of appConfig.locations) {
       const leaderboardDoc: LeaderboardRecord = {
         location,
         updatedAt: new Date().toISOString(),
-        rows,
+        rows: buildLocationRows(allAgents, location, Boolean(appConfig.testMode)),
       };
 
       const ref = leaderboardCollection.doc(location);

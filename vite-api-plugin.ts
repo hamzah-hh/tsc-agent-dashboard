@@ -3,7 +3,7 @@ import { adminAuth, adminDb } from './server-firebase-admin';
 import { ensureSeedData, processImport } from './server-import';
 import { normalizeEmail } from './src/shared/incentive';
 import { generateAiText, runBatchAiGeneration } from './server-ai';
-import { defaultHOPlan, defaultSTOREPlan } from './src/shared/plans';
+import { buildLocationRows } from './src/shared/leaderboard';
 import { AgentRecord } from './src/shared/types';
 
 export function apiServerPlugin(): Plugin {
@@ -158,6 +158,18 @@ export function apiServerPlugin(): Plugin {
               deletedAccessCount++;
             });
 
+            // Delete the sync log entries written by test runs (real Apps Script syncs are kept)
+            const testLogsSnap = await adminDb
+              .collection('syncLogs')
+              .where('source', '==', 'test')
+              .get();
+
+            let deletedSyncLogsCount = 0;
+            testLogsSnap.forEach((doc: any) => {
+              batch.delete(doc.ref);
+              deletedSyncLogsCount++;
+            });
+
             // Recalculate leaderboards
             const remainingAgentsSnap = await adminDb
               .collection('cycles')
@@ -170,17 +182,6 @@ export function apiServerPlugin(): Plugin {
               .filter((a) => !a.isTest);
 
             for (const loc of appConfig.locations) {
-              const locAgents = remainingNonTestAgents.filter((a) => a.location === loc);
-              locAgents.sort((a, b) => {
-                if (b.result.total !== a.result.total) {
-                  return b.result.total - a.result.total;
-                }
-                if (b.result.achievementPct !== a.result.achievementPct) {
-                  return b.result.achievementPct - a.result.achievementPct;
-                }
-                return a.name.localeCompare(b.name);
-              });
-
               const lbRef = adminDb
                 .collection('cycles')
                 .doc(cycleId)
@@ -190,15 +191,7 @@ export function apiServerPlugin(): Plugin {
               batch.set(lbRef, {
                 location: loc,
                 updatedAt: new Date().toISOString(),
-                rows: locAgents.map((a, idx) => ({
-                  rank: idx + 1,
-                  name: a.name,
-                  officialEmail: a.officialEmail,
-                  sales: a.totals.sales,
-                  achievementPct: a.result.achievementPct,
-                  className: a.result.className,
-                  totalIncentive: a.result.total,
-                })),
+                rows: buildLocationRows(remainingNonTestAgents as AgentRecord[], loc, false),
               });
             }
 
@@ -208,6 +201,7 @@ export function apiServerPlugin(): Plugin {
               status: 'ok',
               deletedAgents: deletedAgentsCount,
               deletedAccess: deletedAccessCount,
+              deletedSyncLogs: deletedSyncLogsCount,
             });
           }
 
@@ -343,11 +337,7 @@ export function apiServerPlugin(): Plugin {
               });
             }
 
-            const plan =
-              cycle.plans?.[targetAgent.agentType] ||
-              (targetAgent.agentType === 'HO' ? defaultHOPlan : defaultSTOREPlan);
-
-            const aiResult = await generateAiText(targetAgent, plan, cycle, appConfig);
+            const aiResult = await generateAiText(targetAgent, cycle, appConfig);
 
             return sendJson(200, {
               agentName: targetAgent.name,
@@ -391,8 +381,6 @@ export function apiServerPlugin(): Plugin {
 
             const { okCount, failedCount, updatedAgents } = await runBatchAiGeneration(
               agents,
-              cycle.plans.HO || defaultHOPlan,
-              cycle.plans.STORE || defaultSTOREPlan,
               cycle,
               appConfig
             );

@@ -9,6 +9,15 @@ This Apps Script integrates the master sales & audit spreadsheet with the **TSC 
 ### 1. Open the Google Spreadsheet
 Open the Google Sheet containing the `MainSheet` and `D-1_QualityAudit_Summary` tabs.
 
+**MainSheet columns.** The sync finds columns by header name, so column order does not matter. Besides the original columns it reads two Pre Sales columns:
+
+| Column | Used for |
+| :--- | :--- |
+| `Inbound_Calls` | Pre Sales only: inbound calls that day. Averaged over Active Days (sum of `Day`). |
+| `Avg_TT_per_day` | Pre Sales only: that day's average talk time in **seconds**. Weighted by `Inbound_Calls` over the cycle. |
+
+Pre Sales agents use `Agent_Tier` = `PreSales` (`Pre Sales` and `pre-sales` also work) and `Agent_Location` = `Dighe`. Leave the revenue columns (`Sales`, `Count_of_Orders`, `Unique_Connects`, `Talk_Time_(seconds)`, store visits) blank for Pre Sales rows, and leave `Inbound_Calls` / `Avg_TT_per_day` blank for HO and Store rows. A Pre Sales agent needs a row in `D-1_QualityAudit_Summary`: without an audit both incentives stay at ₹0.
+
 ### 2. Open Apps Script
 In the top menu, navigate to:
 **Extensions** > **Apps Script**

@@ -138,6 +138,7 @@ export function StaffPortal({
           userRole={userRole}
           userEmail={userEmail}
           activeCycleId={activeCycleId}
+          testMode={testMode}
           onOpenAgent={(officialEmail) => setSelectedAgentEmail(officialEmail)}
         />
       )}

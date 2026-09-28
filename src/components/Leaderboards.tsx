@@ -87,7 +87,7 @@ export function Leaderboards({ userRole, userLocation, activeCycleId }: Leaderbo
             </span>
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Real-time branch rankings, revenue delivery, and incentive standings.
+            Branch rankings by incentive and revenue. Pre Sales agents are not ranked here; see the Team view.
           </p>
         </div>
 

@@ -1,9 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { AgentRecord, Cycle, Plan } from '../shared/types';
-import { defaultHOPlan, defaultSTOREPlan } from '../shared/plans';
+import { AgentRecord, AgentType, Cycle, Plan, PreSalesPlan } from '../shared/types';
+import {
+  defaultHOPlan,
+  defaultPreSalesPlan,
+  defaultSTOREPlan,
+  getPreSalesPlan,
+  getRevenuePlan,
+} from '../shared/plans';
+import { preSalesMetricsFromTotals } from '../shared/incentive';
 import { ActualTab } from './ActualTab';
 import { TargetTab } from './TargetTab';
 import { SimulatorTab } from './SimulatorTab';
+import { PreSalesActualTab } from './PreSalesActualTab';
+import { PreSalesSimulatorTab } from './PreSalesSimulatorTab';
 import { calculateProjection, calculateRemainingWorkingDays } from '../shared/planning';
 import {
   RotateCcw,
@@ -118,13 +127,15 @@ export function AgentView({ officialEmail, getIdToken, onBack }: AgentViewProps)
     plans: {
       HO: defaultHOPlan,
       STORE: defaultSTOREPlan,
+      PRE_SALES: defaultPreSalesPlan,
     },
   };
 
-  const agentType: 'HO' | 'STORE' = agentRecord?.agentType || 'STORE';
-  const plan: Plan =
-    activeCycle.plans?.[agentType] ||
-    (agentType === 'HO' ? defaultHOPlan : defaultSTOREPlan);
+  const agentType: AgentType = agentRecord?.agentType || 'STORE';
+  const isPreSales = agentType === 'PRE_SALES';
+  // HO / Store agents use the revenue plan; Pre Sales agents use their own plan
+  const plan: Plan = getRevenuePlan(activeCycle, agentType === 'HO' ? 'HO' : 'STORE');
+  const preSalesPlan: PreSalesPlan = getPreSalesPlan(activeCycle);
 
   // Check if lastDataDate is more than 2 days before today in IST
   // IST is UTC+5:30
@@ -184,6 +195,13 @@ export function AgentView({ officialEmail, getIdToken, onBack }: AgentViewProps)
       )
     : 200;
 
+  // Pre Sales simulator starting values (current averages, or the first tier / gate before any data)
+  const psMetrics = preSalesMetricsFromTotals(totals, quality, preSalesPlan);
+  const psHasData = totals.activeDays > 0;
+  const initialPsCalls = psHasData ? psMetrics.avgCalls : preSalesPlan.calls[0]?.min ?? 100;
+  const initialPsTalk = psHasData ? psMetrics.avgTalkSeconds : preSalesPlan.talkSeconds[0]?.min ?? 165;
+  const initialPsQuality = psMetrics.qualityScore ?? (psHasData ? 0 : preSalesPlan.qualityGate);
+
   const actualTotalIncentive = agentRecord?.result?.total || 0;
 
   return (
@@ -217,7 +235,7 @@ export function AgentView({ officialEmail, getIdToken, onBack }: AgentViewProps)
               {agentRecord?.name || 'Caller Performance'}
             </h1>
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 font-mono tracking-wide">
-              · {agentType === 'HO' ? 'HO Caller' : 'Store Caller'}
+              · {agentType === 'HO' ? 'HO Caller' : agentType === 'PRE_SALES' ? 'Pre Sales' : 'Store Caller'}
             </span>
           </div>
 
@@ -247,20 +265,22 @@ export function AgentView({ officialEmail, getIdToken, onBack }: AgentViewProps)
               <LayoutDashboard className="w-3.5 h-3.5" />
               Actual
             </button>
-            <button
-              onClick={() => {
-                soundFx.playPop();
-                setActiveTab('target');
-              }}
-              className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
-                activeTab === 'target'
-                  ? 'bg-white dark:bg-slate-800 text-amber-600 dark:text-amber-400 shadow-xs font-bold'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <Target className="w-3.5 h-3.5" />
-              Target & Goals
-            </button>
+            {!isPreSales && (
+              <button
+                onClick={() => {
+                  soundFx.playPop();
+                  setActiveTab('target');
+                }}
+                className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
+                  activeTab === 'target'
+                    ? 'bg-white dark:bg-slate-800 text-amber-600 dark:text-amber-400 shadow-xs font-bold'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <Target className="w-3.5 h-3.5" />
+                Target & Goals
+              </button>
+            )}
             <button
               onClick={() => {
                 soundFx.playPop();
@@ -293,7 +313,24 @@ export function AgentView({ officialEmail, getIdToken, onBack }: AgentViewProps)
       </div>
 
       {/* Main Tab Body */}
-      {activeTab === 'actual' ? (
+      {isPreSales ? (
+        activeTab === 'simulator' ? (
+          <PreSalesSimulatorTab
+            plan={preSalesPlan}
+            initialCalls={initialPsCalls}
+            initialTalkSeconds={initialPsTalk}
+            initialQualityScore={initialPsQuality}
+            actualTotalIncentive={actualTotalIncentive}
+          />
+        ) : (
+          <PreSalesActualTab
+            agentRecord={agentRecord}
+            plan={preSalesPlan}
+            cycle={activeCycle}
+            onNavigateToSimulator={() => setActiveTab('simulator')}
+          />
+        )
+      ) : activeTab === 'actual' ? (
         <ActualTab
           agentRecord={agentRecord}
           plan={plan}

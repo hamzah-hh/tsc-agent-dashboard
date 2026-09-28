@@ -29,6 +29,7 @@ import {
   Flame,
   Info,
   Sparkles,
+  Store,
 } from 'lucide-react';
 import { MilestoneLadder } from './MilestoneLadder';
 import { AnimatedCounter } from './AnimatedCounter';

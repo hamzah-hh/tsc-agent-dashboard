@@ -2,12 +2,16 @@ import {
   AgentDailyEntry,
   AgentRecord,
   AgentTotals,
+  AgentType,
   BonusBandConfig,
   BonusResult,
   DeductionRule,
   IncentiveResult,
   MetricDeductionResult,
   Plan,
+  PreSalesMetrics,
+  PreSalesPlan,
+  PreSalesTier,
   ProcessedMetrics,
   QualitySummary,
   RawMainRow,
@@ -136,6 +140,8 @@ export function aggregateAgent(
       visitsBooked: safeNum(r.Store_Visits_Booked),
       visitsAttributed: safeNum(r.Store_Visits_Attributed),
       day: safeNum(r.Day),
+      calls: safeNum(r.Inbound_Calls),
+      avgTalkSec: safeNum(r.Avg_TT_per_day),
     };
   });
 
@@ -154,6 +160,16 @@ export function aggregateAgent(
 
   const dailyMap: Map<string, AgentDailyEntry> = new Map();
 
+  // Pre Sales: Inbound_Calls is summed. Avg_TT_per_day is already a daily average, so it is
+  // weighted by that day's Inbound_Calls (total talk time / total calls), and also kept as a
+  // plain sum + count of worked days for the 'simple' method. A blank value means "no data".
+  let psCalls = 0;
+  let psWeightedSum = 0;
+  let psWeightCalls = 0;
+  let psSum = 0;
+  let psRows = 0;
+  const ttByDate = new Map<string, { num: number; calls: number; sum: number; n: number }>();
+
   for (const nr of normalizedRows) {
     totals.sales += nr.sales;
     totals.orders += nr.orders;
@@ -162,6 +178,22 @@ export function aggregateAgent(
     totals.visitsBooked += nr.visitsBooked;
     totals.visitsAttributed += nr.visitsAttributed;
     totals.activeDays += nr.day;
+
+    psCalls += nr.calls;
+    if (nr.avgTalkSec > 0) {
+      psWeightedSum += nr.avgTalkSec * nr.calls;
+      psWeightCalls += nr.calls;
+      if (nr.day > 0) {
+        psSum += nr.avgTalkSec;
+        psRows += 1;
+      }
+      const acc = ttByDate.get(nr.date) ?? { num: 0, calls: 0, sum: 0, n: 0 };
+      acc.num += nr.avgTalkSec * nr.calls;
+      acc.calls += nr.calls;
+      acc.sum += nr.avgTalkSec;
+      acc.n += 1;
+      ttByDate.set(nr.date, acc);
+    }
 
     if (dailyMap.has(nr.date)) {
       const existing = dailyMap.get(nr.date)!;
@@ -172,6 +204,7 @@ export function aggregateAgent(
       existing.visitsBooked += nr.visitsBooked;
       existing.visitsAttributed += nr.visitsAttributed;
       existing.day += nr.day;
+      existing.calls = (existing.calls ?? 0) + nr.calls;
     } else {
       dailyMap.set(nr.date, {
         date: nr.date,
@@ -182,13 +215,28 @@ export function aggregateAgent(
         visitsBooked: nr.visitsBooked,
         visitsAttributed: nr.visitsAttributed,
         day: nr.day,
+        calls: nr.calls,
       });
     }
   }
 
+  totals.calls = psCalls;
+  totals.ttWeightedSum = psWeightedSum;
+  totals.ttWeightCalls = psWeightCalls;
+  totals.ttSum = psSum;
+  totals.ttRows = psRows;
+
   const daily = Array.from(dailyMap.values()).sort((a, b) =>
     a.date.localeCompare(b.date)
   );
+
+  for (const entry of daily) {
+    const acc = ttByDate.get(entry.date);
+    if (acc) {
+      const avg = acc.calls > 0 ? acc.num / acc.calls : acc.sum / acc.n;
+      entry.avgTalkSec = Math.round(avg * 10) / 10;
+    }
+  }
 
   // Latest row for profile fields
   const latestRowItem =
@@ -426,5 +474,122 @@ export function calculateFromMetrics(
       amount: riderAmount,
     },
     total,
+  };
+}
+
+/**
+ * Lower-case and drop everything except letters and digits, so "PreSales", "Pre Sales" and
+ * "pre-sales" all match the same Agent_Tier mapping.
+ */
+export function normalizeTierKey(value: any): string {
+  return String(value ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+/** Maps the Agent_Tier text from the sheet to an Agent Type. Returns null for an unknown value. */
+export function resolveAgentType(
+  tierMap: Record<string, AgentType> | undefined,
+  rawTier: string
+): AgentType | null {
+  const key = normalizeTierKey(rawTier);
+  if (!tierMap || !key) return null;
+  for (const [label, type] of Object.entries(tierMap)) {
+    if (normalizeTierKey(label) === key) return type;
+  }
+  return null;
+}
+
+/**
+ * Pre Sales metrics from the cycle totals.
+ * - avgCalls = roundHalfUp(Inbound_Calls / activeDays)
+ * - avgTalkSeconds: 'weighted' = roundHalfUp(sum(Avg_TT_per_day x Inbound_Calls) / sum(Inbound_Calls));
+ *   'simple' = roundHalfUp(average of the daily values). Without call counts, the simple average is used.
+ * - qualityScore = roundHalfUp(score); null when there are no audits (the quality gate is then not met).
+ */
+export function preSalesMetricsFromTotals(
+  totals: AgentTotals,
+  quality: QualitySummary,
+  plan: PreSalesPlan
+): PreSalesMetrics {
+  const days = totals.activeDays;
+  const avgCalls = days > 0 ? roundHalfUp((totals.calls ?? 0) / days) : 0;
+
+  let avgTalkSeconds = 0;
+  const weightCalls = totals.ttWeightCalls ?? 0;
+  const rows = totals.ttRows ?? 0;
+  if (plan.talkMethod === 'weighted' && weightCalls > 0) {
+    avgTalkSeconds = roundHalfUp((totals.ttWeightedSum ?? 0) / weightCalls);
+  } else if (rows > 0) {
+    avgTalkSeconds = roundHalfUp((totals.ttSum ?? 0) / rows);
+  }
+
+  return {
+    avgCalls,
+    avgTalkSeconds,
+    qualityScore: quality.audits > 0 ? roundHalfUp(quality.score) : null,
+  };
+}
+
+/** Highest tier whose minimum is reached. tier 0 = below the first tier. */
+export function pickPreSalesTier(
+  tiers: PreSalesTier[],
+  value: number
+): { tier: number; payout: number } {
+  let tier = 0;
+  let payout = 0;
+  [...tiers]
+    .sort((a, b) => a.min - b.min)
+    .forEach((t, i) => {
+      if (value >= t.min) {
+        tier = i + 1;
+        payout = t.payout;
+      }
+    });
+  return { tier, payout };
+}
+
+/**
+ * Pre Sales incentive: two incentives (calls per day, talk time in seconds). BOTH are paid only
+ * when the Quality Score is at least the gate; no audits or a score below the gate = Rs 0 for both.
+ * Reuses IncentiveResult: the revenue fields are 0, className is 'PS', details are in `preSales`.
+ */
+export function calculatePreSales(metrics: PreSalesMetrics, plan: PreSalesPlan): IncentiveResult {
+  const eligible = metrics.qualityScore !== null && metrics.qualityScore >= plan.qualityGate;
+  const callsPick = pickPreSalesTier(plan.calls, metrics.avgCalls);
+  const talkPick = pickPreSalesTier(plan.talkSeconds, metrics.avgTalkSeconds);
+  const callsAmount = eligible ? callsPick.payout : 0;
+  const talkAmount = eligible ? talkPick.payout : 0;
+
+  return {
+    achievementPct: 0,
+    className: 'PS',
+    rate: 0,
+    revenueIncentiveGross: 0,
+    deductions: [],
+    revenueIncentiveNet: 0,
+    quality: { value: metrics.qualityScore, band: 'None', amount: 0 },
+    connects: { value: null, band: 'None', amount: 0 },
+    talk: { value: null, band: 'None', amount: 0 },
+    rider: { tier: 0, amount: 0 },
+    total: callsAmount + talkAmount,
+    preSales: {
+      qualityScore: metrics.qualityScore,
+      qualityGate: plan.qualityGate,
+      eligible,
+      calls: {
+        value: metrics.avgCalls,
+        tier: callsPick.tier,
+        payout: callsPick.payout,
+        amount: callsAmount,
+      },
+      talk: {
+        value: metrics.avgTalkSeconds,
+        tier: talkPick.tier,
+        payout: talkPick.payout,
+        amount: talkAmount,
+      },
+      potentialTotal: callsPick.payout + talkPick.payout,
+    },
   };
 }

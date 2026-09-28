@@ -7,3 +7,6 @@ coverage/
 .env*
 !.env.example
 firebase-applet-config.json
+# Local fallback store of server-db.ts (a snapshot of test data). Never commit it: a pull into the
+# live account would seed the live server with test documents.
+local-db.json

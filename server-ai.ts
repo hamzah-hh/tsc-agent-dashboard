@@ -1,6 +1,6 @@
 import { GoogleGenAI, Type } from '@google/genai';
-import { AgentRecord, AppConfig, Cycle, Plan, Suggestion } from './src/shared/types';
-import { buildSuggestions } from './src/shared/suggestions';
+import { AgentRecord, AppConfig, Cycle, Suggestion } from './src/shared/types';
+import { buildAgentSuggestions } from './src/shared/suggestions';
 import { calculateRemainingWorkingDays } from './src/shared/planning';
 
 const apiKey = process.env.GEMINI_API_KEY || '';
@@ -133,11 +133,11 @@ async function callGeminiWithTimeoutAndRetry(payloadString: string): Promise<any
  */
 export async function generateAiText(
   agentRecord: AgentRecord,
-  plan: Plan,
   cycle: Cycle,
   appConfig: AppConfig
 ): Promise<GenerateAiResult> {
-  const suggestions = buildSuggestions(agentRecord, plan, cycle);
+  // The rule engine picks the right rules (HO, Store or Pre Sales) from the agent's type
+  const suggestions = buildAgentSuggestions(agentRecord, cycle);
   if (!suggestions || suggestions.length === 0) {
     return {
       success: false,
@@ -157,8 +157,13 @@ export async function generateAiText(
   const inputPayload = {
     tone: appConfig.aiTone || 'english',
     agentType: agentRecord.agentType,
-    className: agentRecord.result?.className || 'NQ',
-    achievementPct: agentRecord.result?.achievementPct || 0,
+    // Revenue class and achievement only exist for HO / Store agents
+    ...(agentRecord.agentType === 'PRE_SALES'
+      ? {}
+      : {
+          className: agentRecord.result?.className || 'NQ',
+          achievementPct: agentRecord.result?.achievementPct || 0,
+        }),
     daysLeft: remainingWorkingDays,
     items: suggestions.map((s) => ({
       id: s.id,
@@ -323,8 +328,6 @@ export async function generateAiText(
  */
 export async function runBatchAiGeneration(
   agents: AgentRecord[],
-  planHO: Plan,
-  planSTORE: Plan,
   cycle: Cycle,
   appConfig: AppConfig,
   onProgress?: (completed: number, total: number) => void
@@ -340,10 +343,9 @@ export async function runBatchAiGeneration(
     while (currentIndex < updatedAgents.length) {
       const idx = currentIndex++;
       const agent = updatedAgents[idx];
-      const plan = agent.agentType === 'HO' ? planHO : planSTORE;
 
       try {
-        const result = await generateAiText(agent, plan, cycle, appConfig);
+        const result = await generateAiText(agent, cycle, appConfig);
         if (result.success && result.aiSuggestions) {
           agent.aiSuggestions = result.aiSuggestions;
           okCount++;

@@ -22,6 +22,7 @@ import {
 import { testCases } from '../shared/incentive.testcases';
 import { AppConfig, Cycle, RawMainRow, RawQualityRow, SyncLogRecord } from '../shared/types';
 import { formatCurrencyINR, formatNumberINR, normalizeEmail } from '../shared/incentive';
+import { generateDummyData } from '../shared/dummyData';
 
 interface TestCenterProps {
   userEmail: string;
@@ -63,14 +64,17 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken })
     error?: string;
   }>({ loading: false });
 
-  // 4. Generate dummy data state
+  // 4. Demo users state. The 3 demo users are 1 HO Caller, 1 Store Caller and 1 Pre Sales agent.
+  // A blank login email gets a placeholder that nobody can sign in with; a Super Admin can still
+  // open the demo user from the Team view.
   const [dummyForm, setDummyForm] = useState({
-    digheEmail: 'agent.dighe@test.com',
-    andheriEmail: 'agent.andheri@test.com',
-    bangaloreEmail: 'agent.bangalore@test.com',
-    tlDigheEmail: 'tl.dighe@test.com',
-    managerEmail: 'testmanager.tsc@gmail.com',
-    dataUpTo: '2026-10-20',
+    hoEmail: '',
+    storeEmail: '',
+    preSalesEmail: '',
+    tlDigheEmail: '',
+    tlAndheriEmail: '',
+    managerEmail: '',
+    dataUpTo: '2026-11-15',
   });
   const [newManagerInput, setNewManagerInput] = useState('');
   const [savingManagers, setSavingManagers] = useState(false);
@@ -365,7 +369,10 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken })
     reader.onload = (evt) => {
       try {
         const data = new Uint8Array(evt.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+        // Keep Excel dates as serial numbers (no cellDates): the server turns them into the IST date.
+        // With cellDates: true, SheetJS returns 18:29:50 UTC of the previous day for an IST midnight,
+        // so every imported date shifted back by one day and the first cycle day was dropped.
+        const workbook = XLSX.read(data, { type: 'array' });
 
         let mainRows: RawMainRow[] = [];
         let qualityRows: RawQualityRow[] = [];
@@ -438,260 +445,21 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken })
     }
   };
 
-  // 4. Generate dummy test data
-  const generateDummyData = async () => {
+  // 4. Create the 3 demo users through /api/import (source 'test'): 1 HO Caller, 1 Store Caller, 1 Pre Sales
+  const createDemoUsers = async (): Promise<boolean> => {
     setDummyStatus({ loading: true });
     try {
       const startDate = cycle?.startDate || '2026-10-01';
-      const endDate = dummyForm.dataUpTo || '2026-10-20';
+      const endDate = dummyForm.dataUpTo || '2026-11-15';
 
-      // 9 agents: 3 for each location (Dighe, Andheri, Bangalore)
-      // First agent of each location uses user's provided test email
-      // TL for Dighe uses provided tlDigheEmail; others get fake TL emails
-      const agentConfigs = [
-        // Dighe (HO Callers)
-        {
-          name: 'Dighe Agent One (D-Tier)',
-          official: 'dighe.agent1@test.local',
-          personal: normalizeEmail(dummyForm.digheEmail) || 'agent1.dighe@test.local',
-          location: 'Dighe',
-          tier: 'HO Callers',
-          tlOfficial: 'tl.dighe@test.local',
-          tlPersonal: normalizeEmail(dummyForm.tlDigheEmail) || 'tl.dighe@test.local',
-          profileRate: {
-            salesPerDay: 850000, // Very high -> Class D
-            ordersPerDay: 18,
-            connectsPerDay: 155, // High band
-            talkSecPerDay: 11500, // ~191 min -> High band
-            visitsBooked: 14,
-            visitsAttributed: 13,
-            audits: 12,
-            qualityScore: 94,
-          },
-        },
-        {
-          name: 'Dighe Agent Two (B-Tier)',
-          official: 'dighe.agent2@test.local',
-          personal: 'dummy2.dighe@example.com',
-          location: 'Dighe',
-          tier: 'HO Callers',
-          tlOfficial: 'tl.dighe@test.local',
-          tlPersonal: normalizeEmail(dummyForm.tlDigheEmail) || 'tl.dighe@test.local',
-          profileRate: {
-            salesPerDay: 580000, // Class B
-            ordersPerDay: 12,
-            connectsPerDay: 142, // Mid band
-            talkSecPerDay: 10200, // ~170 min -> Mid band
-            visitsBooked: 10,
-            visitsAttributed: 9,
-            audits: 10,
-            qualityScore: 88,
-          },
-        },
-        {
-          name: 'Dighe Agent Three (NQ-Tier)',
-          official: 'dighe.agent3@test.local',
-          personal: 'dummy3.dighe@example.com',
-          location: 'Dighe',
-          tier: 'HO Callers',
-          tlOfficial: 'tl.dighe@test.local',
-          tlPersonal: normalizeEmail(dummyForm.tlDigheEmail) || 'tl.dighe@test.local',
-          profileRate: {
-            salesPerDay: 200000, // Low -> NQ
-            ordersPerDay: 4,
-            connectsPerDay: 110,
-            talkSecPerDay: 6000,
-            visitsBooked: 2,
-            visitsAttributed: 2,
-            audits: 0, // One agent has 0 audits!
-            qualityScore: 0,
-          },
-        },
-
-        // Andheri (Store Callers)
-        {
-          name: 'Andheri Agent One (C-Tier)',
-          official: 'andheri.agent1@test.local',
-          personal: normalizeEmail(dummyForm.andheriEmail) || 'agent1.andheri@test.local',
-          location: 'Andheri',
-          tier: 'Store Callers',
-          tlOfficial: 'tl.andheri@test.local',
-          tlPersonal: 'tl.andheri@test.local',
-          profileRate: {
-            salesPerDay: 950000, // Class C
-            ordersPerDay: 15,
-            connectsPerDay: 147, // High
-            talkSecPerDay: 11000, // High
-            visitsBooked: 22,
-            visitsAttributed: 20,
-            audits: 15,
-            qualityScore: 91,
-          },
-        },
-        {
-          name: 'Andheri Agent Two (A-Tier)',
-          official: 'andheri.agent2@test.local',
-          personal: 'dummy5.andheri@example.com',
-          location: 'Andheri',
-          tier: 'Store Callers',
-          tlOfficial: 'tl.andheri@test.local',
-          tlPersonal: 'tl.andheri@test.local',
-          profileRate: {
-            salesPerDay: 680000, // Class A
-            ordersPerDay: 11,
-            connectsPerDay: 141, // Mid
-            talkSecPerDay: 10000, // Mid
-            visitsBooked: 14,
-            visitsAttributed: 13,
-            audits: 8,
-            qualityScore: 86,
-          },
-        },
-        {
-          name: 'Andheri Agent Three (B-Tier)',
-          official: 'andheri.agent3@test.local',
-          personal: 'dummy6.andheri@example.com',
-          location: 'Andheri',
-          tier: 'Store Callers',
-          tlOfficial: 'tl.andheri@test.local',
-          tlPersonal: 'tl.andheri@test.local',
-          profileRate: {
-            salesPerDay: 780000, // Class B
-            ordersPerDay: 13,
-            connectsPerDay: 144, // Mid
-            talkSecPerDay: 10100, // Mid
-            visitsBooked: 18,
-            visitsAttributed: 17,
-            audits: 12,
-            qualityScore: 92,
-          },
-        },
-
-        // Bangalore (Store Callers)
-        {
-          name: 'Bangalore Agent One (B-Tier)',
-          official: 'bangalore.agent1@test.local',
-          personal: normalizeEmail(dummyForm.bangaloreEmail) || 'agent1.bangalore@test.local',
-          location: 'Bangalore',
-          tier: 'Store Callers',
-          tlOfficial: 'tl.bangalore@test.local',
-          tlPersonal: 'tl.bangalore@test.local',
-          profileRate: {
-            salesPerDay: 750000, // Class B
-            ordersPerDay: 12,
-            connectsPerDay: 146, // High
-            talkSecPerDay: 11200, // High
-            visitsBooked: 19,
-            visitsAttributed: 18,
-            audits: 14,
-            qualityScore: 93,
-          },
-        },
-        {
-          name: 'Bangalore Agent Two (C-Tier)',
-          official: 'bangalore.agent2@test.local',
-          personal: 'dummy8.bangalore@example.com',
-          location: 'Bangalore',
-          tier: 'Store Callers',
-          tlOfficial: 'tl.bangalore@test.local',
-          tlPersonal: 'tl.bangalore@test.local',
-          profileRate: {
-            salesPerDay: 960000, // Class C
-            ordersPerDay: 16,
-            connectsPerDay: 148, // High
-            talkSecPerDay: 11400, // High
-            visitsBooked: 21,
-            visitsAttributed: 20,
-            audits: 15,
-            qualityScore: 95,
-          },
-        },
-        {
-          name: 'Bangalore Agent Three (NQ-Tier)',
-          official: 'bangalore.agent3@test.local',
-          personal: 'dummy9.bangalore@example.com',
-          location: 'Bangalore',
-          tier: 'Store Callers',
-          tlOfficial: 'tl.bangalore@test.local',
-          tlPersonal: 'tl.bangalore@test.local',
-          profileRate: {
-            salesPerDay: 350000, // NQ
-            ordersPerDay: 6,
-            connectsPerDay: 120,
-            talkSecPerDay: 7500,
-            visitsBooked: 8,
-            visitsAttributed: 7,
-            audits: 6,
-            qualityScore: 82,
-          },
-        },
-      ];
-
-      // Generate date list from startDate to dataUpTo
-      const cur = new Date(startDate);
-      const end = new Date(endDate);
-      const dateStrings: string[] = [];
-
-      while (cur <= end) {
-        dateStrings.push(cur.toISOString().split('T')[0]);
-        cur.setDate(cur.getDate() + 1);
-      }
-
-      const generatedMainRows: RawMainRow[] = [];
-      const generatedQualityRows: RawQualityRow[] = [];
-
-      agentConfigs.forEach((agent, agentIdx) => {
-        // Quality row
-        generatedQualityRows.push({
-          Agent_Email_Official: agent.official,
-          Total_Audits: agent.profileRate.audits,
-          Average_Audit_Score: agent.profileRate.qualityScore,
-        });
-
-        // Daily rows: 6 days working out of 7, 1 day off (Day=0), and 1 half-day (Day=0.5) per agent
-        dateStrings.forEach((dStr, dayIdx) => {
-          let dayVal = 1;
-          // Every 7th day off
-          if (dayIdx % 7 === 6) {
-            dayVal = 0;
-          } else if (dayIdx === (agentIdx % 5) + 2) {
-            // Exactly one half day for this agent
-            dayVal = 0.5;
-          }
-
-          const multiplier = dayVal;
-          const sales = Math.round(agent.profileRate.salesPerDay * multiplier);
-          const orders = Math.round(agent.profileRate.ordersPerDay * multiplier);
-          const connects = Math.round(agent.profileRate.connectsPerDay * multiplier);
-          const talkSeconds = Math.round(agent.profileRate.talkSecPerDay * multiplier);
-          const visitsBooked = Math.round(agent.profileRate.visitsBooked * multiplier);
-          const visitsAttributed = Math.round(agent.profileRate.visitsAttributed * multiplier);
-          const aov = orders > 0 ? Math.round(sales / orders) : 0;
-
-          generatedMainRows.push({
-            Date: dStr,
-            Month: 'October',
-            Agent_Name: agent.name,
-            Agent_Email_Official: agent.official,
-            Agent_Email_Personal: agent.personal,
-            Agent_Location: agent.location,
-            Agent_Tier: agent.tier,
-            Count_of_Orders: orders,
-            Sales: sales,
-            Average_Order_Value: aov,
-            Unique_Connects: connects,
-            'Talk_Time_(seconds)': talkSeconds,
-            TL_Official_Email: agent.tlOfficial,
-            TL_Personal_Email: agent.tlPersonal,
-            Store_Visits_Booked: visitsBooked,
-            Store_Visits_Attributed: visitsAttributed,
-            Day: dayVal,
-            isTest: true,
-          });
-        });
+      const { mainRows, qualityRows } = generateDummyData(startDate, endDate, {
+        hoEmail: dummyForm.hoEmail,
+        storeEmail: dummyForm.storeEmail,
+        preSalesEmail: dummyForm.preSalesEmail,
+        tlDigheEmail: dummyForm.tlDigheEmail,
+        tlAndheriEmail: dummyForm.tlAndheriEmail,
       });
 
-      // Submit through /api/import
       const token = await getIdToken();
       const res = await fetch('/api/import', {
         method: 'POST',
@@ -700,8 +468,8 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken })
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          mainRows: generatedMainRows,
-          qualityRows: generatedQualityRows,
+          mainRows,
+          qualityRows,
           source: 'test',
         }),
       });
@@ -731,20 +499,59 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken })
           summary: data,
         });
         loadConfigAndLogs();
-      } else {
-        setDummyStatus({
-          loading: false,
-          result: 'error',
-          summary: data,
-        });
+        return true;
       }
+
+      setDummyStatus({
+        loading: false,
+        result: 'error',
+        summary: data,
+      });
+      return false;
     } catch (err: any) {
       setDummyStatus({
         loading: false,
         result: 'error',
         summary: { error: err.message },
       });
+      return false;
     }
+  };
+
+  // Clear ALL test data, then create the 3 demo users again
+  const resetDemoData = async () => {
+    if (
+      !confirm(
+        'This deletes ALL test data (every record with isTest = true, and the test sync logs) and then creates the 3 demo users again. Real agents are not touched. Continue?'
+      )
+    ) {
+      return;
+    }
+    setDummyStatus({ loading: true });
+    try {
+      const token = await getIdToken();
+      const res = await fetch('/api/clear-test', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setDummyStatus({
+          loading: false,
+          result: 'error',
+          summary: { error: data.error || 'Failed to clear test data' },
+        });
+        return;
+      }
+      setClearStatus({
+        loading: false,
+        result: `Cleaned successfully: ${data.deletedAgents || 0} agents, ${data.deletedAccess || 0} access records, ${data.deletedSyncLogs || 0} test sync logs removed.`,
+      });
+    } catch (err: any) {
+      setDummyStatus({ loading: false, result: 'error', summary: { error: err.message } });
+      return;
+    }
+    await createDemoUsers();
   };
 
   // 5. Clear Test Data
@@ -765,7 +572,7 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken })
       if (res.ok) {
         setClearStatus({
           loading: false,
-          result: `Cleaned successfully: ${data.deletedAgents || 0} agents, ${data.deletedAccess || 0} access records removed.`,
+          result: `Cleaned successfully: ${data.deletedAgents || 0} agents, ${data.deletedAccess || 0} access records, ${data.deletedSyncLogs || 0} test sync logs removed.`,
         });
         loadConfigAndLogs();
       } else {
@@ -877,17 +684,17 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken })
               {testsRan && (
                 <span
                   className={`text-xs font-bold px-2.5 py-1 rounded-full ${
-                    passedTestsCount === 16
+                    passedTestsCount === testCases.length
                       ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
                       : 'bg-rose-100 text-rose-800 border border-rose-200'
                   }`}
                 >
-                  {passedTestsCount} of 16 passed
+                  {passedTestsCount} of {testCases.length} passed
                 </span>
               )}
             </div>
             <p className="text-xs text-slate-600 mb-4">
-              Validates all 16 specification incentive test cases directly in the browser using the pure TypeScript calculation engine.
+              Validates all {testCases.length} incentive test cases (HO, Store and Pre Sales) directly in the browser using the pure TypeScript calculation engine.
             </p>
           </div>
 
@@ -895,7 +702,7 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken })
             onClick={runCalculationTests}
             className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg shadow-sm transition"
           >
-            <Play className="w-4 h-4" /> Run All 16 Test Cases
+            <Play className="w-4 h-4" /> Run All {testCases.length} Test Cases
           </button>
         </div>
       </div>
@@ -1040,56 +847,59 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken })
         )}
       </div>
 
-      {/* Section 4: Generate Dummy Data */}
+      {/* Section 4: Demo users */}
       <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
         <div className="flex items-center gap-2 mb-2">
           <Database className="w-5 h-5 text-blue-600" />
-          <h2 className="text-base font-bold text-slate-900">4. Generate Dummy Test Data</h2>
+          <h2 className="text-base font-bold text-slate-900">4. Demo Users (3)</h2>
         </div>
         <p className="text-xs text-slate-600 mb-4">
-          Generates comprehensive synthetic records for <strong>9 agents</strong> (3 per location: Dighe, Andheri, Bangalore) from 2026-10-01 up to the chosen date. Includes 6 working days/week, 1 half-day per agent, diverse incentive classes (NQ, A, B, C, D), bonus bands, and 1 agent with 0 audits. All marked <code className="bg-slate-100 px-1 py-0.5 rounded text-blue-700">isTest = true</code>.
+          Creates exactly <strong>3 demo users</strong>: 1 HO Caller (Dighe), 1 Store Caller (Andheri) and 1 Pre Sales agent (Dighe), with sample data from the cycle start up to the chosen date. All are marked <code className="bg-slate-100 px-1 py-0.5 rounded text-blue-700">isTest = true</code>: once test mode is off they stay out of leaderboards and team totals, and <strong>Clear All Test Data</strong> removes them. A blank login email gets a placeholder that nobody can sign in with; you can still open that demo user from the Team view.
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
           <div>
             <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-              Dighe Test Agent Login Email
+              HO Caller demo login email (Dighe)
             </label>
             <input
               type="email"
-              value={dummyForm.digheEmail}
-              onChange={(e) => setDummyForm({ ...dummyForm, digheEmail: e.target.value })}
+              value={dummyForm.hoEmail}
+              onChange={(e) => setDummyForm({ ...dummyForm, hoEmail: e.target.value })}
+              placeholder="personal Gmail"
               className="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 text-slate-800"
             />
           </div>
 
           <div>
             <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-              Andheri Test Agent Login Email
+              Store Caller demo login email (Andheri)
             </label>
             <input
               type="email"
-              value={dummyForm.andheriEmail}
-              onChange={(e) => setDummyForm({ ...dummyForm, andheriEmail: e.target.value })}
+              value={dummyForm.storeEmail}
+              onChange={(e) => setDummyForm({ ...dummyForm, storeEmail: e.target.value })}
+              placeholder="personal Gmail"
               className="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 text-slate-800"
             />
           </div>
 
           <div>
             <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-              Bangalore Test Agent Login Email
+              Pre Sales demo login email (Dighe)
             </label>
             <input
               type="email"
-              value={dummyForm.bangaloreEmail}
-              onChange={(e) => setDummyForm({ ...dummyForm, bangaloreEmail: e.target.value })}
+              value={dummyForm.preSalesEmail}
+              onChange={(e) => setDummyForm({ ...dummyForm, preSalesEmail: e.target.value })}
+              placeholder="personal Gmail"
               className="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 text-slate-800"
             />
           </div>
 
           <div>
             <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-              Dighe TL Login Email
+              Dighe TL login email (optional)
             </label>
             <input
               type="email"
@@ -1101,13 +911,24 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken })
 
           <div>
             <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-              Test Manager Login Email
+              Andheri TL login email (optional)
+            </label>
+            <input
+              type="email"
+              value={dummyForm.tlAndheriEmail}
+              onChange={(e) => setDummyForm({ ...dummyForm, tlAndheriEmail: e.target.value })}
+              className="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 text-slate-800"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+              Test Manager login email (optional)
             </label>
             <input
               type="email"
               value={dummyForm.managerEmail}
               onChange={(e) => setDummyForm({ ...dummyForm, managerEmail: e.target.value })}
-              placeholder="e.g. testmanager.tsc@gmail.com"
               className="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 text-slate-800"
             />
           </div>
@@ -1126,19 +947,29 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken })
 
           <div className="flex items-end">
             <button
-              onClick={generateDummyData}
+              onClick={() => createDemoUsers()}
               disabled={dummyStatus.loading}
               className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-semibold rounded-lg shadow-sm transition"
             >
               {dummyStatus.loading ? (
                 <>
-                  <RefreshCw className="w-4 h-4 animate-spin" /> Generating...
+                  <RefreshCw className="w-4 h-4 animate-spin" /> Working...
                 </>
               ) : (
                 <>
-                  <Database className="w-4 h-4" /> Generate 9 Test Agents
+                  <Database className="w-4 h-4" /> Create 3 Demo Users
                 </>
               )}
+            </button>
+          </div>
+
+          <div className="flex items-end">
+            <button
+              onClick={resetDemoData}
+              disabled={dummyStatus.loading}
+              className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white text-xs font-semibold rounded-lg shadow-sm transition"
+            >
+              <Trash2 className="w-4 h-4" /> Reset: Clear Test Data + Create 3
             </button>
           </div>
         </div>
@@ -1154,17 +985,32 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken })
             <div className="font-bold flex items-center gap-2">
               {dummyStatus.result === 'ok' ? (
                 <>
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Dummy Data Generated & Processed Successfully!
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Demo users created successfully!
                 </>
               ) : (
                 <>
-                  <XCircle className="w-4 h-4 text-rose-600" /> Generation Error
+                  <XCircle className="w-4 h-4 text-rose-600" /> Demo user creation failed
                 </>
               )}
             </div>
             {dummyStatus.summary && (
               <div className="mt-2 text-slate-700">
-                Created <strong>{dummyStatus.summary.agents || 9}</strong> agent records across 3 locations (Dighe, Andheri, Bangalore), built 3 location leaderboards, and created access records.
+                {dummyStatus.result === 'ok' ? (
+                  <>
+                    Created <strong>{dummyStatus.summary.agents ?? 3}</strong> demo users (HO Caller, Store Caller, Pre Sales) and their access records.
+                  </>
+                ) : (
+                  <span className="font-mono text-[11px]">
+                    {dummyStatus.summary.error ||
+                      (dummyStatus.summary.warnings && dummyStatus.summary.warnings.join('; ')) ||
+                      'Unknown error'}
+                  </span>
+                )}
+                {dummyStatus.result === 'ok' && dummyStatus.summary.warnings?.length > 0 && (
+                  <div className="mt-2 text-amber-800 bg-amber-50 p-2 rounded border border-amber-200">
+                    {dummyStatus.summary.warnings.join('; ')}
+                  </div>
+                )}
               </div>
             )}
           </div>

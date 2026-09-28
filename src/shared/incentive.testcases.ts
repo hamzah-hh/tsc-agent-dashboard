@@ -1,6 +1,31 @@
-import { calculateFromMetrics, metricsFromTotals } from './incentive';
-import { defaultHOPlan, defaultSTOREPlan } from './plans';
-import { Plan, ProcessedMetrics } from './types';
+import {
+  aggregateAgent,
+  calculateFromMetrics,
+  calculatePreSales,
+  metricsFromTotals,
+  preSalesMetricsFromTotals,
+  resolveAgentType,
+} from './incentive';
+import { defaultHOPlan, defaultPreSalesPlan, defaultSTOREPlan } from './plans';
+import { AgentTotals, AgentType, Plan, ProcessedMetrics } from './types';
+
+// --- Pre Sales helpers (cases 17-24) ---
+function psTotal(avgCalls: number, avgTalkSeconds: number, qualityScore: number | null): number {
+  return calculatePreSales({ avgCalls, avgTalkSeconds, qualityScore }, defaultPreSalesPlan).total;
+}
+
+function psTotals(partial: Partial<AgentTotals>): AgentTotals {
+  return {
+    sales: 0,
+    orders: 0,
+    connects: 0,
+    talkSeconds: 0,
+    visitsBooked: 0,
+    visitsAttributed: 0,
+    activeDays: 0,
+    ...partial,
+  };
+}
 
 export interface TestCaseDefinition {
   id: number;
@@ -451,6 +476,197 @@ export const testCases: TestCaseDefinition[] = [
         passed,
         expected: 'Class B, Gross: 45000, Q: 1300, C: 900, T: 1000, R: 4000, Total: 52200',
         actual: `Class ${res.className}, Gross: ${res.revenueIncentiveNet}, Q: ${res.quality.amount}, C: ${res.connects.amount}, T: ${res.talk.amount}, R: ${res.rider.amount}, Total: ${res.total}`,
+      };
+    },
+  },
+
+  // 17. Pre Sales calls per day tiers (quality 90 so the gate is met, talk time below its first tier)
+  {
+    id: 17,
+    description:
+      'Pre Sales calls/day: 100 -> 0, 101 -> 500, 115 -> 500, 116 -> 1000, 130 -> 1000, 131 -> 2000',
+    run: () => {
+      const cases: Array<[number, number]> = [
+        [100, 0],
+        [101, 500],
+        [115, 500],
+        [116, 1000],
+        [130, 1000],
+        [131, 2000],
+      ];
+      const actual = cases.map(([calls]) => psTotal(calls, 0, 90));
+      const expected = cases.map(([, pay]) => pay);
+      return {
+        passed: actual.every((v, i) => v === expected[i]),
+        expected: expected.join(', '),
+        actual: actual.join(', '),
+      };
+    },
+  },
+
+  // 18. Pre Sales talk time (seconds) tiers
+  {
+    id: 18,
+    description:
+      'Pre Sales talk time (s): 165 -> 0, 166 -> 500, 180 -> 500, 181 -> 1000, 210 -> 1000, 211 -> 2000',
+    run: () => {
+      const cases: Array<[number, number]> = [
+        [165, 0],
+        [166, 500],
+        [180, 500],
+        [181, 1000],
+        [210, 1000],
+        [211, 2000],
+      ];
+      const actual = cases.map(([talk]) => psTotal(0, talk, 90));
+      const expected = cases.map(([, pay]) => pay);
+      return {
+        passed: actual.every((v, i) => v === expected[i]),
+        expected: expected.join(', '),
+        actual: actual.join(', '),
+      };
+    },
+  },
+
+  // 19. Quality gate: both incentives need a Quality Score of 85 or more
+  {
+    id: 19,
+    description: 'Pre Sales quality gate: calls 131 + talk 211 -> score 84 = 0, score 85 = 4000, score 100 = 4000',
+    run: () => {
+      const below = psTotal(131, 211, 84);
+      const atGate = psTotal(131, 211, 85);
+      const top = psTotal(131, 211, 100);
+      return {
+        passed: below === 0 && atGate === 4000 && top === 4000,
+        expected: 'score 84: 0, score 85: 4000, score 100: 4000',
+        actual: `score 84: ${below}, score 85: ${atGate}, score 100: ${top}`,
+      };
+    },
+  },
+
+  // 20. No audits -> the gate is not met, even with a high score value and top tiers
+  {
+    id: 20,
+    description: 'Pre Sales with Total_Audits 0 (score 95): both incentives 0',
+    run: () => {
+      const totals = psTotals({
+        activeDays: 1,
+        calls: 131,
+        ttWeightedSum: 211 * 131,
+        ttWeightCalls: 131,
+        ttSum: 211,
+        ttRows: 1,
+      });
+      const metrics = preSalesMetricsFromTotals(totals, { audits: 0, score: 95 }, defaultPreSalesPlan);
+      const res = calculatePreSales(metrics, defaultPreSalesPlan);
+      return {
+        passed:
+          metrics.qualityScore === null && res.total === 0 && res.preSales?.potentialTotal === 4000,
+        expected: 'quality null, total 0, potential 4000',
+        actual: `quality ${metrics.qualityScore}, total ${res.total}, potential ${res.preSales?.potentialTotal}`,
+      };
+    },
+  },
+
+  // 21. Rounding: 201 calls in 2 active days = 100.5 -> 101 (half rounds up) -> Tier 1
+  {
+    id: 21,
+    description: 'Pre Sales: 201 calls in 2 active days (100.5) rounds to 101 -> 500',
+    run: () => {
+      const totals = psTotals({ activeDays: 2, calls: 201 });
+      const metrics = preSalesMetricsFromTotals(totals, { audits: 3, score: 90 }, defaultPreSalesPlan);
+      const res = calculatePreSales(metrics, defaultPreSalesPlan);
+      return {
+        passed: metrics.avgCalls === 101 && res.total === 500,
+        expected: 'avgCalls 101, total 500',
+        actual: `avgCalls ${metrics.avgCalls}, total ${res.total}`,
+      };
+    },
+  },
+
+  // 22. Talk time is weighted by Inbound_Calls (default) or a simple average (plan setting)
+  {
+    id: 22,
+    description:
+      'Pre Sales talk time: day 1 = 200 s on 100 calls, day 2 = 100 s on 300 calls -> weighted 125, simple 150',
+    run: () => {
+      const totals = psTotals({
+        activeDays: 2,
+        calls: 400,
+        ttWeightedSum: 200 * 100 + 100 * 300,
+        ttWeightCalls: 400,
+        ttSum: 300,
+        ttRows: 2,
+      });
+      const quality = { audits: 2, score: 90 };
+      const weighted = preSalesMetricsFromTotals(totals, quality, { ...defaultPreSalesPlan, talkMethod: 'weighted' });
+      const simple = preSalesMetricsFromTotals(totals, quality, { ...defaultPreSalesPlan, talkMethod: 'simple' });
+      return {
+        passed: weighted.avgTalkSeconds === 125 && simple.avgTalkSeconds === 150,
+        expected: 'weighted 125, simple 150',
+        actual: `weighted ${weighted.avgTalkSeconds}, simple ${simple.avgTalkSeconds}`,
+      };
+    },
+  },
+
+  // 23. Raw sheet rows -> aggregate -> incentive (Sunday row with blank values is ignored)
+  {
+    id: 23,
+    description:
+      'Pre Sales from sheet rows: calls 110 + 130, talk 180 s + 200 s (weighted 191), quality 88 -> 1000 + 1000 = 2000',
+    run: () => {
+      const base = {
+        Agent_Email_Official: 'ps@test.local',
+        Agent_Location: 'Dighe',
+        Agent_Tier: 'PreSales',
+      };
+      const rows = [
+        { ...base, Date: '2026-10-01', Inbound_Calls: 110, Avg_TT_per_day: 180, Day: 1 },
+        { ...base, Date: '2026-10-02', Inbound_Calls: 130, Avg_TT_per_day: 200, Day: 1 },
+        { ...base, Date: '2026-10-04', Inbound_Calls: '', Avg_TT_per_day: '', Day: 0 },
+      ];
+      const agg = aggregateAgent(rows, { Agent_Email_Official: 'ps@test.local', Total_Audits: 4, Average_Audit_Score: 88 });
+      const metrics = preSalesMetricsFromTotals(agg.totals, agg.quality, defaultPreSalesPlan);
+      const res = calculatePreSales(metrics, defaultPreSalesPlan);
+      const passed =
+        agg.totals.calls === 240 &&
+        agg.totals.activeDays === 2 &&
+        agg.daily.length === 3 &&
+        metrics.avgCalls === 120 &&
+        metrics.avgTalkSeconds === 191 &&
+        res.total === 2000;
+      return {
+        passed,
+        expected: 'calls 240, active days 2, 3 daily rows, avgCalls 120, avgTalk 191, total 2000',
+        actual: `calls ${agg.totals.calls}, active days ${agg.totals.activeDays}, ${agg.daily.length} daily rows, avgCalls ${metrics.avgCalls}, avgTalk ${metrics.avgTalkSeconds}, total ${res.total}`,
+      };
+    },
+  },
+
+  // 24. Agent_Tier text: "PreSales" (as in the sheet), "Pre Sales", and messy spellings all map to Pre Sales
+  {
+    id: 24,
+    description: "Agent_Tier 'PreSales', 'Pre Sales' and ' pre-sales ' -> PRE_SALES; unknown or blank -> not mapped",
+    run: () => {
+      const map: Record<string, AgentType> = {
+        'HO Callers': 'HO',
+        'Store Callers': 'STORE',
+        PreSales: 'PRE_SALES',
+      };
+      const got = [
+        resolveAgentType(map, 'PreSales'),
+        resolveAgentType(map, 'Pre Sales'),
+        resolveAgentType(map, ' pre-sales '),
+        resolveAgentType(map, 'HO Callers'),
+        resolveAgentType(map, 'store callers'),
+        resolveAgentType(map, 'Trainee'),
+        resolveAgentType(map, ''),
+      ];
+      const want = ['PRE_SALES', 'PRE_SALES', 'PRE_SALES', 'HO', 'STORE', null, null];
+      return {
+        passed: got.every((v, i) => v === want[i]),
+        expected: want.join(', '),
+        actual: got.join(', '),
       };
     },
   },

@@ -1,4 +1,4 @@
-import { Plan } from './types';
+import { Cycle, Plan, PreSalesPlan } from './types';
 
 export const standardClasses = [
   { name: 'NQ', abovePct: 0, rate: 0 },
@@ -69,3 +69,30 @@ export const defaultSTOREPlan: Plan = {
   ],
   deductionRules: [],
 };
+
+// Pre Sales (Agent_Tier "PreSales", location Dighe): two incentives, and BOTH are paid only when
+// the Quality Score is at least the gate. Values are whole numbers (same rounding as the other plans).
+export const defaultPreSalesPlan: PreSalesPlan = {
+  qualityGate: 85,
+  calls: [
+    { min: 101, payout: 500 },
+    { min: 116, payout: 1000 },
+    { min: 131, payout: 2000 },
+  ],
+  talkSeconds: [
+    { min: 166, payout: 500 },
+    { min: 181, payout: 1000 },
+    { min: 211, payout: 2000 },
+  ],
+  talkMethod: 'weighted',
+};
+
+/** The cycle's revenue plan for an Agent Type, or the built-in default. */
+export function getRevenuePlan(cycle: Cycle | null | undefined, type: 'HO' | 'STORE'): Plan {
+  return cycle?.plans?.[type] ?? (type === 'HO' ? defaultHOPlan : defaultSTOREPlan);
+}
+
+/** The cycle's Pre Sales plan, or the built-in default. */
+export function getPreSalesPlan(cycle: Cycle | null | undefined): PreSalesPlan {
+  return cycle?.plans?.PRE_SALES ?? defaultPreSalesPlan;
+}
