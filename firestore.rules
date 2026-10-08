@@ -1,0 +1,46 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{db}/documents {
+    function signedIn() { return request.auth != null; }
+    function me() { return request.auth.token.email.lower(); }
+    function isSuper() { 
+      return signedIn() && (
+        me() == 'agha.h489@gmail.com' ||
+        (exists(/databases/$(db)/documents/config/app) && me() in get(/databases/$(db)/documents/config/app).data.superAdmins)
+      ); 
+    }
+    function isManager() { 
+      return signedIn() && exists(/databases/$(db)/documents/config/app) && me() in get(/databases/$(db)/documents/config/app).data.managers; 
+    }
+    function seesAll() { return isSuper() || isManager(); }
+    function hasAccess() { return signedIn() && exists(/databases/$(db)/documents/access/$(me())); }
+    function acc() { return get(/databases/$(db)/documents/access/$(me())).data; }
+
+    match /config/app { allow read: if signedIn(); allow write: if isSuper(); }
+    match /access/{e} { allow read: if signedIn() && (e == me() || seesAll()); allow write: if false; }
+    match /cycles/{c} {
+      allow read: if seesAll() || hasAccess();
+      allow write: if isSuper();
+      match /agents/{a} {
+        allow read: if seesAll() || (signedIn() && (
+          resource.data.personalEmail == me() ||
+          resource.data.tlPersonalEmail == me() ||
+          (hasAccess() && acc().role == 'tl' && (
+            (acc().officialEmail != null && resource.data.tlOfficialEmail == acc().officialEmail) ||
+            resource.data.location == acc().location
+          ))
+        ));
+        allow update: if isSuper() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['absentDays']);
+        allow create, delete: if false;
+      }
+      match /leaderboards/{loc} {
+        allow read: if seesAll() || (hasAccess() && acc().role == 'tl' && acc().location == loc);
+        allow write: if false;
+      }
+    }
+    match /syncLogs/{id} { allow read: if isSuper(); allow write: if false; }
+    match /auditLog/{id} { allow read, create: if isSuper(); allow update, delete: if false; }
+    match /health/{id} { allow read, write: if false; }
+  }
+}
+

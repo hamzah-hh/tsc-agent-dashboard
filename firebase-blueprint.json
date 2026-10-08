@@ -1,0 +1,129 @@
+{
+  "entities": {
+    "AppConfig": {
+      "title": "AppConfig",
+      "description": "Global application configuration and Super Admin list",
+      "type": "object",
+      "properties": {
+        "superAdmins": { "type": "array" },
+        "managers": { "type": "array" },
+        "activeCycleId": { "type": "string" },
+        "tierMap": { "type": "object" },
+        "locations": { "type": "array" },
+        "testMode": { "type": "boolean" },
+        "aiEnabled": { "type": "boolean" },
+        "aiTone": { "type": "string" }
+      },
+      "required": ["superAdmins", "activeCycleId", "locations"]
+    },
+    "Access": {
+      "title": "Access",
+      "description": "User access and role assignment mapping",
+      "type": "object",
+      "properties": {
+        "role": { "type": "string", "enum": ["agent", "tl"] },
+        "officialEmail": { "type": "string" },
+        "name": { "type": "string" },
+        "location": { "type": "string" },
+        "isTest": { "type": "boolean" }
+      },
+      "required": ["role", "officialEmail", "name", "location"]
+    },
+    "Cycle": {
+      "title": "Cycle",
+      "description": "Sales incentive cycle configuration and targets",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "startDate": { "type": "string" },
+        "endDate": { "type": "string" },
+        "status": { "type": "string" },
+        "workingDaysPerWeek": { "type": "number" },
+        "plans": { "type": "object" }
+      },
+      "required": ["name", "startDate", "endDate", "status", "plans"]
+    },
+    "Agent": {
+      "title": "Agent",
+      "description": "Agent performance metrics, daily stats, and calculated incentive result",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "officialEmail": { "type": "string" },
+        "personalEmail": { "type": "string" },
+        "location": { "type": "string" },
+        "agentType": { "type": "string" },
+        "totals": { "type": "object" },
+        "daily": { "type": "array" },
+        "quality": { "type": "object" },
+        "result": { "type": "object" },
+        "lastDataDate": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["name", "officialEmail", "totals", "result"]
+    },
+    "Leaderboard": {
+      "title": "Leaderboard",
+      "description": "Aggregated location leaderboard ranking",
+      "type": "object",
+      "properties": {
+        "location": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "rows": { "type": "array" }
+      },
+      "required": ["location", "updatedAt", "rows"]
+    },
+    "SyncLog": {
+      "title": "SyncLog",
+      "description": "Sync and import execution audit log",
+      "type": "object",
+      "properties": {
+        "time": { "type": "string" },
+        "source": { "type": "string" },
+        "result": { "type": "string" },
+        "rows": { "type": "number" },
+        "agents": { "type": "number" }
+      },
+      "required": ["time", "source", "result"]
+    },
+    "HealthPing": {
+      "title": "HealthPing",
+      "description": "System health ping write/read probe",
+      "type": "object",
+      "properties": {
+        "time": { "type": "string" }
+      },
+      "required": ["time"]
+    }
+  },
+  "firestore": {
+    "/config/app": {
+      "schema": "AppConfig",
+      "description": "Application configuration"
+    },
+    "/access/{loginEmail}": {
+      "schema": "Access",
+      "description": "User access map"
+    },
+    "/cycles/{cycleId}": {
+      "schema": "Cycle",
+      "description": "Sales incentive cycle definitions"
+    },
+    "/cycles/{cycleId}/agents/{officialEmail}": {
+      "schema": "Agent",
+      "description": "Agent performance records"
+    },
+    "/cycles/{cycleId}/leaderboards/{location}": {
+      "schema": "Leaderboard",
+      "description": "Location leaderboard"
+    },
+    "/syncLogs/{logId}": {
+      "schema": "SyncLog",
+      "description": "Sync history logs"
+    },
+    "/health/{docId}": {
+      "schema": "HealthPing",
+      "description": "Health ping probe"
+    }
+  }
+}
