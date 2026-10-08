@@ -1468,6 +1468,12 @@ function isAgentOfTl(
         },
         allowedAgents,
         updatedAt: rawRecords.updatedAt,
+        // Why the data may be missing (last fill attempt). Only staff see the technical reason.
+        syncStatus: rawRecords.syncStatus
+          ? identity.role === 'agent'
+            ? { ok: rawRecords.syncStatus.ok, at: rawRecords.syncStatus.at }
+            : rawRecords.syncStatus
+          : null,
       });
     })
   );
@@ -1478,8 +1484,14 @@ function isAgentOfTl(
     route(async (req, res) => {
       const { appConfig } = await requireSuperAdmin(req);
       const cycleId = appConfig.activeCycleId;
-      const sheetUrl = req.body?.sheetUrl || DEFAULT_RAW_SHEET_URL;
-      const result = await syncRawSheetData(cycleId, sheetUrl);
+      // The configured sheet first: DEFAULT_RAW_SHEET_URL is an older sheet with different headers.
+      const sheetUrl = req.body?.sheetUrl || appConfig.googleSpreadsheetUrl || DEFAULT_RAW_SHEET_URL;
+      let result: { ordersCount: number; visitsCount: number };
+      try {
+        result = await syncRawSheetData(cycleId, sheetUrl);
+      } catch (err: any) {
+        throw new HttpError(502, `Raw sheet sync failed: ${err?.message || err}`);
+      }
       return res.json({
         status: 'ok',
         ordersCount: result.ordersCount,

@@ -30,7 +30,7 @@ import {
   SyncLogRecord,
 } from './src/shared/types';
 import { isAiConfigured, runBatchAiGeneration } from './server-ai';
-import { saveRawRecords, normalizeRawOrders, normalizeRawVisits, syncRawSheetData } from './server-raw-data';
+import { DEFAULT_RAW_SHEET_URL, saveRawPayload, syncRawSheetData } from './server-raw-data';
 
 const REQUIRED_MAIN_HEADERS = [
   'Date',
@@ -602,6 +602,8 @@ export interface ProcessImportResult {
   aiFailed?: number;
   aiSkipped?: number;
   aiPending?: number;
+  /** Raw_Revenue / Raw_Visit outcome; error is set when the raw data could not be saved. */
+  rawData?: { ordersCount: number; visitsCount: number; error?: string };
 }
 
 export interface ProcessImportOptions {
@@ -622,6 +624,7 @@ export async function processImport(
 ): Promise<ProcessImportResult> {
   const warnings: string[] = [];
   const revenueRows = options.revenueRows || [];
+  let rawData: ProcessImportResult['rawData'];
 
   try {
     // 1. Check and normalize rows
@@ -720,18 +723,21 @@ export async function processImport(
       (options.rawVisitRows && options.rawVisitRows.length > 0) ||
       (options.rawRevenueTabRows && options.rawRevenueTabRows.length > 0);
 
-    if (hasRawPayload) {
-      const visits = normalizeRawVisits(options.rawVisitRows || [], excludedEmails);
-      const orders = normalizeRawOrders(options.rawRevenueTabRows || [], excludedEmails);
-      await saveRawRecords(cycleId, orders, visits);
-    } else {
-      // Fallback: If no raw data is sent in payload, sync it directly from the spreadsheet URL
-      try {
+    // A raw-data failure must not block the incentive data, but it is no longer silent: the reason
+    // goes into the sync result and sync log (warnings) and into rawRecordsStatus for the Raw Data view.
+    try {
+      if (hasRawPayload) {
+        rawData = await saveRawPayload(cycleId, options.rawRevenueTabRows || [], options.rawVisitRows || [], excludedEmails);
+      } else {
+        // Fallback: no raw rows in the payload (an Apps Script older than the Raw_Visit / Raw_Revenue
+        // reader), so read the tabs from the sheet's public CSV export.
         console.log('[Import] No raw rows in payload. Syncing raw sheet directly from', appConfig.googleSpreadsheetUrl);
-        await syncRawSheetData(cycleId, appConfig.googleSpreadsheetUrl);
-      } catch (err: any) {
-        console.warn('[Import] Fallback raw sheet sync failed:', err?.message || err);
+        rawData = await syncRawSheetData(cycleId, appConfig.googleSpreadsheetUrl || DEFAULT_RAW_SHEET_URL);
       }
+    } catch (err: any) {
+      const reason = err?.message || String(err);
+      rawData = { ordersCount: 0, visitsCount: 0, error: reason };
+      warnings.push(`Raw data (Raw_Revenue / Raw_Visit) not saved: ${reason}`);
     }
 
     // Load and parse Leader_Mapping
@@ -814,6 +820,7 @@ export async function processImport(
         agents: 0,
         lastDataDate: '',
         warnings,
+        rawData,
       };
     }
 
@@ -1146,6 +1153,7 @@ export async function processImport(
       agents: updatedAgents.length,
       lastDataDate: overallLastDate,
       warnings,
+      rawData,
       ...(appConfig.aiEnabled
         ? { aiOk: ai.ok, aiFailed: ai.failed, aiSkipped: ai.skipped, aiPending: ai.pending }
         : {}),

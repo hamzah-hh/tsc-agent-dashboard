@@ -52,54 +52,104 @@ function parseCSV(text: string): Record<string, string>[] {
   return rows;
 }
 
-export function normalizeRawOrders(rawOrders: any[], excludedSet: Set<string>): RawOrderRecord[] {
-  return rawOrders.map((o) => {
-    let loc = o['Agent Category'] || o['Location'] || '';
-    if (loc.includes('Andheri')) loc = 'Andheri';
-    else if (loc.includes('Bangalore')) loc = 'Bangalore';
-    else if (loc.includes('HO') || loc.includes('Dighe')) loc = 'Dighe';
-    else loc = 'Dighe';
+/** Header key with case, spaces and punctuation removed: " Order Value " and "order_value" both -> "ordervalue". */
+function headerKey(h: string): string {
+  return String(h ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
 
-    const val = parseFloat((o['Order Value'] || o['order_value'] || o['Order_Value'] || '0').replace(/[^0-9.-]/g, '')) || 0;
+/**
+ * Reads a column by any of its known header names, ignoring case, spacing and punctuation, and returns it
+ * as a trimmed string. Sheet values sent by Apps Script can be numbers or booleans, not only strings, so
+ * every value is converted with String() before any string method is used on it.
+ */
+function pick(row: Record<string, any>, ...names: string[]): string {
+  const wanted = new Set(names.map(headerKey));
+  for (const [k, v] of Object.entries(row || {})) {
+    if (wanted.has(headerKey(k)) && v !== undefined && v !== null && String(v).trim() !== '') {
+      return String(v).trim();
+    }
+  }
+  return '';
+}
+
+const ORDER_VALUE_HEADERS = ['Order Value', 'order_value', 'Order_Value'];
+const ORDER_AGENT_HEADERS = ['Agent', 'Agent Email', 'Agent_Email'];
+const VISIT_AGENT_HEADERS = ['Agent ID', 'agent_id', 'Agent', 'Agent Email'];
+
+/** Branch from a sheet's location / agent-category text. */
+function branchOf(text: string, fallback: string): string {
+  const t = text.toLowerCase();
+  if (t.includes('andheri')) return 'Andheri';
+  if (t.includes('bangalore') || t.includes('bengaluru')) return 'Bangalore';
+  if (t.includes('dighe') || /\bho\b/.test(t)) return 'Dighe';
+  return fallback;
+}
+
+export function normalizeRawOrders(rawOrders: any[], excludedSet: Set<string>): RawOrderRecord[] {
+  return (rawOrders || []).map((o) => {
+    const agentCategory = pick(o, 'Agent Category');
+    const val = parseFloat(pick(o, ...ORDER_VALUE_HEADERS).replace(/[^0-9.-]/g, '')) || 0;
     return {
-      orderId: String(o['Order ID'] || o['order_id'] || o['Order_ID'] || ''),
-      date: String(o['Date'] || o['date'] || ''),
-      orderTime: String(o['Order Time'] || o['order_time'] || o['Order_Time'] || ''),
+      orderId: pick(o, 'Order ID', 'order_id', 'Order_ID'),
+      date: pick(o, 'Date', 'Activity Date/Order Date'),
+      orderTime: pick(o, 'Order Time', 'order_time', 'Order_Time'),
       orderValue: Math.round(val),
-      orderPhone: String(o['Phone/Alternate Phone'] || o['phone_alternate_phone'] || o['Phone / Alternate Phone'] || o['Order Phone / Alternate Phone'] || o['Order_Phone'] || ''),
-      agentEmail: normalizeEmail(o['Agent'] || o['agent'] || ''),
-      category: String(o['Category'] || o['category'] || ''),
-      talkTimeCohort: String(o['Talk Time Cohort'] || o['talk_time_cohort'] || ''),
-      originalPhoneOrMarketplace: String(o['Original Phone/Marketplace Name'] || o['Original Phone / Marketplace Name (for Alt/MP Orders)'] || ''),
+      orderPhone: pick(o, 'Phone/Alternate Phone', 'Order Phone / Alternate Phone', 'Order_Phone', 'phone_alternate_phone'),
+      agentEmail: normalizeEmail(pick(o, ...ORDER_AGENT_HEADERS)),
+      category: pick(o, 'Category'),
+      talkTimeCohort: pick(o, 'Talk Time Cohort'),
+      originalPhoneOrMarketplace: pick(
+        o,
+        'Original Phone/Marketplace Name',
+        'Original Phone / Marketplace Name (for Alt/MP Orders)'
+      ),
       consideredForOverall: true,
       consideredForAgent: true,
-      agentCategory: String(o['Agent Category'] || ''),
-      location: loc,
-      channel: String(o['Channel'] || o['channel'] || ''),
+      agentCategory,
+      location: branchOf(agentCategory || pick(o, 'Location'), 'Dighe'),
+      channel: pick(o, 'Channel'),
     };
   }).filter((o) => !excludedSet.has(normalizeEmail(o.agentEmail)));
 }
 
 export function normalizeRawVisits(rawVisits: any[], excludedSet: Set<string>): RawVisitRecord[] {
-  return rawVisits.map((v, i) => {
-    let loc = v['Location'] || v['location'] || '';
-    if (loc.includes('Andheri')) loc = 'Andheri';
-    else if (loc.includes('Bangalore')) loc = 'Bangalore';
-    else if (loc.includes('Dighe')) loc = 'Dighe';
-    else loc = 'Store';
-    
+  return (rawVisits || []).map((v, i) => {
+    const visitDateTime = pick(v, 'Visit Date Time', 'visit_date_time');
     return {
       id: 'visit_' + (i + 1),
       type: 'STORE' as const,
-      date: String((v['Visit Date Time'] || v['visit_date_time'] || v['Date'] || v['date'] || '').split(' ')[0] || ''),
-      visitDateTime: String(v['Visit Date Time'] || v['visit_date_time'] || ''),
-      phoneNumber: String(v['Phone Number'] || v['phone_number'] || ''),
-      agentEmail: normalizeEmail(v['Agent ID'] || v['agent_id'] || v['Agent'] || ''),
-      location: loc,
-      talkTimeSeconds: parseInt(v['Talk Time (before visit)'] || v['talk_time_before_visit'] || '0', 10) || 0,
-      visitSource: String(v['Visit Source'] || v['visit_source'] || ''),
+      date: (visitDateTime || pick(v, 'Date')).split(' ')[0] || '',
+      visitDateTime,
+      phoneNumber: pick(v, 'Phone Number', 'phone_number'),
+      agentEmail: normalizeEmail(pick(v, ...VISIT_AGENT_HEADERS)),
+      location: branchOf(pick(v, 'Location'), 'Store'),
+      talkTimeSeconds: parseInt(pick(v, 'Talk Time (before visit)', 'Talk Time before visit', 'talk_time_before_visit'), 10) || 0,
+      visitSource: pick(v, 'Visit Source', 'visit_source'),
     };
   }).filter((v) => !excludedSet.has(normalizeEmail(v.agentEmail)));
+}
+
+/**
+ * Throws when a raw tab has rows but not the columns the app needs, naming the headers it did find
+ * (header names only, never cell values). Without this a renamed or missing header row silently
+ * produced orders with no value and no agent.
+ */
+export function assertRawHeaders(tab: 'Raw_Revenue' | 'Raw_Visit', rows: any[]): void {
+  if (!rows || rows.length === 0) return;
+  const keys = new Set<string>();
+  for (const r of rows.slice(0, 5)) Object.keys(r || {}).forEach((k) => keys.add(headerKey(k)));
+  const groups: Record<string, string[]> =
+    tab === 'Raw_Revenue' ? { 'Order Value': ORDER_VALUE_HEADERS, Agent: ORDER_AGENT_HEADERS } : { 'Agent ID': VISIT_AGENT_HEADERS };
+  const missing = Object.entries(groups)
+    .filter(([, names]) => !names.some((n) => keys.has(headerKey(n))))
+    .map(([label]) => label);
+  if (missing.length > 0) {
+    const found = Object.keys(rows[0] || {}).filter((k) => k.trim() !== '').slice(0, 12);
+    throw new Error(
+      `${tab}: missing column ${missing.join(', ')}. Row 1 of the tab must be the header row. ` +
+        `Columns found: ${found.length ? found.map((f) => `"${f}"`).join(', ') : '(none)'}`
+    );
+  }
 }
 
 export function buildLocationSummaries(orders: RawOrderRecord[]): Record<string, LocationRevenueData> {
@@ -193,10 +243,47 @@ export function buildLocationSummaries(orders: RawOrderRecord[]): Record<string,
   return locationSummaries;
 }
 
+function rawRecordsRef(cycleId: string) {
+  return adminDb.collection('cycles').doc(cycleId).collection('data').doc('rawRecords');
+}
+
+function rawStatusRef(cycleId: string) {
+  return adminDb.collection('cycles').doc(cycleId).collection('data').doc('rawRecordsStatus');
+}
+
+/** Outcome of the last attempt to fill rawRecords, shown in the Raw Data view and the sync result. */
+export interface RawSyncStatus {
+  ok: boolean;
+  at: string;
+  source: 'sync-payload' | 'sheet-csv';
+  ordersCount?: number;
+  visitsCount?: number;
+  error?: string;
+}
+
+/** After a failed attempt, page views wait this long before fetching the sheet again. */
+export const RAW_RETRY_COOLDOWN_MS = 10 * 60 * 1000;
+
+export async function recordRawSyncStatus(cycleId: string, status: RawSyncStatus): Promise<void> {
+  try {
+    await rawStatusRef(cycleId).set(status);
+  } catch (e) {
+    console.error('[RawData] Could not save the raw-data sync status:', e);
+  }
+}
+
+export async function getRawSyncStatus(cycleId: string): Promise<RawSyncStatus | null> {
+  try {
+    const snap = await rawStatusRef(cycleId).get();
+    return snap.exists ? (snap.data() as RawSyncStatus) : null;
+  } catch (_e) {
+    return null;
+  }
+}
+
 export async function saveRawRecords(cycleId: string, orders: RawOrderRecord[], visits: RawVisitRecord[]) {
   const locationSummaries = buildLocationSummaries(orders);
-  const dataRef = adminDb.collection('cycles').doc(cycleId).collection('data').doc('rawRecords');
-  await dataRef.set({
+  await rawRecordsRef(cycleId).set({
     orders,
     visits,
     locationSummaries,
@@ -205,73 +292,147 @@ export async function saveRawRecords(cycleId: string, orders: RawOrderRecord[], 
 }
 
 /**
- * Ingests the 2 raw tabs from the Google Sheet:
- * - Raw_Revenue (orders)
- * - Raw_Visit (visits)
+ * Normalizes, checks and saves raw rows that arrived in the Apps Script sync payload, and records the
+ * outcome. Throws with the reason on failure (the caller reports it as a sync warning).
  */
-export async function syncRawSheetData(cycleId: string, sheetUrl = DEFAULT_RAW_SHEET_URL) {
-  // Load excluded agents
-  const excludedSet = new Set<string>();
+export async function saveRawPayload(
+  cycleId: string,
+  rawRevenueTabRows: any[],
+  rawVisitRows: any[],
+  excludedSet: Set<string>
+): Promise<{ ordersCount: number; visitsCount: number }> {
   try {
-    const excludesSnap = await adminDb.collection('cycles').doc(cycleId).collection('data').doc('excludedAgents').get();
-    if (excludesSnap.exists) {
-      const list = excludesSnap.data()?.list || [];
-      for (const item of list) {
-        if (item.active && item.agentEmail) {
-          excludedSet.add(normalizeEmail(item.agentEmail));
-        }
-      }
-    }
-  } catch (e) {
-    console.warn('Failed to load excluded agents in syncRawSheetData:', e);
+    assertRawHeaders('Raw_Revenue', rawRevenueTabRows);
+    assertRawHeaders('Raw_Visit', rawVisitRows);
+    const orders = normalizeRawOrders(rawRevenueTabRows, excludedSet);
+    const visits = normalizeRawVisits(rawVisitRows, excludedSet);
+    await saveRawRecords(cycleId, orders, visits);
+    const result = { ordersCount: orders.length, visitsCount: visits.length };
+    await recordRawSyncStatus(cycleId, { ok: true, at: new Date().toISOString(), source: 'sync-payload', ...result });
+    return result;
+  } catch (err: any) {
+    const error = err?.message || String(err);
+    await recordRawSyncStatus(cycleId, { ok: false, at: new Date().toISOString(), source: 'sync-payload', error });
+    throw new Error(error);
   }
-
-  // Extract spreadsheet ID from sheetUrl
-  const match = sheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
-  const spreadsheetId = match ? match[1] : '1Bg_F0Asq16F1BSwxyKF7SjFH4UUSVk6cTZ6cp9dnqb0';
-  const urlBase = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&sheet=`;
-
-  const [ordersRes, visitsRes] = await Promise.all([
-    fetch(urlBase + 'Raw_Revenue'),
-    fetch(urlBase + 'Raw_Visit'),
-  ]);
-
-  const [ordersCsv, visitsCsv] = await Promise.all([
-    ordersRes.text(),
-    visitsRes.text(),
-  ]);
-
-  const rawOrders = parseCSV(ordersCsv);
-  const rawVisits = parseCSV(visitsCsv);
-
-  // Normalize Orders
-  const orders = normalizeRawOrders(rawOrders, excludedSet);
-
-  // Normalize Visits
-  const visits = normalizeRawVisits(rawVisits, excludedSet);
-
-  // Save raw records
-  await saveRawRecords(cycleId, orders, visits);
-
-  return { ordersCount: orders.length, visitsCount: visits.length };
 }
 
 /**
- * Loads cached raw data or fetches and populates if not yet present.
+ * Downloads one tab as CSV through the sheet's public CSV export. This only works while the sheet is
+ * shared as "Anyone with the link can view"; otherwise Google answers with a sign-in page (HTML), which
+ * used to be parsed as if it were data. Now anything that is not CSV is an error with the reason.
  */
-export async function getOrLoadRawRecords(cycleId: string) {
-  const dataRef = adminDb.collection('cycles').doc(cycleId).collection('data').doc('rawRecords');
+let sheetFetch: typeof fetch = (input, init) => fetch(input, init);
+
+/** Tests replace the Google Sheets download so they never touch the network or the real sheet. */
+export function setRawSheetFetchForTests(f: typeof fetch | null): void {
+  sheetFetch = f || ((input, init) => fetch(input, init));
+}
+
+async function fetchTabCsv(spreadsheetId: string, tab: string): Promise<Record<string, string>[]> {
+  // headers=1: always treat row 1 as the header row (otherwise Google guesses, and can guess 0).
+  const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&headers=1&sheet=${encodeURIComponent(tab)}`;
+  let res: Response;
+  try {
+    res = await sheetFetch(url);
+  } catch (err: any) {
+    throw new Error(`${tab}: could not reach Google Sheets (${err?.message || err})`);
+  }
+  const contentType = res.headers.get('content-type') || '';
+  if (!res.ok) {
+    throw new Error(`${tab}: Google Sheets answered HTTP ${res.status}. Check the tab name and that the sheet is shared as "Anyone with the link can view".`);
+  }
+  if (!/csv|text\/plain/i.test(contentType)) {
+    throw new Error(`${tab}: Google Sheets did not return CSV (got "${contentType || 'unknown'}"). The sheet is probably not shared as "Anyone with the link can view".`);
+  }
+  return parseCSV(await res.text());
+}
+
+/** The spreadsheet id in a Google Sheets URL. */
+export function spreadsheetIdOf(sheetUrl?: string): string | null {
+  const match = (sheetUrl || '').match(/\/d\/([a-zA-Z0-9-_]+)/);
+  return match ? match[1] : null;
+}
+
+/**
+ * Ingests the 2 raw tabs from the Google Sheet:
+ * - Raw_Revenue (orders)
+ * - Raw_Visit (visits)
+ * Throws with the reason on any failure, and records the outcome in rawRecordsStatus. Existing raw
+ * records are only replaced after both tabs were read and checked.
+ */
+export async function syncRawSheetData(cycleId: string, sheetUrl = DEFAULT_RAW_SHEET_URL) {
+  try {
+    // Load excluded agents
+    const excludedSet = new Set<string>();
+    try {
+      const excludesSnap = await adminDb.collection('cycles').doc(cycleId).collection('data').doc('excludedAgents').get();
+      if (excludesSnap.exists) {
+        const list = excludesSnap.data()?.list || [];
+        for (const item of list) {
+          if (item.active && item.agentEmail) {
+            excludedSet.add(normalizeEmail(item.agentEmail));
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to load excluded agents in syncRawSheetData:', e);
+    }
+
+    const spreadsheetId = spreadsheetIdOf(sheetUrl);
+    if (!spreadsheetId) throw new Error(`Not a Google Sheets URL: "${sheetUrl}"`);
+
+    const [rawOrders, rawVisits] = await Promise.all([
+      fetchTabCsv(spreadsheetId, 'Raw_Revenue'),
+      fetchTabCsv(spreadsheetId, 'Raw_Visit'),
+    ]);
+    assertRawHeaders('Raw_Revenue', rawOrders);
+    assertRawHeaders('Raw_Visit', rawVisits);
+
+    const orders = normalizeRawOrders(rawOrders, excludedSet);
+    const visits = normalizeRawVisits(rawVisits, excludedSet);
+    await saveRawRecords(cycleId, orders, visits);
+
+    const result = { ordersCount: orders.length, visitsCount: visits.length };
+    await recordRawSyncStatus(cycleId, { ok: true, at: new Date().toISOString(), source: 'sheet-csv', ...result });
+    return result;
+  } catch (err: any) {
+    const error = err?.message || String(err);
+    console.error('[RawData] Raw sheet sync failed:', error);
+    await recordRawSyncStatus(cycleId, { ok: false, at: new Date().toISOString(), source: 'sheet-csv', error });
+    throw new Error(error);
+  }
+}
+
+export interface RawRecordsDoc {
+  orders: RawOrderRecord[];
+  visits: RawVisitRecord[];
+  locationSummaries?: Record<string, LocationRevenueData>;
+  updatedAt?: string;
+  /** The last fill attempt, so screens can say why the data is missing instead of showing zeros. */
+  syncStatus?: RawSyncStatus | null;
+}
+
+/**
+ * Loads the saved raw data. When nothing is saved yet it tries to fetch the sheet once; after a failed
+ * attempt it waits RAW_RETRY_COOLDOWN_MS before trying again, instead of re-downloading on every page
+ * view. Never throws for a fetch problem: it returns empty data plus the reason in syncStatus.
+ */
+export async function getOrLoadRawRecords(cycleId: string): Promise<RawRecordsDoc> {
+  const dataRef = rawRecordsRef(cycleId);
   const snap = await dataRef.get();
+  const status = await getRawSyncStatus(cycleId);
   if (snap.exists) {
     const d = snap.data() as any;
-    if (Array.isArray(d.orders) && d.orders.length > 0) {
-      return d as {
-        orders: RawOrderRecord[];
-        visits: RawVisitRecord[];
-        locationSummaries?: Record<string, LocationRevenueData>;
-        updatedAt?: string;
-      };
+    const hasData = (Array.isArray(d.orders) && d.orders.length > 0) || (Array.isArray(d.visits) && d.visits.length > 0);
+    if (hasData) {
+      return { orders: d.orders || [], visits: d.visits || [], locationSummaries: d.locationSummaries, updatedAt: d.updatedAt, syncStatus: status };
     }
+  }
+
+  const empty: RawRecordsDoc = { orders: [], visits: [], locationSummaries: {}, syncStatus: status };
+  if (status && !status.ok && Date.now() - new Date(status.at).getTime() < RAW_RETRY_COOLDOWN_MS) {
+    return empty;
   }
 
   // Load appConfig to get the correct spreadsheet URL
@@ -285,13 +446,18 @@ export async function getOrLoadRawRecords(cycleId: string) {
     console.warn('Failed to load config for spreadsheetUrl in getOrLoadRawRecords:', err);
   }
 
-  // If not yet seeded or empty, automatically fetch and populate
-  await syncRawSheetData(cycleId, sheetUrl);
-  const freshSnap = await dataRef.get();
-  return freshSnap.data() as {
-    orders: RawOrderRecord[];
-    visits: RawVisitRecord[];
-    locationSummaries?: Record<string, LocationRevenueData>;
-    updatedAt?: string;
+  try {
+    await syncRawSheetData(cycleId, sheetUrl || DEFAULT_RAW_SHEET_URL);
+  } catch (_err) {
+    // syncRawSheetData already recorded the reason in rawRecordsStatus.
+    return { ...empty, syncStatus: await getRawSyncStatus(cycleId) };
+  }
+  const fresh = (await dataRef.get()).data() as any;
+  return {
+    orders: fresh?.orders || [],
+    visits: fresh?.visits || [],
+    locationSummaries: fresh?.locationSummaries || {},
+    updatedAt: fresh?.updatedAt,
+    syncStatus: await getRawSyncStatus(cycleId),
   };
 }

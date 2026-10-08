@@ -45,6 +45,7 @@ export function RawDataView({
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [syncStatus, setSyncStatus] = useState<{ ok: boolean; at: string; error?: string } | null>(null);
 
   const [orders, setOrders] = useState<RawOrderRecord[]>([]);
   const [visits, setVisits] = useState<RawVisitRecord[]>([]);
@@ -104,6 +105,7 @@ export function RawDataView({
       const json = await res.json();
       setOrders(json.orders || []);
       setVisits(json.visits || []);
+      setSyncStatus(json.syncStatus || null);
       setSummary(
         json.summary || {
           totalOrders: 0,
@@ -430,6 +432,19 @@ export function RawDataView({
           <span className="text-[11px] text-slate-400 block mt-0.5">Store footfalls credited</span>
         </div>
       </div>
+
+      {/* The last raw-data fill failed: say so instead of showing zeros as if there were no orders. */}
+      {syncStatus && !syncStatus.ok && (
+        <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">
+          <p className="font-bold">Raw orders and visits could not be loaded from the Google Sheet.</p>
+          <p className="mt-1 break-words">
+            {syncStatus.error || 'Ask the Super Admin to check the Raw_Revenue and Raw_Visit sync.'}
+          </p>
+          {syncStatus.at && (
+            <p className="mt-1 text-rose-500">Last attempt: {new Date(syncStatus.at).toLocaleString('en-IN')}</p>
+          )}
+        </div>
+      )}
 
       {/* Main Table Card */}
       <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">

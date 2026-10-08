@@ -4,6 +4,7 @@ import { adminDb, resetBackendForTests } from '../server-firebase-admin';
 import { createApiApp } from '../server-routes';
 import { processImport } from '../server-import';
 import { setGeminiForTests } from '../server-ai';
+import { RAW_RETRY_COOLDOWN_MS, setRawSheetFetchForTests } from '../server-raw-data';
 import { generateDummyData } from '../src/shared/dummyData';
 import { AgentRecord, LeaderboardRecord } from '../src/shared/types';
 import { check, section } from './harness';
@@ -73,6 +74,16 @@ export async function runApiTests() {
   process.env.SYNC_KEY = 'sync-key-for-tests-1234567890';
   delete process.env.GEMINI_API_KEY;
   resetBackendForTests();
+
+  // The Google Sheet download is faked so no test reads the real sheet over the network. By default it
+  // answers like a public sheet whose raw tabs have only a header row.
+  const emptyRawTabs = { status: 200, type: 'text/csv; charset=utf-8', body: '"Order ID","Order Value","Agent"\n' };
+  const sheet = { calls: 0, answer: emptyRawTabs as { status: number; type: string; body: string | ((url: string) => string) } };
+  setRawSheetFetchForTests((async (input: any) => {
+    sheet.calls++;
+    const body = typeof sheet.answer.body === 'function' ? sheet.answer.body(String(input)) : sheet.answer.body;
+    return new Response(body, { status: sheet.answer.status, headers: { 'content-type': sheet.answer.type } });
+  }) as typeof fetch);
 
   const app = createApiApp({ verifyIdToken: fakeVerify });
   const server: Server = await new Promise((resolve) => {
@@ -663,6 +674,65 @@ export async function runApiTests() {
     r = await call('GET', '/api/admin/login-tracker/activity', { token: tok(L.admin) });
     const riyaAct = r.json.activities.find((a: any) => a.agentEmail === 'riya@co.in');
     check('admin: riya login time is reset to 0', riyaAct !== undefined && riyaAct.amSecondsUsed === 0 && riyaAct.pmSecondsUsed === 0);
+    // ------------------------------------------------------------------
+    section('raw data sync: failures are reported, not shown as zero orders');
+    await adminDb.collection('cycles').doc(CYCLE).collection('data').doc('rawRecords').delete();
+    await adminDb.collection('cycles').doc(CYCLE).collection('data').doc('rawRecordsStatus').delete();
+    sheet.calls = 0;
+    sheet.answer = { status: 200, type: 'text/html; charset=utf-8', body: '<html>Sign in</html>' }; // not shared publicly
+    r = await call('POST', '/api/sync', { headers: { 'X-Sync-Key': process.env.SYNC_KEY! }, body: { mainRows: realRows(), qualityRows: realQuality } });
+    check('sync without raw rows + a sheet that is not public: still ok for incentives, raw failure is a warning with the reason',
+      r.json.result === 'ok' && r.json.rawData?.error && r.json.warnings.some((w: string) => /Raw data .*not saved.*Anyone with the link/.test(w)), r.text.slice(0, 400));
+    let log = (await adminDb.collection('syncLogs').get()).docs.map((d) => d.data()).sort((a: any, b: any) => String(b.time).localeCompare(String(a.time)))[0];
+    check('the raw failure is in the sync log', (log?.warnings || []).some((w: string) => /Raw data/.test(w)), JSON.stringify(log).slice(0, 300));
+    r = await call('GET', '/api/raw-data', { token: tok(L.admin) });
+    check('raw-data: the Super Admin is told why there is no data', r.status === 200 && r.json.summary.totalOrders === 0 && r.json.syncStatus?.ok === false && /Anyone with the link/.test(r.json.syncStatus.error), JSON.stringify(r.json?.syncStatus));
+    const callsAfterFail = sheet.calls;
+    await call('GET', '/api/raw-data', { token: tok(L.admin) });
+    await call('GET', '/api/raw-data', { token: tok(L.admin) });
+    check(`raw-data: a failed fetch is not retried on every page view (cooldown ${RAW_RETRY_COOLDOWN_MS / 60000} min)`, sheet.calls === callsAfterFail, `${callsAfterFail} -> ${sheet.calls}`);
+    r = await call('GET', '/api/raw-data', { token: tok('riya.login@gmail.com') });
+    check('raw-data: an agent sees that it failed, but not the technical reason', r.status === 200 && r.json.syncStatus?.ok === false && r.json.syncStatus.error === undefined, JSON.stringify(r.json?.syncStatus));
+
+    // Apps Script sends cell values as numbers (Order Value 25000, not "25000"); this used to crash the sync.
+    const payloadOrders = [
+      { 'Order ID': 'A-1', 'Order Value': 25000, Date: '2026-10-01', 'Order Time': '10:00', 'Order Phone / Alternate Phone': 9999900001, Agent: 'riya@co.in', 'Talk Time Cohort': '10. More than 5 minutes', Category: '1. Shopify', 'Agent Category': 'HO Caller', Channel: 'Website' },
+      { 'Order ID': 'A-2', ' Order Value ': '15,000', Date: '2026-10-02', Agent: 'sam@co.in', Category: '4. POS', 'Agent Category': 'Andheri Store Caller', Channel: 'Store' },
+    ];
+    const payloadVisits = [
+      { 'Phone Number': 9999900003, 'Visit Date Time': '2026-10-03 17:49:31', 'Agent ID': 'riya@co.in', Location: 'HO Caller', 'Talk Time (before visit)': 445, 'Visit Source': 'Same Number' },
+    ];
+    r = await call('POST', '/api/sync', { headers: { 'X-Sync-Key': process.env.SYNC_KEY! }, body: { mainRows: realRows(), qualityRows: realQuality, rawRevenueTabRows: payloadOrders, rawVisitRows: payloadVisits } });
+    check('sync with raw rows (numeric cells): ok, 2 orders and 1 visit saved, no raw warning',
+      r.json.result === 'ok' && r.json.rawData?.ordersCount === 2 && r.json.rawData?.visitsCount === 1 && !r.json.warnings.some((w: string) => /Raw data/.test(w)), r.text.slice(0, 400));
+    r = await call('GET', '/api/raw-data', { token: tok(L.admin) });
+    check('raw-data after a good sync: 2 orders worth 40,000, 1 visit, status ok', r.json.summary.totalOrders === 2 && r.json.summary.totalRevenue === 40000 && r.json.summary.totalVisits === 1 && r.json.syncStatus?.ok === true, JSON.stringify(r.json?.summary));
+    const riyaVisit = r.json.visits.find((v: any) => v.agentEmail === 'riya@co.in');
+    check('an "HO Caller" visit is a Dighe visit; numeric talk time is kept', riyaVisit?.location === 'Dighe' && riyaVisit?.talkTimeSeconds === 445, JSON.stringify(riyaVisit));
+
+    r = await call('POST', '/api/sync', { headers: { 'X-Sync-Key': process.env.SYNC_KEY! }, body: { mainRows: realRows(), qualityRows: realQuality, rawRevenueTabRows: [{ foo: 1, bar: 2 }], rawVisitRows: payloadVisits } });
+    check('raw rows without an Order Value / Agent header: warning names the missing columns', r.json.result === 'ok' && r.json.warnings.some((w: string) => /Raw_Revenue: missing column Order Value, Agent/.test(w)), r.text.slice(0, 400));
+    r = await call('GET', '/api/raw-data', { token: tok(L.admin) });
+    check('a bad raw payload does not wipe the last good raw data', r.json.summary.totalOrders === 2, JSON.stringify(r.json?.summary));
+
+    // Manual re-sync from the sheet's CSV export (configured sheet, not the old default one)
+    sheet.answer = {
+      status: 200,
+      type: 'text/csv; charset=utf-8',
+      body: (url: string) => /sheet=Raw_Visit/.test(url)
+        ? '"Phone Number","Visit Date Time","Agent ID","Location","Talk Time (before visit)","Visit Source"\n"1","2026-10-03 10:00:00","sam@co.in","Andheri","60","Same Number"\n'
+        : '"Order ID","Order Value","Date","Agent","Category","Agent Category"\n"B-1","50000","2026-10-04","sam@co.in","1. Shopify","Andheri"\n',
+    };
+    let lastUrl = '';
+    const csvAnswer = sheet.answer.body as (url: string) => string;
+    sheet.answer.body = (url: string) => { lastUrl = url; return csvAnswer(url); };
+    r = await call('POST', '/api/admin/sync-raw-sheet', { token: tok(L.admin), body: {} });
+    const cfgNow = (await adminDb.collection('config').doc('app').get()).data();
+    const cfgId = String(cfgNow.googleSpreadsheetUrl || '').match(/\/d\/([a-zA-Z0-9-_]+)/)?.[1];
+    check('manual raw re-sync: reads the configured sheet with headers=1, 1 order and 1 visit', r.status === 200 && r.json.ordersCount === 1 && r.json.visitsCount === 1 && !!cfgId && lastUrl.includes(cfgId) && lastUrl.includes('headers=1'), `${r.status} ${r.text.slice(0, 200)} ${lastUrl}`);
+    sheet.answer = { status: 404, type: 'text/html', body: 'Not found' };
+    r = await call('POST', '/api/admin/sync-raw-sheet', { token: tok(L.admin), body: {} });
+    check('manual raw re-sync failure: 502 with the reason', r.status === 502 && /HTTP 404/.test(r.json?.error), r.text.slice(0, 200));
   } finally {
     setGeminiForTests(null);
     await new Promise<void>((resolve) => server.close(() => resolve()));
@@ -709,6 +779,7 @@ export async function runApiTests() {
     delete process.env.FIRESTORE_REST_BASE;
     process.env.DB_MODE = 'local';
     if (savedManagerEmails !== undefined) process.env.MANAGER_EMAILS = savedManagerEmails;
+    setRawSheetFetchForTests(null);
     resetBackendForTests();
   }
 }
