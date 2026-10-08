@@ -230,6 +230,18 @@ export async function runApiTests() {
     dighe = await board('Dighe');
     let andheri = await board('Andheri');
     check('the leaderboards are rebuilt at once (no waiting for the next sync): demo agents gone', dighe.rows.map((x) => x.name).join() === 'Real Riya' && andheri.rows.map((x) => x.name).join() === 'Real Sam', `${dighe.rows.map((x) => x.name)} | ${andheri.rows.map((x) => x.name)}`);
+
+    // A board saved by older code in incentive order is served in revenue order (podium and table).
+    const staleRow = (rank: number, name: string, sales: number, totalIncentive: number) =>
+      ({ rank, name, officialEmail: `${rank}@x.in`, sales, achievementPct: 0, className: 'B', totalIncentive });
+    await adminDb.collection('cycles').doc(CYCLE).collection('leaderboards').doc('Bangalore').set({
+      location: 'Bangalore',
+      updatedAt: '2026-10-05T00:00:00.000Z',
+      rows: [staleRow(1, 'Bucket Big', 500000, 9000), staleRow(2, 'Bucket Mid', 600000, 8000), staleRow(3, 'Top Seller', 874473, 4000)],
+    });
+    r = await call('GET', `/api/leaderboard?cycleId=${CYCLE}&location=Bangalore`, { token: tok(L.manager) });
+    const served = (r.json?.leaderboard?.rows || []).map((x: any) => `${x.rank}:${x.name}`).join();
+    check('a stored revenue board is served by revenue: highest seller is #1 even with the smallest incentive', r.status === 200 && served === '1:Top Seller,2:Bucket Mid,3:Bucket Big', `${r.status} ${served} ${r.text.slice(0, 200)}`);
     r = await open(tok(L.manager), 'demo.store@test.local');
     check('live: a manager can no longer open a demo agent', r.status === 200 && r.json.agentRecord === null);
     r = await open(tok(L.tlAndheri), 'demo.store@test.local');

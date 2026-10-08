@@ -500,9 +500,9 @@ export async function loadAgents(cycleId: string): Promise<AgentRecord[]> {
 }
 
 /**
- * One leaderboard per location: sorted by total desc, then achievementPct desc, then name A-Z.
- * Pre Sales agents are not revenue-ranked, and demo/test agents only rank while test mode is on
- * (see buildLocationRows).
+ * One leaderboard per location. Revenue locations (Dighe, Andheri, Bangalore) are sorted by revenue
+ * desc, then name A-Z; Pre Sales is sorted by total incentive, then calls, then talk time. Demo/test
+ * agents only rank while test mode is on (see buildLocationRows).
  */
 export function buildLeaderboardDocs(agents: AgentRecord[], appConfig: AppConfig): LeaderboardRecord[] {
   const updatedAt = new Date().toISOString();

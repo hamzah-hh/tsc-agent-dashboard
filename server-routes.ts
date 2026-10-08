@@ -14,8 +14,8 @@ import { buildReadiness } from './server-readiness';
 import { generateAiText, isAiConfigured, runBatchAiGeneration } from './server-ai';
 import { normalizeEmail } from './src/shared/incentive';
 import { buildTeamRevenue } from './src/shared/revenue';
-import { isTestAgentIdentifier } from './src/shared/leaderboard';
-import { AgentLeaderboardRow, AgentRecord, AppConfig, Cycle } from './src/shared/types';
+import { compareByRevenue, isTestAgentIdentifier, rankRevenueRows } from './src/shared/leaderboard';
+import { AgentLeaderboardRow, AgentRecord, AppConfig, Cycle, LeaderboardRecord } from './src/shared/types';
 import {
   syncRawSheetData,
   getOrLoadRawRecords,
@@ -798,7 +798,10 @@ function isAgentOfTl(
       const loc = (req.query.location as string) || 'Dighe';
       const snap = await adminDb.collection('cycles').doc(cycleId).collection('leaderboards').doc(loc).get();
       if (snap.exists) {
-        return res.json({ leaderboard: snap.data() });
+        // Re-rank by revenue on the way out: a board saved by an older sync may still be in incentive order.
+        const stored = snap.data() as LeaderboardRecord;
+        const rows = Array.isArray(stored?.rows) ? rankRevenueRows(stored.rows, loc) : [];
+        return res.json({ leaderboard: { ...stored, rows } });
       }
       return res.json({
         leaderboard: {
@@ -815,8 +818,9 @@ function isAgentOfTl(
    * 1. HO Callers in Dighe
    * 2. Store Callers in Andheri and Bangalore
    *
-   * Ordered in descending order by Total Incentive Earned,
-   * but the Total Incentive Earned column is strictly hidden so callers cannot see peers' earnings.
+   * HO and Store callers are ordered by Revenue (totals.sales), highest first, then name A-Z.
+   * Pre Sales callers are ordered by Total Incentive, then calls/day, then talk time, then name.
+   * The Total Incentive Earned column is strictly hidden so callers cannot see peers' earnings.
    */
   api.get(
     '/api/agent-leaderboard',
@@ -840,22 +844,16 @@ function isAgentOfTl(
       const userOfficial = normalizeEmail(identity.access?.officialEmail || user.email);
 
       // 1. HO Callers (strictly agentType === 'HO')
+      // HO and Store callers rank by revenue, the same order as the location leaderboards.
+      const byRevenue = (a: AgentRecord, b: AgentRecord) =>
+        compareByRevenue({ sales: a.totals?.sales || 0, name: a.name }, { sales: b.totals?.sales || 0, name: b.name });
+
       const hoAgents = agents.filter((a) => a.agentType === 'HO');
-      hoAgents.sort(
-        (a, b) =>
-          (b.result?.total || 0) - (a.result?.total || 0) ||
-          (b.result?.achievementPct || 0) - (a.result?.achievementPct || 0) ||
-          a.name.localeCompare(b.name)
-      );
+      hoAgents.sort(byRevenue);
 
       // 2. Store Callers (strictly agentType === 'STORE')
       const storeAgents = agents.filter((a) => a.agentType === 'STORE');
-      storeAgents.sort(
-        (a, b) =>
-          (b.result?.total || 0) - (a.result?.total || 0) ||
-          (b.result?.achievementPct || 0) - (a.result?.achievementPct || 0) ||
-          a.name.localeCompare(b.name)
-      );
+      storeAgents.sort(byRevenue);
 
       // 3. Pre Sales Callers (strictly agentType === 'PRE_SALES')
       const preSalesAgents = agents.filter((a) => a.agentType === 'PRE_SALES');

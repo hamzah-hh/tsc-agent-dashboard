@@ -12,6 +12,7 @@ import { buildSuggestions } from './suggestions';
 import { calculateRemainingWorkingDays } from './planning';
 import { classRank, classSteps, scaleMaxPct } from './classes';
 import { aiFingerprint, aiTextIsCurrent } from './aiText';
+import { buildLocationRows, rankRevenueRows } from './leaderboard';
 
 // --- helpers for cases 25-28 ---
 const testCycle: Cycle = {
@@ -814,6 +815,48 @@ export const testCases: TestCaseDefinition[] = [
         expected: want.join(', '),
         actual: got.join(', '),
       };
+    },
+  },
+  // 29. Revenue leaderboards rank by revenue, not by the bucketed incentive payout
+  {
+    id: 29,
+    description: 'Leaderboard: Dighe/Andheri/Bangalore rank by revenue (top seller #1 even with a smaller incentive); Pre Sales keeps its incentive order',
+    run: () => {
+      const rev = (name: string, location: string, agentType: AgentType, sales: number, total: number) =>
+        ({
+          name,
+          officialEmail: `${name.toLowerCase().replace(/ /g, '.')}@test.local`,
+          location,
+          agentType,
+          isTest: false,
+          totals: { sales },
+          result: { total, achievementPct: 0, className: 'B' },
+        }) as unknown as AgentRecord;
+      const agents: AgentRecord[] = [
+        rev('Big Bucket', 'Dighe', 'HO', 600000, 9000),
+        rev('Huned Shaikh', 'Dighe', 'HO', 874473, 4000),
+        rev('Mid Seller', 'Dighe', 'HO', 700000, 9000),
+        rev('Store Two', 'Andheri', 'STORE', 300000, 5000),
+        rev('Store One', 'Andheri', 'STORE', 450000, 1000),
+        { ...rev('PS Low Incentive', 'Dighe (Pre Sales)', 'PRE_SALES', 0, 500), result: { total: 500 } } as unknown as AgentRecord,
+        { ...rev('PS High Incentive', 'Dighe (Pre Sales)', 'PRE_SALES', 0, 2000), result: { total: 2000 } } as unknown as AgentRecord,
+      ];
+      const dighe = buildLocationRows(agents, 'Dighe', false).map((r) => `${r.rank}:${r.name}`).join(', ');
+      const andheri = buildLocationRows(agents, 'Andheri', false).map((r) => `${r.rank}:${r.name}`).join(', ');
+      const ps = buildLocationRows(agents, 'Dighe (Pre Sales)', false).map((r) => `${r.rank}:${r.name}`).join(', ');
+      // A board stored by older code (incentive order) is re-ranked by revenue when served.
+      const stale = [
+        { rank: 1, name: 'Big Bucket', sales: 600000 },
+        { rank: 2, name: 'Mid Seller', sales: 700000 },
+        { rank: 3, name: 'Huned Shaikh', sales: 874473 },
+      ];
+      const reranked = rankRevenueRows(stale, 'Dighe').map((r) => `${r.rank}:${r.name}`).join(', ');
+      const psUntouched = rankRevenueRows(stale, 'Dighe (Pre Sales)') === stale;
+      const actual = `${dighe} | ${andheri} | ${ps} | ${reranked} | ps rows untouched ${psUntouched}`;
+      const expected =
+        '1:Huned Shaikh, 2:Mid Seller, 3:Big Bucket | 1:Store One, 2:Store Two | 1:PS High Incentive, 2:PS Low Incentive | ' +
+        '1:Huned Shaikh, 2:Mid Seller, 3:Big Bucket | ps rows untouched true';
+      return { passed: actual === expected, expected, actual };
     },
   },
 ];

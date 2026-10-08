@@ -19,13 +19,40 @@ export function isTestAgentIdentifier(email?: string, name?: string): boolean {
   );
 }
 
+/** True for the Pre Sales leaderboard (e.g. "Dighe (Pre Sales)"), which is not revenue-ranked. */
+export function isPreSalesLocation(location: string): boolean {
+  return (location || '').toLowerCase().includes('pre sales');
+}
+
+/**
+ * Revenue ranking used by every revenue leaderboard (Dighe, Andheri, Bangalore): highest revenue first,
+ * then name A-Z. The incentive payout is deliberately NOT part of the order: it is bucketed by class, so
+ * an agent with the highest revenue could otherwise rank below agents who earned a bigger bucket.
+ */
+export function compareByRevenue(a: { sales: number; name: string }, b: { sales: number; name: string }): number {
+  return (b.sales || 0) - (a.sales || 0) || (a.name || '').localeCompare(b.name || '');
+}
+
+/**
+ * Re-sorts and re-ranks stored revenue-leaderboard rows by revenue. Leaderboard documents are written at
+ * sync time, so documents saved by older code can still be in incentive order; serving them through this
+ * makes the order correct at once, without waiting for the next sync. Pre Sales rows are returned as is.
+ */
+export function rankRevenueRows<T extends { rank: number; sales: number; name: string }>(
+  rows: T[],
+  location: string
+): T[] {
+  if (isPreSalesLocation(location)) return rows;
+  return [...rows].sort(compareByRevenue).map((r, index) => ({ ...r, rank: index + 1 }));
+}
+
 /**
  * Ranked rows for one location's leaderboard.
  *
  * - For Pre Sales (Dighe Pre Sales): agents are ranked by Total Incentive, then average calls per day,
  *   then talk time seconds, then name A-Z.
- * - For Revenue branches (Dighe, Andheri, Bangalore): agents are ranked by Total Incentive, then achievement %,
- *   then name A-Z.
+ * - For Revenue branches (Dighe, Andheri, Bangalore): agents are ranked by Revenue (totals.sales),
+ *   highest first, then name A-Z (see compareByRevenue). The incentive amount does not affect the order.
  * - Demo / test agents only rank while test mode is on.
  */
 export function buildLocationRows(
@@ -33,9 +60,7 @@ export function buildLocationRows(
   location: string,
   includeTest: boolean
 ): LeaderboardRow[] {
-  const isPreSalesLoc = location.toLowerCase().includes('pre sales');
-
-  if (isPreSalesLoc) {
+  if (isPreSalesLocation(location)) {
     return agents
       .filter(
         (a) =>
@@ -78,11 +103,7 @@ export function buildLocationRows(
         a.location.toLowerCase() === location.toLowerCase() &&
         (includeTest || (!a.isTest && !isTestAgentIdentifier(a.officialEmail, a.name)))
     )
-    .sort(
-      (a, b) =>
-        ((b.totals?.sales ?? 0) - (a.totals?.sales ?? 0)) ||
-        a.name.localeCompare(b.name)
-    )
+    .sort((a, b) => compareByRevenue({ sales: a.totals?.sales ?? 0, name: a.name }, { sales: b.totals?.sales ?? 0, name: b.name }))
     .map((a, index) => ({
       rank: index + 1,
       name: a.name,
