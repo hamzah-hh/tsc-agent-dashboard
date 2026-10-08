@@ -1,0 +1,15 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+# Local fallback store of server-db.ts (a snapshot of test data). Never commit it: a pull into the
+# live account would seed the live server with test documents.
+local-db.json
+
+# Firebase Admin service-account key (contains a private key). Never commit it; provide it
+# locally or through the host's secret settings instead.
+service-account.json
