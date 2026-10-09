@@ -27,7 +27,9 @@ service cloud.firestore {
           resource.data.tlPersonalEmail == me() ||
           (hasAccess() && acc().role == 'tl' && (
             (acc().officialEmail != null && resource.data.tlOfficialEmail == acc().officialEmail) ||
-            resource.data.location == acc().location
+            // Location is the team only for an agent with no TL at all (the same rule as the API)
+            (resource.data.get('tlOfficialEmail', '') == '' && resource.data.get('tlPersonalEmail', '') == '' &&
+             resource.data.location == acc().location)
           ))
         ));
         allow update: if isSuper() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['absentDays']);

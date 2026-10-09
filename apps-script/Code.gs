@@ -252,13 +252,21 @@ function syncNow() {
   });
 
   var endpoint = syncUrl.replace(/\/+$/, '') + '/api/sync';
+  var headers = {
+    'X-Sync-Key': syncKey,
+  };
+  var body = payload;
+  // Vercel refuses request bodies over about 4.5 MB. A big sheet is sent gzip-compressed (sheet JSON
+  // shrinks about 10x; the server unpacks it). Smaller syncs are sent as plain JSON, as before.
+  if (payload.length > 3500000) {
+    body = Utilities.gzip(Utilities.newBlob(payload, 'application/json')).getBytes();
+    headers['Content-Encoding'] = 'gzip';
+  }
   var options = {
     method: 'post',
     contentType: 'application/json',
-    headers: {
-      'X-Sync-Key': syncKey,
-    },
-    payload: payload,
+    headers: headers,
+    payload: body,
     muteHttpExceptions: true,
   };
 

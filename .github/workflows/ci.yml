@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Type-check
+        run: npm run lint
+      - name: Calculation tests
+        run: npm test
+      - name: Server tests
+        run: npm run test:server
+      - name: Build
+        run: npm run build && npm run build:api
+      - name: Committed API bundle matches the source
+        run: git diff --exit-code api/index.js

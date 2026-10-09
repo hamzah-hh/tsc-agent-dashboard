@@ -2,9 +2,9 @@ import type { AddressInfo } from 'net';
 import type { Server } from 'http';
 import { adminDb, resetBackendForTests } from '../server-firebase-admin';
 import { createApiApp } from '../server-routes';
-import { processImport } from '../server-import';
+import { invalidateReadCache, processImport } from '../server-import';
 import { setGeminiForTests } from '../server-ai';
-import { RAW_RETRY_COOLDOWN_MS, setRawSheetFetchForTests } from '../server-raw-data';
+import { RAW_RETRY_COOLDOWN_MS, getOrLoadRawRecords, invalidateRawCache, saveRawRecords, setRawSheetFetchForTests } from '../server-raw-data';
 import { generateDummyData } from '../src/shared/dummyData';
 import { AgentRecord, LeaderboardRecord } from '../src/shared/types';
 import { check, section } from './harness';
@@ -135,7 +135,7 @@ export async function runApiTests() {
     const dSt = agents.get('demo.store@test.local')!;
     const dPs = agents.get('demo.presales@test.local')!;
     check('demo HO: Class B, total 35,175', dHo?.result.className === 'B' && dHo.result.total === 35175, JSON.stringify(dHo?.result.total));
-    check('demo Store: Class A, total 25,380', dSt?.result.className === 'A' && dSt.result.total === 25380);
+    check('demo Store: Class A, total 25,380', dSt?.result.className === 'A' && dSt.result.total === 25380, JSON.stringify(dSt?.result));
     check('demo Pre Sales: gate met, 118 calls/day tier 2, 195 s tier 2, total 2,000', dPs?.result.preSales?.eligible === true && dPs.result.preSales.calls.tier === 2 && dPs.result.preSales.talk.tier === 2 && dPs.result.total === 2000);
     check('all three are flagged isTest', dHo.isTest === true && dSt.isTest === true && dPs.isTest === true);
 
@@ -733,6 +733,89 @@ export async function runApiTests() {
     sheet.answer = { status: 404, type: 'text/html', body: 'Not found' };
     r = await call('POST', '/api/admin/sync-raw-sheet', { token: tok(L.admin), body: {} });
     check('manual raw re-sync failure: 502 with the reason', r.status === 502 && /HTTP 404/.test(r.json?.error), r.text.slice(0, 200));
+
+    // ------------------------------------------------------------------
+    section('sync key: only the configured key');
+    for (const oldKey of ['tsc-sync-secret-2026', 'CHANGE_ME_TO_24_OR_MORE_RANDOM_CHARACTERS']) {
+      r = await call('POST', '/api/sync', { headers: { 'X-Sync-Key': oldKey }, body: { mainRows: realRows() } });
+      check(`the old built-in key "${oldKey.slice(0, 8)}..." is refused (401)`, r.status === 401, r.text);
+    }
+    {
+      const { gzipSync } = await import('zlib');
+      const zipped = await fetch(base + '/api/sync', {
+        method: 'POST',
+        headers: { 'X-Sync-Key': process.env.SYNC_KEY!, 'Content-Type': 'application/json', 'Content-Encoding': 'gzip' },
+        body: gzipSync(JSON.stringify({ mainRows: realRows(), qualityRows: realQuality })),
+      }).then((x) => x.json());
+      check('a gzip-compressed sync (what Apps Script sends for a big sheet) is unpacked and accepted', zipped.result === 'ok' && zipped.rows === 10, JSON.stringify(zipped).slice(0, 200));
+    }
+    r = await call('POST', `/api/sync?key=${encodeURIComponent(process.env.SYNC_KEY!)}`, { body: { mainRows: realRows() } });
+    check('the key in the URL is refused (header only, so it never lands in access logs)', r.status === 401, r.text);
+
+    // ------------------------------------------------------------------
+    section('location leaderboard: staff only');
+    r = await call('GET', `/api/leaderboard?cycleId=${CYCLE}&location=Dighe`, { token: tok('riya.login@gmail.com') });
+    check('an agent cannot read the location leaderboard (it carries every total incentive): 403', r.status === 403, r.text.slice(0, 200));
+    r = await call('GET', `/api/leaderboard?cycleId=${CYCLE}&location=Dighe`, { token: tok(L.tlDighe) });
+    check('a TL reads their own location', r.status === 200, r.text.slice(0, 200));
+    r = await call('GET', `/api/leaderboard?cycleId=${CYCLE}&location=Andheri`, { token: tok(L.tlDighe) });
+    check('a TL cannot read another location: 403', r.status === 403, r.text.slice(0, 200));
+    r = await call('GET', `/api/dod-data?cycleId=${CYCLE}&location=Andheri`, { token: tok(L.tlDighe) });
+    check('day-on-day: a TL asking for another location gets their own', r.status === 200 && r.json.team.location === 'Dighe', r.text.slice(0, 200));
+
+    // ------------------------------------------------------------------
+    section('Leader_Mapping: headers in any spelling, and its Gmail wins');
+    r = await call('GET', '/api/auth/session', { token: tok('sam.mapped@gmail.com') });
+    check('before the mapping: the new Gmail is refused', r.status === 403);
+    r = await call('POST', '/api/sync', {
+      headers: { 'X-Sync-Key': process.env.SYNC_KEY! },
+      body: {
+        mainRows: realRows(),
+        qualityRows: realQuality,
+        leaderMappingRows: [
+          { ' Agent Official Email ': 'sam@co.in', 'agent personal email': 'Sam.Mapped@gmail.com', Status: 'Active' },
+          { Agent_Email_Official: 'ghost@co.in', Agent_Gmail_Mail: 'ghost@gmail.com', Status: 'Active' },
+        ],
+      },
+    });
+    check('sync ok', r.json?.result === 'ok', r.text.slice(0, 300));
+    const warns: string[] = r.json?.warnings || [];
+    check('a warning names the Gmail difference between MainSheet and Leader_Mapping', warns.some((w) => w.includes('sam.login@gmail.com') && w.includes('sam.mapped@gmail.com')), JSON.stringify(warns));
+    check('a warning names the mapped agent with no MainSheet rows', warns.some((w) => w.includes('ghost@co.in') && /cannot sign in/.test(w)), JSON.stringify(warns));
+    r = await call('GET', '/api/auth/session', { token: tok('sam.mapped@gmail.com') });
+    check('the mapped Gmail signs in right after the sync (the access cache was dropped)', r.status === 200 && r.json.role === 'agent' && r.json.officialEmail === 'sam@co.in', r.text);
+    r = await call('GET', '/api/auth/session', { token: tok('sam.login@gmail.com') });
+    check('the old Gmail keeps working (access records are never removed by a sync)', r.status === 200, r.text);
+
+    // ------------------------------------------------------------------
+    section('the Manager that used to be in the code');
+    const cfgBefore = (await adminDb.collection('config').doc('app').get()).data();
+    check('the code no longer makes snehatsc@gmail.com a Manager on its own', !(cfgBefore.managers || []).includes('snehatsc@gmail.com'));
+    await adminDb.collection('config').doc('app').set({ ...cfgBefore, legacyManagerMigrated: false });
+    invalidateReadCache();
+    r = await call('GET', '/api/auth/session', { token: tok('snehatsc@gmail.com') });
+    const cfgAfter = (await adminDb.collection('config').doc('app').get()).data();
+    check('an existing project keeps her as Manager, now in the managers list', r.json?.role === 'manager' && cfgAfter.managers.includes('snehatsc@gmail.com') && cfgAfter.legacyManagerMigrated === true, r.text);
+    r = await call('POST', '/api/admin/config', { token: tok(L.admin), body: { managers: cfgAfter.managers.filter((m: string) => m !== 'snehatsc@gmail.com') } });
+    r = await call('GET', '/api/auth/session', { token: tok('snehatsc@gmail.com') });
+    check('and the Admin tab can remove her like anyone else', r.status === 403, r.text);
+
+    // ------------------------------------------------------------------
+    section('raw orders are split over several documents (Firestore: 1 MiB a document)');
+    const order = (i: number) => ({
+      orderId: `O-${i}`, date: '2026-10-02', orderTime: '', orderValue: 1000, orderPhone: String(9000000000 + i), agentEmail: 'sam@co.in',
+      category: '1. Shopify', talkTimeCohort: '', originalPhoneOrMarketplace: '', consideredForOverall: true, consideredForAgent: true,
+      agentCategory: 'Andheri', location: 'Andheri', channel: 'Shopify',
+    });
+    await saveRawRecords(CYCLE, Array.from({ length: 2500 }, (_, i) => order(i)), []);
+    const head = (await adminDb.collection('cycles').doc(CYCLE).collection('data').doc('rawRecords').get()).data();
+    check('2,500 orders: 3 chunks, and no rows in the summary document', head.orderChunks === 3 && head.orders === undefined && head.ordersCount === 2500, JSON.stringify({ ...head, locationSummaries: undefined }));
+    const back = await getOrLoadRawRecords(CYCLE);
+    check('they read back complete and in order', back.orders.length === 2500 && back.orders[0].orderId === 'O-0' && back.orders[2499].orderId === 'O-2499');
+    await saveRawRecords(CYCLE, [order(1)], []);
+    const left = await adminDb.collection('cycles').doc(CYCLE).collection('data').doc('rawRecords').collection('chunks').doc('orders-2').get();
+    invalidateRawCache();
+    check('a smaller save removes the leftover chunks', !left.exists && (await getOrLoadRawRecords(CYCLE)).orders.length === 1);
   } finally {
     setGeminiForTests(null);
     await new Promise<void>((resolve) => server.close(() => resolve()));

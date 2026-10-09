@@ -112,6 +112,8 @@ export interface AgentDailyLoginActivity {
 export interface AppConfig {
   superAdmins: string[];
   managers: string[];
+  /** The Manager that the code used to add on its own has been moved into `managers` (one time). */
+  legacyManagerMigrated?: boolean;
   activeCycleId: string;
   tierMap: Record<string, AgentType>;
   locations: string[];

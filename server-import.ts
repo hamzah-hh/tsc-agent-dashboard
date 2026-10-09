@@ -269,6 +269,22 @@ export function canonicalizeMainHeader(rawHeader: string): string {
   return clean;
 }
 
+/** Header key with case, spaces and punctuation removed: " Agent Email (Personal) " -> "agentemailpersonal". */
+function headerKey(h: string): string {
+  return String(h ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+/** The first non-empty value among the given column names, matched by headerKey. Values may be numbers. */
+function pickColumn(row: Record<string, any>, ...names: string[]): string {
+  const values = new Map<string, any>();
+  for (const [k, v] of Object.entries(row || {})) values.set(headerKey(k), v);
+  for (const name of names) {
+    const v = values.get(headerKey(name));
+    if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim();
+  }
+  return '';
+}
+
 export function normalizeRawMainRow(row: Record<string, any>): RawMainRow {
   const normalized: Record<string, any> = {};
   for (const [k, v] of Object.entries(row)) {
@@ -380,9 +396,6 @@ function defaultTierMap(): AppConfig['tierMap'] {
 export function defaultAppConfig(): AppConfig {
   const superAdmins = envEmails('SUPER_ADMIN_EMAILS');
   const managers = envEmails('MANAGER_EMAILS');
-  if (!managers.includes('snehatsc@gmail.com')) {
-    managers.push('snehatsc@gmail.com');
-  }
   return {
     superAdmins: superAdmins.length > 0 ? superAdmins : [DEFAULT_SUPER_ADMIN],
     managers,
@@ -393,8 +406,13 @@ export function defaultAppConfig(): AppConfig {
     aiEnabled: false,
     aiTone: 'english',
     googleSpreadsheetUrl: 'https://docs.google.com/spreadsheets/d/1cyAdyup2UontNJecjnZYdS4ndBq8qZtX9JJ5qiuq8mk/edit?usp=sharing',
+    legacyManagerMigrated: true,
   };
 }
+
+// Was given Manager access in the code itself. Moved once into config/app.managers so that the
+// Admin tab can remove the access like anyone else's.
+const LEGACY_CODE_MANAGER = 'snehatsc@gmail.com';
 
 /**
  * Makes sure config/app and the active cycle exist.
@@ -403,7 +421,31 @@ export function defaultAppConfig(): AppConfig {
  *   app can never be left without an administrator.
  * - Documents from an older version are upgraded in place (Pre Sales tier and plan). Safe to repeat.
  */
+// Per-server-instance read cache. Every page load used to re-read config/app, the cycle and the whole
+// agents collection, which runs into Firestore's free daily read quota. Entries live CACHE_TTL_MS and are
+// dropped by invalidateReadCache() after any write this server makes (sync, import, Admin changes).
+// Another instance may serve data up to CACHE_TTL_MS old.
+const CACHE_TTL_MS = 30000;
+let seedCache: { at: number; value: { appConfig: AppConfig; cycle: Cycle } } | null = null;
+const agentsCache = new Map<string, { at: number; value: AgentRecord[] }>();
+
+export function invalidateReadCache(): void {
+  seedCache = null;
+  agentsCache.clear();
+}
+
+/** Makes sure config/app and the active cycle exist (cached for a few seconds, see CACHE_TTL_MS). */
 export async function ensureSeedData(): Promise<{ appConfig: AppConfig; cycle: Cycle }> {
+  if (seedCache && Date.now() - seedCache.at < CACHE_TTL_MS) {
+    // Copies, so a caller that changes the objects cannot change the cache
+    return structuredClone(seedCache.value);
+  }
+  const value = await ensureSeedDataUncached();
+  seedCache = { at: Date.now(), value: structuredClone(value) };
+  return value;
+}
+
+async function ensureSeedDataUncached(): Promise<{ appConfig: AppConfig; cycle: Cycle }> {
   let appConfig: AppConfig = defaultAppConfig();
 
   try {
@@ -423,6 +465,14 @@ export async function ensureSeedData(): Promise<{ appConfig: AppConfig; cycle: C
       if (!Array.isArray(appConfig.managers)) {
         appConfig.managers = [];
         patch.managers = appConfig.managers;
+      }
+      if (!appConfig.legacyManagerMigrated) {
+        if (!appConfig.managers.map(normalizeEmail).includes(LEGACY_CODE_MANAGER)) {
+          appConfig.managers = [...appConfig.managers, LEGACY_CODE_MANAGER];
+          patch.managers = appConfig.managers;
+        }
+        appConfig.legacyManagerMigrated = true;
+        patch.legacyManagerMigrated = true;
       }
       if (!appConfig.activeCycleId) {
         appConfig.activeCycleId = 'diwali-2026';
@@ -495,8 +545,12 @@ export async function ensureSeedData(): Promise<{ appConfig: AppConfig; cycle: C
 
 /** All agents of a cycle. */
 export async function loadAgents(cycleId: string): Promise<AgentRecord[]> {
+  const hit = agentsCache.get(cycleId);
+  if (hit && Date.now() - hit.at < CACHE_TTL_MS) return structuredClone(hit.value);
   const snap = await adminDb.collection('cycles').doc(cycleId).collection('agents').get();
-  return snap.docs.map((d) => d.data() as AgentRecord);
+  const agents = snap.docs.map((d) => d.data() as AgentRecord);
+  agentsCache.set(cycleId, { at: Date.now(), value: structuredClone(agents) });
+  return agents;
 }
 
 /**
@@ -750,14 +804,23 @@ export async function processImport(
 
     const rawMappings = options.leaderMappingRows || [];
     for (const row of rawMappings) {
-      const rawOfficial = row['Agent_Email_Official'] || row['agentofficialemail'] || row['Agent Email Official'] || '';
-      const official = normalizeEmail(rawOfficial);
+      // Headers are matched ignoring case, spaces and punctuation, like MainSheet
+      // ("Agent Personal Email", "agent_email_personal" and "Agent_Gmail_Mail" all work)
+      const official = normalizeEmail(
+        pickColumn(row, 'Agent_Email_Official', 'Agent_Official_Email', 'Official_Email', 'Agent_Official_Mail', 'Agent_Email')
+      );
       if (!official) continue;
 
-      const personal = normalizeEmail(row['Agent_Email_Personal'] || row['Agent_Email_Personal'] || row['Agent Email Personal'] || row['Agent_Gmail_Mail'] || row['agentgmailmail'] || '');
-      const tlOfficial = normalizeEmail(row['TL_Official_Email'] || row['tl_official_email'] || row['TL Official Email'] || row['Leader_Official_Mail'] || row['leaderofficialmail'] || '');
-      const tlPersonal = normalizeEmail(row['TL_Personal_Email'] || row['tl_personal_email'] || row['TL Personal Email'] || row['Leader_Gmail_Mail'] || row['leadergmailmail'] || '');
-      const status = String(row['Status'] || row['status'] || 'Active').trim();
+      const personal = normalizeEmail(
+        pickColumn(row, 'Agent_Email_Personal', 'Agent_Personal_Email', 'Personal_Email', 'Agent_Gmail_Mail', 'Agent_Gmail', 'Gmail', 'Login_Email')
+      );
+      const tlOfficial = normalizeEmail(
+        pickColumn(row, 'TL_Official_Email', 'TL_Email_Official', 'Leader_Official_Mail', 'Leader_Official_Email', 'Team_Leader_Official_Email')
+      );
+      const tlPersonal = normalizeEmail(
+        pickColumn(row, 'TL_Personal_Email', 'TL_Email_Personal', 'Leader_Gmail_Mail', 'Leader_Personal_Email', 'TL_Gmail', 'Team_Leader_Personal_Email')
+      );
+      const status = pickColumn(row, 'Status') || 'Active';
 
       leaderMappingDict.set(official, {
         personalEmail: personal,
@@ -867,7 +930,14 @@ export async function processImport(
       // Enrich profile from leader mapping tab if present
       const lmInfo = leaderMappingDict.get(officialEmail);
       if (lmInfo) {
-        if (lmInfo.personalEmail && !aggregated.profile.personalEmail) {
+        // Leader_Mapping is the sheet for login mappings, so its Gmail wins over the one in MainSheet
+        if (lmInfo.personalEmail) {
+          const fromMain = normalizeEmail(aggregated.profile.personalEmail);
+          if (fromMain && fromMain !== lmInfo.personalEmail) {
+            warnings.push(
+              `Agent ${aggregated.profile.name} (${officialEmail}): MainSheet has Gmail '${fromMain}' but Leader_Mapping has '${lmInfo.personalEmail}'. Using Leader_Mapping.`
+            );
+          }
           aggregated.profile.personalEmail = lmInfo.personalEmail;
         }
         if (lmInfo.tlOfficialEmail && !aggregated.profile.tlOfficialEmail) {
@@ -1020,6 +1090,16 @@ export async function processImport(
           },
         });
       }
+    }
+
+    // Mapped agents without a MainSheet row in this cycle get no login yet: say so, or it looks like a bug
+    const notInMain = Array.from(leaderMappingDict.entries())
+      .filter(([official, info]) => !groupedByAgent.has(official) && !excludedEmails.has(official) && !/inactive|left|exit/i.test(info.status))
+      .map(([official, info]) => (info.personalEmail ? `${official} (${info.personalEmail})` : official));
+    if (notInMain.length > 0) {
+      warnings.push(
+        `${notInMain.length} agent(s) in Leader_Mapping have no MainSheet rows between ${startDate} and ${endDate}, so they cannot sign in yet: ${notInMain.slice(0, 20).join(', ')}${notInMain.length > 20 ? ', ...' : ''}`
+      );
     }
 
     // 6. Save the data FIRST. AI text comes afterwards (step 7), so Gemini can never delay or fail a sync.

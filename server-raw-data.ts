@@ -265,6 +265,7 @@ export interface RawSyncStatus {
 export const RAW_RETRY_COOLDOWN_MS = 10 * 60 * 1000;
 
 export async function recordRawSyncStatus(cycleId: string, status: RawSyncStatus): Promise<void> {
+  invalidateRawCache();
   try {
     await rawStatusRef(cycleId).set(status);
   } catch (e) {
@@ -281,14 +282,71 @@ export async function getRawSyncStatus(cycleId: string): Promise<RawSyncStatus |
   }
 }
 
+// A Firestore document holds at most 1 MiB, and a cycle has more orders than that. So rawRecords keeps
+// only the summary and chunk counts, and the rows live in rawRecords/chunks/orders-0, orders-1, ...
+// (about 400 bytes a row, so a chunk stays near 0.4 MiB). Older data with the rows inline still reads.
+const RAW_CHUNK_SIZE = 1000;
+
+function rawChunksCol(cycleId: string) {
+  return rawRecordsRef(cycleId).collection('chunks');
+}
+
+function chunk<T>(rows: T[]): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < rows.length; i += RAW_CHUNK_SIZE) out.push(rows.slice(i, i + RAW_CHUNK_SIZE));
+  return out;
+}
+
+// The raw rows are read on every Raw Data, Day-on-Day and Location Revenue page view. Cached per server
+// instance for a short time; any save on this instance drops the cache.
+const RAW_CACHE_TTL_MS = 30000;
+const rawCache = new Map<string, { at: number; value: RawRecordsDoc }>();
+
+export function invalidateRawCache(): void {
+  rawCache.clear();
+}
+
 export async function saveRawRecords(cycleId: string, orders: RawOrderRecord[], visits: RawVisitRecord[]) {
   const locationSummaries = buildLocationSummaries(orders);
-  await rawRecordsRef(cycleId).set({
-    orders,
-    visits,
+  const prev = await rawRecordsRef(cycleId).get();
+  const prevData = prev.exists ? (prev.data() as any) : null;
+  const orderChunks = chunk(orders);
+  const visitChunks = chunk(visits);
+
+  // One atomic commit when it fits (400 writes = 400,000 rows): readers never see half a save
+  const batch = adminDb.batch();
+  orderChunks.forEach((rows, i) => batch.set(rawChunksCol(cycleId).doc(`orders-${i}`), { rows }));
+  visitChunks.forEach((rows, i) => batch.set(rawChunksCol(cycleId).doc(`visits-${i}`), { rows }));
+  for (let i = orderChunks.length; i < (prevData?.orderChunks || 0); i++) batch.delete(rawChunksCol(cycleId).doc(`orders-${i}`));
+  for (let i = visitChunks.length; i < (prevData?.visitChunks || 0); i++) batch.delete(rawChunksCol(cycleId).doc(`visits-${i}`));
+  batch.set(rawRecordsRef(cycleId), {
+    orderChunks: orderChunks.length,
+    visitChunks: visitChunks.length,
+    ordersCount: orders.length,
+    visitsCount: visits.length,
     locationSummaries,
     updatedAt: new Date().toISOString(),
   });
+  await batch.commit();
+  invalidateRawCache();
+}
+
+/** The saved raw data, from chunks or (older saves) inline. null when nothing is saved. */
+async function readRawRecords(cycleId: string): Promise<Omit<RawRecordsDoc, 'syncStatus'> | null> {
+  const snap = await rawRecordsRef(cycleId).get();
+  if (!snap.exists) return null;
+  const d = snap.data() as any;
+  if (Array.isArray(d.orders) || Array.isArray(d.visits)) {
+    return { orders: d.orders || [], visits: d.visits || [], locationSummaries: d.locationSummaries, updatedAt: d.updatedAt };
+  }
+  const read = async (prefix: string, count: number) => {
+    const parts = await Promise.all(
+      Array.from({ length: count }, (_, i) => rawChunksCol(cycleId).doc(`${prefix}-${i}`).get())
+    );
+    return parts.flatMap((p) => (p.exists ? (p.data() as any)?.rows || [] : []));
+  };
+  const [orders, visits] = await Promise.all([read('orders', d.orderChunks || 0), read('visits', d.visitChunks || 0)]);
+  return { orders, visits, locationSummaries: d.locationSummaries, updatedAt: d.updatedAt };
 }
 
 /**
@@ -419,15 +477,18 @@ export interface RawRecordsDoc {
  * view. Never throws for a fetch problem: it returns empty data plus the reason in syncStatus.
  */
 export async function getOrLoadRawRecords(cycleId: string): Promise<RawRecordsDoc> {
-  const dataRef = rawRecordsRef(cycleId);
-  const snap = await dataRef.get();
+  const hit = rawCache.get(cycleId);
+  if (hit && Date.now() - hit.at < RAW_CACHE_TTL_MS) return structuredClone(hit.value);
+  const value = await getOrLoadRawRecordsUncached(cycleId);
+  rawCache.set(cycleId, { at: Date.now(), value: structuredClone(value) });
+  return value;
+}
+
+async function getOrLoadRawRecordsUncached(cycleId: string): Promise<RawRecordsDoc> {
+  const saved = await readRawRecords(cycleId);
   const status = await getRawSyncStatus(cycleId);
-  if (snap.exists) {
-    const d = snap.data() as any;
-    const hasData = (Array.isArray(d.orders) && d.orders.length > 0) || (Array.isArray(d.visits) && d.visits.length > 0);
-    if (hasData) {
-      return { orders: d.orders || [], visits: d.visits || [], locationSummaries: d.locationSummaries, updatedAt: d.updatedAt, syncStatus: status };
-    }
+  if (saved && (saved.orders.length > 0 || saved.visits.length > 0)) {
+    return { ...saved, syncStatus: status };
   }
 
   const empty: RawRecordsDoc = { orders: [], visits: [], locationSummaries: {}, syncStatus: status };
@@ -452,7 +513,7 @@ export async function getOrLoadRawRecords(cycleId: string): Promise<RawRecordsDo
     // syncRawSheetData already recorded the reason in rawRecordsStatus.
     return { ...empty, syncStatus: await getRawSyncStatus(cycleId) };
   }
-  const fresh = (await dataRef.get()).data() as any;
+  const fresh = await readRawRecords(cycleId);
   return {
     orders: fresh?.orders || [],
     visits: fresh?.visits || [],

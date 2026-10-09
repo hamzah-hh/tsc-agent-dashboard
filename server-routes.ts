@@ -6,6 +6,8 @@ import { loadEnv } from './server-env';
 import {
   clearTestData,
   ensureSeedData,
+  invalidateReadCache,
+  loadAgents,
   processImport,
   rebuildLeaderboards,
   saveAiText,
@@ -19,6 +21,7 @@ import { AgentLeaderboardRow, AgentRecord, AppConfig, Cycle, LeaderboardRecord }
 import {
   syncRawSheetData,
   getOrLoadRawRecords,
+  invalidateRawCache,
   DEFAULT_RAW_SHEET_URL,
 } from './server-raw-data';
 import {
@@ -72,7 +75,25 @@ function sameSecret(a: string, b: string): boolean {
   return crypto.timingSafeEqual(ha, hb);
 }
 
+// Same short read cache as ensureSeedData/loadAgents (server-import.ts), dropped by clearRouteCache()
+const ROUTE_CACHE_TTL_MS = 30000;
+const excludedCache = new Map<string, { at: number; value: Set<string> }>();
+const accessCache = new Map<string, { at: number; value: any }>();
+
+function clearRouteCache(): void {
+  excludedCache.clear();
+  accessCache.clear();
+}
+
 async function getExcludedEmails(cycleId: string): Promise<Set<string>> {
+  const hit = excludedCache.get(cycleId);
+  if (hit && Date.now() - hit.at < ROUTE_CACHE_TTL_MS) return new Set(hit.value);
+  const value = await loadExcludedEmails(cycleId);
+  excludedCache.set(cycleId, { at: Date.now(), value: new Set(value) });
+  return value;
+}
+
+async function loadExcludedEmails(cycleId: string): Promise<Set<string>> {
   const excludesSet = new Set<string>();
   try {
     const snap = await adminDb.collection('cycles').doc(cycleId).collection('data').doc('excludedAgents').get();
@@ -120,6 +141,20 @@ export function createApiApp(options: ApiOptions = {}): express.Express {
 
   // JSON bodies (a sync sends the whole sheet), and never cache API answers
   api.use('/api', express.json({ limit: '50mb' }));
+  // Requests that write config, agents or access: drop the read cache once they are done (and before,
+  // so they work on fresh data). Heartbeats only write login activity, which is not cached.
+  api.use(['/api/sync', '/api/import', '/api/clear-test', '/api/admin'], (req, res, next) => {
+    if (req.method === 'GET') return next();
+    const clear = () => {
+      invalidateReadCache();
+      invalidateRawCache();
+      clearRouteCache();
+    };
+    clear();
+    res.on('finish', clear);
+    next();
+  });
+
   api.use('/api', (req, res, next) => {
     res.setHeader('Cache-Control', 'no-store');
     const authHeader = req.headers.authorization;
@@ -158,43 +193,21 @@ export function createApiApp(options: ApiOptions = {}): express.Express {
     return { email, name: decoded.name || email };
   }
 
-  /** Checks Firebase ID token from Authorization header or ?token= query parameter. */
-  async function authenticateAny(req: Request): Promise<{ email: string; name: string }> {
-    let token = '';
-    const header = req.headers.authorization;
-    if (header && header.startsWith('Bearer ')) {
-      token = header.slice('Bearer '.length).trim();
-    } else if (typeof req.query.token === 'string' && req.query.token.trim()) {
-      token = req.query.token.trim();
-    }
-
-    if (!token) {
-      throw new HttpError(401, 'Unauthorized: Access restricted to authorized users. Please log in first.');
-    }
-
-    let decoded;
-    try {
-      decoded = await verify(token);
-    } catch (err: any) {
-      throw new HttpError(401, `Invalid login token: ${err?.message || 'could not be verified'}`);
-    }
-    const email = normalizeEmail(decoded.email);
-    if (!email) throw new HttpError(403, 'Forbidden: No email associated with token');
-    if (decoded.email_verified !== true) throw new HttpError(403, 'Forbidden: The email address is not verified');
-    return { email, name: decoded.name || email };
-  }
-
   async function identify(email: string, appConfig: AppConfig): Promise<Identity | null> {
     const normalized = normalizeEmail(email);
-    if (normalized === 'snehatsc@gmail.com') return { role: 'manager' };
     if (includesEmail(appConfig.superAdmins, email)) return { role: 'superAdmin' };
     if (includesEmail(appConfig.managers, email)) return { role: 'manager' };
     try {
-      const snap = await adminDb.collection('access').doc(email).get();
-      if (snap.exists) {
-        const data = snap.data();
-        if (data?.role === 'tl' || data?.role === 'agent') return { role: data.role, access: data };
+      const hit = accessCache.get(normalized);
+      let data: any;
+      if (hit && Date.now() - hit.at < ROUTE_CACHE_TTL_MS) {
+        data = hit.value;
+      } else {
+        const snap = await adminDb.collection('access').doc(normalized).get();
+        data = snap.exists ? snap.data() : null;
+        accessCache.set(normalized, { at: Date.now(), value: data });
       }
+      if (data?.role === 'tl' || data?.role === 'agent') return { role: data.role, access: { ...data } };
     } catch (_err) {
       // Access document lookup failed (e.g. unseeded or network)
     }
@@ -245,17 +258,19 @@ export function createApiApp(options: ApiOptions = {}): express.Express {
     route(async (req, res) => {
       try {
         const { appConfig } = await ensureSeedData();
-        const validKeys = [
-          process.env.SYNC_KEY,
-          (appConfig as any)?.syncKey,
-          'tsc-sync-secret-2026',
-          'CHANGE_ME_TO_24_OR_MORE_RANDOM_CHARACTERS',
-        ].filter((k): k is string => Boolean(k));
+        // Only the configured keys. No built-in fallbacks: a key that is written in the code is no secret.
+        const validKeys = [process.env.SYNC_KEY, (appConfig as any)?.syncKey].filter(
+          (k): k is string => typeof k === 'string' && k.length > 0
+        );
+        if (validKeys.length === 0) {
+          throw new HttpError(503, 'Sync is not configured: set SYNC_KEY on the server.');
+        }
 
-        const given = (req.headers['x-sync-key'] as string) || (req.query.key as string);
-        const isAuthorized = Boolean(given && typeof given === 'string' && validKeys.some((k) => sameSecret(given, k)));
+        // Header only: a key in the URL ends up in access logs
+        const given = req.headers['x-sync-key'];
+        const isAuthorized = typeof given === 'string' && given.length > 0 && validKeys.some((k) => sameSecret(given, k));
         if (!isAuthorized) {
-          throw new HttpError(401, 'Unauthorized: Invalid or missing X-Sync-Key. Provide X-Sync-Key header or ?key= parameter matching your sync key.');
+          throw new HttpError(401, 'Unauthorized: Invalid or missing X-Sync-Key header.');
         }
         const { mainRows, qualityRows, revenueRows, leaderMappingRows, excludedAgentsRows, rawVisitRows, rawRevenueTabRows } = req.body || {};
         const result = await processImport('apps-script', mainRows || [], qualityRows || [], {
@@ -440,8 +455,7 @@ export function createApiApp(options: ApiOptions = {}): express.Express {
       if (!isAiConfigured()) throw new HttpError(400, 'GEMINI_API_KEY is not set on the server.');
       const cycleId = appConfig.activeCycleId;
 
-      const snap = await adminDb.collection('cycles').doc(cycleId).collection('agents').get();
-      const agents = snap.docs.map((d) => d.data() as AgentRecord);
+      const agents = await loadAgents(cycleId);
       if (agents.length === 0) return res.json({ status: 'ok', okCount: 0, failedCount: 0, pendingCount: 0, total: 0 });
 
       const run = await runBatchAiGeneration(agents, cycle, appConfig, { budgetMs: 120000 });
@@ -724,8 +738,7 @@ function isAgentOfTl(
       const identity = await identify(user.email, appConfig);
       if (!identity) throw new HttpError(403, 'Access denied');
 
-      const all = await adminDb.collection('cycles').doc(appConfig.activeCycleId).collection('agents').get();
-      let agents = all.docs.map((d) => d.data() as AgentRecord);
+      let agents = await loadAgents(appConfig.activeCycleId);
 
       const excludedEmails = await getExcludedEmails(appConfig.activeCycleId);
       agents = agents.filter((a) => !excludedEmails.has(normalizeEmail(a.officialEmail)));
@@ -768,8 +781,7 @@ function isAgentOfTl(
       }
 
       const cycleId = (req.query.cycleId as string) || appConfig.activeCycleId;
-      const all = await adminDb.collection('cycles').doc(cycleId).collection('agents').get();
-      let agents = all.docs.map((d) => d.data() as AgentRecord);
+      let agents = await loadAgents(cycleId);
 
       const excludedEmails = await getExcludedEmails(cycleId);
       agents = agents.filter((a) => !excludedEmails.has(normalizeEmail(a.officialEmail)));
@@ -792,10 +804,14 @@ function isAgentOfTl(
       const user = await authenticate(req);
       const { appConfig } = await ensureSeedData();
       const identity = await identify(user.email, appConfig);
-      if (!identity) throw new HttpError(403, 'Forbidden: Staff access required');
+      // The stored rows carry each agent's total incentive, so staff only (the same rule as firestore.rules)
+      if (!identity || identity.role === 'agent') throw new HttpError(403, 'Forbidden: Staff access required');
 
       const cycleId = (req.query.cycleId as string) || appConfig.activeCycleId;
       const loc = (req.query.location as string) || 'Dighe';
+      if (identity.role === 'tl' && normalizeEmail(loc) !== normalizeEmail(identity.access?.location)) {
+        throw new HttpError(403, 'Forbidden: A TL sees only the leaderboard of their own location');
+      }
       const snap = await adminDb.collection('cycles').doc(cycleId).collection('leaderboards').doc(loc).get();
       if (snap.exists) {
         // Re-rank by revenue on the way out: a board saved by an older sync may still be in incentive order.
@@ -831,8 +847,7 @@ function isAgentOfTl(
       if (!identity) throw new HttpError(403, 'Access denied');
 
       const cycleId = (req.query.cycleId as string) || appConfig.activeCycleId;
-      const snap = await adminDb.collection('cycles').doc(cycleId).collection('agents').get();
-      let agents = snap.docs.map((d) => d.data() as AgentRecord);
+      let agents = await loadAgents(cycleId);
 
       const excludedEmails = await getExcludedEmails(cycleId);
       agents = agents.filter((a) => !excludedEmails.has(normalizeEmail(a.officialEmail)));
@@ -1011,12 +1026,7 @@ function isAgentOfTl(
       }
 
       // 2. Dynamic aggregation fallback from agent records
-      const agentsSnap = await adminDb
-        .collection('cycles')
-        .doc(cycleId)
-        .collection('agents')
-        .get();
-      const agents = agentsSnap.docs.map((d) => d.data() as AgentRecord);
+      const agents = await loadAgents(cycleId);
 
       const rows: any[] = [];
       for (const a of agents) {
@@ -1059,8 +1069,7 @@ function isAgentOfTl(
       const excludedEmails = await getExcludedEmails(cycleId);
       const allOrders = allOrdersRaw.filter((o) => !excludedEmails.has(normalizeEmail(o.agentEmail)));
 
-      const agentsSnap = await adminDb.collection('cycles').doc(cycleId).collection('agents').get();
-      let allAgents = agentsSnap.docs.map((d) => d.data() as AgentRecord);
+      let allAgents = await loadAgents(cycleId);
 
       allAgents = allAgents.filter((a) => !excludedEmails.has(normalizeEmail(a.officialEmail)));
 
@@ -1084,7 +1093,9 @@ function isAgentOfTl(
         }
       }
 
-      let location = targetAgent?.location || (req.query.location as string)?.trim() || identity.access?.location || 'Dighe';
+      // Agents and TLs stay in their own location; only Managers and the Super Admin may choose one
+      const requestedLocation = identity.role === 'agent' || identity.role === 'tl' ? '' : (req.query.location as string)?.trim();
+      let location = targetAgent?.location || requestedLocation || identity.access?.location || 'Dighe';
       if (location.toLowerCase().includes('andheri')) location = 'Andheri';
       else if (location.toLowerCase().includes('bangalore')) location = 'Bangalore';
       else if (location.toLowerCase().includes('pre sales')) location = 'Dighe';
@@ -1378,8 +1389,7 @@ function isAgentOfTl(
       orders = orders.filter((o) => !excludedEmails.has(normalizeEmail(o.agentEmail)));
       visits = visits.filter((v) => !excludedEmails.has(normalizeEmail(v.agentEmail)));
 
-      const agentsSnap = await adminDb.collection('cycles').doc(cycleId).collection('agents').get();
-      const allAgents = agentsSnap.docs.map((d) => d.data() as AgentRecord);
+      const allAgents = await loadAgents(cycleId);
 
       let allowedAgents: Array<{ officialEmail: string; name: string; location: string }> = [];
 

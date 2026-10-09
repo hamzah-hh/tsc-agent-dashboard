@@ -2428,6 +2428,7 @@ function rawStatusRef(cycleId) {
 }
 var RAW_RETRY_COOLDOWN_MS = 10 * 60 * 1e3;
 async function recordRawSyncStatus(cycleId, status) {
+  invalidateRawCache();
   try {
     await rawStatusRef(cycleId).set(status);
   } catch (e) {
@@ -2442,14 +2443,57 @@ async function getRawSyncStatus(cycleId) {
     return null;
   }
 }
+var RAW_CHUNK_SIZE = 1e3;
+function rawChunksCol(cycleId) {
+  return rawRecordsRef(cycleId).collection("chunks");
+}
+function chunk(rows) {
+  const out = [];
+  for (let i = 0; i < rows.length; i += RAW_CHUNK_SIZE) out.push(rows.slice(i, i + RAW_CHUNK_SIZE));
+  return out;
+}
+var RAW_CACHE_TTL_MS = 3e4;
+var rawCache = /* @__PURE__ */ new Map();
+function invalidateRawCache() {
+  rawCache.clear();
+}
 async function saveRawRecords(cycleId, orders, visits) {
   const locationSummaries = buildLocationSummaries(orders);
-  await rawRecordsRef(cycleId).set({
-    orders,
-    visits,
+  const prev = await rawRecordsRef(cycleId).get();
+  const prevData = prev.exists ? prev.data() : null;
+  const orderChunks = chunk(orders);
+  const visitChunks = chunk(visits);
+  const batch = adminDb.batch();
+  orderChunks.forEach((rows, i) => batch.set(rawChunksCol(cycleId).doc(`orders-${i}`), { rows }));
+  visitChunks.forEach((rows, i) => batch.set(rawChunksCol(cycleId).doc(`visits-${i}`), { rows }));
+  for (let i = orderChunks.length; i < (prevData?.orderChunks || 0); i++) batch.delete(rawChunksCol(cycleId).doc(`orders-${i}`));
+  for (let i = visitChunks.length; i < (prevData?.visitChunks || 0); i++) batch.delete(rawChunksCol(cycleId).doc(`visits-${i}`));
+  batch.set(rawRecordsRef(cycleId), {
+    orderChunks: orderChunks.length,
+    visitChunks: visitChunks.length,
+    ordersCount: orders.length,
+    visitsCount: visits.length,
     locationSummaries,
     updatedAt: (/* @__PURE__ */ new Date()).toISOString()
   });
+  await batch.commit();
+  invalidateRawCache();
+}
+async function readRawRecords(cycleId) {
+  const snap = await rawRecordsRef(cycleId).get();
+  if (!snap.exists) return null;
+  const d = snap.data();
+  if (Array.isArray(d.orders) || Array.isArray(d.visits)) {
+    return { orders: d.orders || [], visits: d.visits || [], locationSummaries: d.locationSummaries, updatedAt: d.updatedAt };
+  }
+  const read = async (prefix, count) => {
+    const parts = await Promise.all(
+      Array.from({ length: count }, (_, i) => rawChunksCol(cycleId).doc(`${prefix}-${i}`).get())
+    );
+    return parts.flatMap((p) => p.exists ? p.data()?.rows || [] : []);
+  };
+  const [orders, visits] = await Promise.all([read("orders", d.orderChunks || 0), read("visits", d.visitChunks || 0)]);
+  return { orders, visits, locationSummaries: d.locationSummaries, updatedAt: d.updatedAt };
 }
 async function saveRawPayload(cycleId, rawRevenueTabRows, rawVisitRows, excludedSet) {
   try {
@@ -2527,15 +2571,17 @@ async function syncRawSheetData(cycleId, sheetUrl = DEFAULT_RAW_SHEET_URL) {
   }
 }
 async function getOrLoadRawRecords(cycleId) {
-  const dataRef = rawRecordsRef(cycleId);
-  const snap = await dataRef.get();
+  const hit = rawCache.get(cycleId);
+  if (hit && Date.now() - hit.at < RAW_CACHE_TTL_MS) return structuredClone(hit.value);
+  const value = await getOrLoadRawRecordsUncached(cycleId);
+  rawCache.set(cycleId, { at: Date.now(), value: structuredClone(value) });
+  return value;
+}
+async function getOrLoadRawRecordsUncached(cycleId) {
+  const saved = await readRawRecords(cycleId);
   const status = await getRawSyncStatus(cycleId);
-  if (snap.exists) {
-    const d = snap.data();
-    const hasData = Array.isArray(d.orders) && d.orders.length > 0 || Array.isArray(d.visits) && d.visits.length > 0;
-    if (hasData) {
-      return { orders: d.orders || [], visits: d.visits || [], locationSummaries: d.locationSummaries, updatedAt: d.updatedAt, syncStatus: status };
-    }
+  if (saved && (saved.orders.length > 0 || saved.visits.length > 0)) {
+    return { ...saved, syncStatus: status };
   }
   const empty = { orders: [], visits: [], locationSummaries: {}, syncStatus: status };
   if (status && !status.ok && Date.now() - new Date(status.at).getTime() < RAW_RETRY_COOLDOWN_MS) {
@@ -2555,7 +2601,7 @@ async function getOrLoadRawRecords(cycleId) {
   } catch (_err) {
     return { ...empty, syncStatus: await getRawSyncStatus(cycleId) };
   }
-  const fresh = (await dataRef.get()).data();
+  const fresh = await readRawRecords(cycleId);
   return {
     orders: fresh?.orders || [],
     visits: fresh?.visits || [],
@@ -2644,6 +2690,18 @@ function canonicalizeMainHeader(rawHeader) {
   }
   return clean;
 }
+function headerKey2(h) {
+  return String(h ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+function pickColumn(row, ...names) {
+  const values = /* @__PURE__ */ new Map();
+  for (const [k, v] of Object.entries(row || {})) values.set(headerKey2(k), v);
+  for (const name of names) {
+    const v = values.get(headerKey2(name));
+    if (v !== void 0 && v !== null && String(v).trim() !== "") return String(v).trim();
+  }
+  return "";
+}
 function normalizeRawMainRow(row) {
   const normalized = {};
   for (const [k, v] of Object.entries(row)) {
@@ -2717,9 +2775,6 @@ function defaultTierMap() {
 function defaultAppConfig() {
   const superAdmins = envEmails("SUPER_ADMIN_EMAILS");
   const managers = envEmails("MANAGER_EMAILS");
-  if (!managers.includes("snehatsc@gmail.com")) {
-    managers.push("snehatsc@gmail.com");
-  }
   return {
     superAdmins: superAdmins.length > 0 ? superAdmins : [DEFAULT_SUPER_ADMIN],
     managers,
@@ -2729,10 +2784,27 @@ function defaultAppConfig() {
     testMode: true,
     aiEnabled: false,
     aiTone: "english",
-    googleSpreadsheetUrl: "https://docs.google.com/spreadsheets/d/1cyAdyup2UontNJecjnZYdS4ndBq8qZtX9JJ5qiuq8mk/edit?usp=sharing"
+    googleSpreadsheetUrl: "https://docs.google.com/spreadsheets/d/1cyAdyup2UontNJecjnZYdS4ndBq8qZtX9JJ5qiuq8mk/edit?usp=sharing",
+    legacyManagerMigrated: true
   };
 }
+var LEGACY_CODE_MANAGER = "snehatsc@gmail.com";
+var CACHE_TTL_MS = 3e4;
+var seedCache = null;
+var agentsCache = /* @__PURE__ */ new Map();
+function invalidateReadCache() {
+  seedCache = null;
+  agentsCache.clear();
+}
 async function ensureSeedData() {
+  if (seedCache && Date.now() - seedCache.at < CACHE_TTL_MS) {
+    return structuredClone(seedCache.value);
+  }
+  const value = await ensureSeedDataUncached();
+  seedCache = { at: Date.now(), value: structuredClone(value) };
+  return value;
+}
+async function ensureSeedDataUncached() {
   let appConfig = defaultAppConfig();
   try {
     const configRef = adminDb.collection("config").doc("app");
@@ -2749,6 +2821,14 @@ async function ensureSeedData() {
       if (!Array.isArray(appConfig.managers)) {
         appConfig.managers = [];
         patch.managers = appConfig.managers;
+      }
+      if (!appConfig.legacyManagerMigrated) {
+        if (!appConfig.managers.map(normalizeEmail).includes(LEGACY_CODE_MANAGER)) {
+          appConfig.managers = [...appConfig.managers, LEGACY_CODE_MANAGER];
+          patch.managers = appConfig.managers;
+        }
+        appConfig.legacyManagerMigrated = true;
+        patch.legacyManagerMigrated = true;
       }
       if (!appConfig.activeCycleId) {
         appConfig.activeCycleId = "diwali-2026";
@@ -2813,8 +2893,12 @@ async function ensureSeedData() {
   return { appConfig, cycle };
 }
 async function loadAgents(cycleId) {
+  const hit = agentsCache.get(cycleId);
+  if (hit && Date.now() - hit.at < CACHE_TTL_MS) return structuredClone(hit.value);
   const snap = await adminDb.collection("cycles").doc(cycleId).collection("agents").get();
-  return snap.docs.map((d) => d.data());
+  const agents = snap.docs.map((d) => d.data());
+  agentsCache.set(cycleId, { at: Date.now(), value: structuredClone(agents) });
+  return agents;
 }
 function buildLeaderboardDocs(agents, appConfig) {
   const updatedAt = (/* @__PURE__ */ new Date()).toISOString();
@@ -2973,13 +3057,20 @@ async function processImport(source, mainRows, qualityRows = [], options = {}) {
     const leaderMappingDict = /* @__PURE__ */ new Map();
     const rawMappings = options.leaderMappingRows || [];
     for (const row of rawMappings) {
-      const rawOfficial = row["Agent_Email_Official"] || row["agentofficialemail"] || row["Agent Email Official"] || "";
-      const official = normalizeEmail(rawOfficial);
+      const official = normalizeEmail(
+        pickColumn(row, "Agent_Email_Official", "Agent_Official_Email", "Official_Email", "Agent_Official_Mail", "Agent_Email")
+      );
       if (!official) continue;
-      const personal = normalizeEmail(row["Agent_Email_Personal"] || row["Agent_Email_Personal"] || row["Agent Email Personal"] || row["Agent_Gmail_Mail"] || row["agentgmailmail"] || "");
-      const tlOfficial = normalizeEmail(row["TL_Official_Email"] || row["tl_official_email"] || row["TL Official Email"] || row["Leader_Official_Mail"] || row["leaderofficialmail"] || "");
-      const tlPersonal = normalizeEmail(row["TL_Personal_Email"] || row["tl_personal_email"] || row["TL Personal Email"] || row["Leader_Gmail_Mail"] || row["leadergmailmail"] || "");
-      const status = String(row["Status"] || row["status"] || "Active").trim();
+      const personal = normalizeEmail(
+        pickColumn(row, "Agent_Email_Personal", "Agent_Personal_Email", "Personal_Email", "Agent_Gmail_Mail", "Agent_Gmail", "Gmail", "Login_Email")
+      );
+      const tlOfficial = normalizeEmail(
+        pickColumn(row, "TL_Official_Email", "TL_Email_Official", "Leader_Official_Mail", "Leader_Official_Email", "Team_Leader_Official_Email")
+      );
+      const tlPersonal = normalizeEmail(
+        pickColumn(row, "TL_Personal_Email", "TL_Email_Personal", "Leader_Gmail_Mail", "Leader_Personal_Email", "TL_Gmail", "Team_Leader_Personal_Email")
+      );
+      const status = pickColumn(row, "Status") || "Active";
       leaderMappingDict.set(official, {
         personalEmail: personal,
         tlOfficialEmail: tlOfficial,
@@ -3060,7 +3151,13 @@ async function processImport(source, mainRows, qualityRows = [], options = {}) {
       const aggregated = aggregateAgent(agentRows, qualityRow);
       const lmInfo = leaderMappingDict.get(officialEmail);
       if (lmInfo) {
-        if (lmInfo.personalEmail && !aggregated.profile.personalEmail) {
+        if (lmInfo.personalEmail) {
+          const fromMain = normalizeEmail(aggregated.profile.personalEmail);
+          if (fromMain && fromMain !== lmInfo.personalEmail) {
+            warnings.push(
+              `Agent ${aggregated.profile.name} (${officialEmail}): MainSheet has Gmail '${fromMain}' but Leader_Mapping has '${lmInfo.personalEmail}'. Using Leader_Mapping.`
+            );
+          }
           aggregated.profile.personalEmail = lmInfo.personalEmail;
         }
         if (lmInfo.tlOfficialEmail && !aggregated.profile.tlOfficialEmail) {
@@ -3182,6 +3279,12 @@ async function processImport(source, mainRows, qualityRows = [], options = {}) {
           }
         });
       }
+    }
+    const notInMain = Array.from(leaderMappingDict.entries()).filter(([official, info]) => !groupedByAgent.has(official) && !excludedEmails.has(official) && !/inactive|left|exit/i.test(info.status)).map(([official, info]) => info.personalEmail ? `${official} (${info.personalEmail})` : official);
+    if (notInMain.length > 0) {
+      warnings.push(
+        `${notInMain.length} agent(s) in Leader_Mapping have no MainSheet rows between ${startDate} and ${endDate}, so they cannot sign in yet: ${notInMain.slice(0, 20).join(", ")}${notInMain.length > 20 ? ", ..." : ""}`
+      );
     }
     const batch = adminDb.batch();
     const agentsCollection = adminDb.collection("cycles").doc(cycleId).collection("agents");
@@ -3646,7 +3749,21 @@ function sameSecret(a, b) {
   const hb = crypto2.createHash("sha256").update(b).digest();
   return crypto2.timingSafeEqual(ha, hb);
 }
+var ROUTE_CACHE_TTL_MS = 3e4;
+var excludedCache = /* @__PURE__ */ new Map();
+var accessCache = /* @__PURE__ */ new Map();
+function clearRouteCache() {
+  excludedCache.clear();
+  accessCache.clear();
+}
 async function getExcludedEmails(cycleId) {
+  const hit = excludedCache.get(cycleId);
+  if (hit && Date.now() - hit.at < ROUTE_CACHE_TTL_MS) return new Set(hit.value);
+  const value = await loadExcludedEmails(cycleId);
+  excludedCache.set(cycleId, { at: Date.now(), value: new Set(value) });
+  return value;
+}
+async function loadExcludedEmails(cycleId) {
   const excludesSet = /* @__PURE__ */ new Set();
   try {
     const snap = await adminDb.collection("cycles").doc(cycleId).collection("data").doc("excludedAgents").get();
@@ -3687,6 +3804,17 @@ function createApiApp(options = {}) {
   api.disable("x-powered-by");
   const verify = options.verifyIdToken ?? ((t) => verifyFirebaseIdToken(t));
   api.use("/api", express.json({ limit: "50mb" }));
+  api.use(["/api/sync", "/api/import", "/api/clear-test", "/api/admin"], (req, res, next) => {
+    if (req.method === "GET") return next();
+    const clear = () => {
+      invalidateReadCache();
+      invalidateRawCache();
+      clearRouteCache();
+    };
+    clear();
+    res.on("finish", clear);
+    next();
+  });
   api.use("/api", (req, res, next) => {
     res.setHeader("Cache-Control", "no-store");
     const authHeader = req.headers.authorization;
@@ -3716,39 +3844,21 @@ function createApiApp(options = {}) {
     if (decoded.email_verified !== true) throw new HttpError(403, "Forbidden: The email address is not verified");
     return { email, name: decoded.name || email };
   }
-  async function authenticateAny(req) {
-    let token = "";
-    const header = req.headers.authorization;
-    if (header && header.startsWith("Bearer ")) {
-      token = header.slice("Bearer ".length).trim();
-    } else if (typeof req.query.token === "string" && req.query.token.trim()) {
-      token = req.query.token.trim();
-    }
-    if (!token) {
-      throw new HttpError(401, "Unauthorized: Access restricted to authorized users. Please log in first.");
-    }
-    let decoded;
-    try {
-      decoded = await verify(token);
-    } catch (err) {
-      throw new HttpError(401, `Invalid login token: ${err?.message || "could not be verified"}`);
-    }
-    const email = normalizeEmail(decoded.email);
-    if (!email) throw new HttpError(403, "Forbidden: No email associated with token");
-    if (decoded.email_verified !== true) throw new HttpError(403, "Forbidden: The email address is not verified");
-    return { email, name: decoded.name || email };
-  }
   async function identify(email, appConfig) {
     const normalized = normalizeEmail(email);
-    if (normalized === "snehatsc@gmail.com") return { role: "manager" };
     if (includesEmail(appConfig.superAdmins, email)) return { role: "superAdmin" };
     if (includesEmail(appConfig.managers, email)) return { role: "manager" };
     try {
-      const snap = await adminDb.collection("access").doc(email).get();
-      if (snap.exists) {
-        const data = snap.data();
-        if (data?.role === "tl" || data?.role === "agent") return { role: data.role, access: data };
+      const hit = accessCache.get(normalized);
+      let data;
+      if (hit && Date.now() - hit.at < ROUTE_CACHE_TTL_MS) {
+        data = hit.value;
+      } else {
+        const snap = await adminDb.collection("access").doc(normalized).get();
+        data = snap.exists ? snap.data() : null;
+        accessCache.set(normalized, { at: Date.now(), value: data });
       }
+      if (data?.role === "tl" || data?.role === "agent") return { role: data.role, access: { ...data } };
     } catch (_err) {
     }
     return null;
@@ -3788,16 +3898,16 @@ function createApiApp(options = {}) {
     route(async (req, res) => {
       try {
         const { appConfig } = await ensureSeedData();
-        const validKeys = [
-          process.env.SYNC_KEY,
-          appConfig?.syncKey,
-          "tsc-sync-secret-2026",
-          "CHANGE_ME_TO_24_OR_MORE_RANDOM_CHARACTERS"
-        ].filter((k) => Boolean(k));
-        const given = req.headers["x-sync-key"] || req.query.key;
-        const isAuthorized = Boolean(given && typeof given === "string" && validKeys.some((k) => sameSecret(given, k)));
+        const validKeys = [process.env.SYNC_KEY, appConfig?.syncKey].filter(
+          (k) => typeof k === "string" && k.length > 0
+        );
+        if (validKeys.length === 0) {
+          throw new HttpError(503, "Sync is not configured: set SYNC_KEY on the server.");
+        }
+        const given = req.headers["x-sync-key"];
+        const isAuthorized = typeof given === "string" && given.length > 0 && validKeys.some((k) => sameSecret(given, k));
         if (!isAuthorized) {
-          throw new HttpError(401, "Unauthorized: Invalid or missing X-Sync-Key. Provide X-Sync-Key header or ?key= parameter matching your sync key.");
+          throw new HttpError(401, "Unauthorized: Invalid or missing X-Sync-Key header.");
         }
         const { mainRows, qualityRows, revenueRows, leaderMappingRows, excludedAgentsRows, rawVisitRows, rawRevenueTabRows } = req.body || {};
         const result = await processImport("apps-script", mainRows || [], qualityRows || [], {
@@ -3951,8 +4061,7 @@ function createApiApp(options = {}) {
       const { appConfig, cycle } = await requireSuperAdmin(req);
       if (!isAiConfigured()) throw new HttpError(400, "GEMINI_API_KEY is not set on the server.");
       const cycleId = appConfig.activeCycleId;
-      const snap = await adminDb.collection("cycles").doc(cycleId).collection("agents").get();
-      const agents = snap.docs.map((d) => d.data());
+      const agents = await loadAgents(cycleId);
       if (agents.length === 0) return res.json({ status: "ok", okCount: 0, failedCount: 0, pendingCount: 0, total: 0 });
       const run = await runBatchAiGeneration(agents, cycle, appConfig, { budgetMs: 12e4 });
       await saveAiText(cycleId, run.generatedAgents);
@@ -4156,8 +4265,7 @@ function createApiApp(options = {}) {
       const { appConfig } = await ensureSeedData();
       const identity = await identify(user.email, appConfig);
       if (!identity) throw new HttpError(403, "Access denied");
-      const all = await adminDb.collection("cycles").doc(appConfig.activeCycleId).collection("agents").get();
-      let agents = all.docs.map((d) => d.data());
+      let agents = await loadAgents(appConfig.activeCycleId);
       const excludedEmails = await getExcludedEmails(appConfig.activeCycleId);
       agents = agents.filter((a) => !excludedEmails.has(normalizeEmail(a.officialEmail)));
       if (identity.role === "agent") {
@@ -4194,8 +4302,7 @@ function createApiApp(options = {}) {
         throw new HttpError(403, "Forbidden: Staff access required");
       }
       const cycleId = req.query.cycleId || appConfig.activeCycleId;
-      const all = await adminDb.collection("cycles").doc(cycleId).collection("agents").get();
-      let agents = all.docs.map((d) => d.data());
+      let agents = await loadAgents(cycleId);
       const excludedEmails = await getExcludedEmails(cycleId);
       agents = agents.filter((a) => !excludedEmails.has(normalizeEmail(a.officialEmail)));
       if (!appConfig.testMode && identity.role !== "superAdmin") {
@@ -4213,9 +4320,12 @@ function createApiApp(options = {}) {
       const user = await authenticate(req);
       const { appConfig } = await ensureSeedData();
       const identity = await identify(user.email, appConfig);
-      if (!identity) throw new HttpError(403, "Forbidden: Staff access required");
+      if (!identity || identity.role === "agent") throw new HttpError(403, "Forbidden: Staff access required");
       const cycleId = req.query.cycleId || appConfig.activeCycleId;
       const loc = req.query.location || "Dighe";
+      if (identity.role === "tl" && normalizeEmail(loc) !== normalizeEmail(identity.access?.location)) {
+        throw new HttpError(403, "Forbidden: A TL sees only the leaderboard of their own location");
+      }
       const snap = await adminDb.collection("cycles").doc(cycleId).collection("leaderboards").doc(loc).get();
       if (snap.exists) {
         const stored = snap.data();
@@ -4239,8 +4349,7 @@ function createApiApp(options = {}) {
       const identity = await identify(user.email, appConfig);
       if (!identity) throw new HttpError(403, "Access denied");
       const cycleId = req.query.cycleId || appConfig.activeCycleId;
-      const snap = await adminDb.collection("cycles").doc(cycleId).collection("agents").get();
-      let agents = snap.docs.map((d) => d.data());
+      let agents = await loadAgents(cycleId);
       const excludedEmails = await getExcludedEmails(cycleId);
       agents = agents.filter((a) => !excludedEmails.has(normalizeEmail(a.officialEmail)));
       if (!appConfig.testMode && identity.role !== "superAdmin") {
@@ -4361,8 +4470,7 @@ function createApiApp(options = {}) {
       if (snap.exists) {
         return res.json({ teamRevenue: snap.data() });
       }
-      const agentsSnap = await adminDb.collection("cycles").doc(cycleId).collection("agents").get();
-      const agents = agentsSnap.docs.map((d) => d.data());
+      const agents = await loadAgents(cycleId);
       const rows = [];
       for (const a of agents) {
         if (a.location !== targetLocation) continue;
@@ -4392,8 +4500,7 @@ function createApiApp(options = {}) {
       const allOrdersRaw = rawRecords.orders || [];
       const excludedEmails = await getExcludedEmails(cycleId);
       const allOrders = allOrdersRaw.filter((o) => !excludedEmails.has(normalizeEmail(o.agentEmail)));
-      const agentsSnap = await adminDb.collection("cycles").doc(cycleId).collection("agents").get();
-      let allAgents = agentsSnap.docs.map((d) => d.data());
+      let allAgents = await loadAgents(cycleId);
       allAgents = allAgents.filter((a) => !excludedEmails.has(normalizeEmail(a.officialEmail)));
       if (!appConfig.testMode && identity.role !== "superAdmin") {
         allAgents = allAgents.filter((a) => !a.isTest && !isTestAgentIdentifier(a.officialEmail, a.name));
@@ -4408,7 +4515,8 @@ function createApiApp(options = {}) {
           throw new HttpError(403, "Access denied to this agent data.");
         }
       }
-      let location = targetAgent?.location || req.query.location?.trim() || identity.access?.location || "Dighe";
+      const requestedLocation = identity.role === "agent" || identity.role === "tl" ? "" : req.query.location?.trim();
+      let location = targetAgent?.location || requestedLocation || identity.access?.location || "Dighe";
       if (location.toLowerCase().includes("andheri")) location = "Andheri";
       else if (location.toLowerCase().includes("bangalore")) location = "Bangalore";
       else if (location.toLowerCase().includes("pre sales")) location = "Dighe";
@@ -4643,8 +4751,7 @@ function createApiApp(options = {}) {
       const excludedEmails = await getExcludedEmails(cycleId);
       orders = orders.filter((o) => !excludedEmails.has(normalizeEmail(o.agentEmail)));
       visits = visits.filter((v) => !excludedEmails.has(normalizeEmail(v.agentEmail)));
-      const agentsSnap = await adminDb.collection("cycles").doc(cycleId).collection("agents").get();
-      const allAgents = agentsSnap.docs.map((d) => d.data());
+      const allAgents = await loadAgents(cycleId);
       let allowedAgents = [];
       if (identity.role === "agent") {
         const userOfficial = normalizeEmail(identity.access?.officialEmail || user.email);

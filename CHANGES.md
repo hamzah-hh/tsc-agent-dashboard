@@ -4,6 +4,38 @@ Newest first. How to demo and go live: [docs/GUIDELINE.md](docs/GUIDELINE.md).
 
 ---
 
+## v4, 10 Oct 2026: security, sign-in mapping and free-tier limits
+
+Verified by: type-check, 29 calculation tests, server tests (one known failure, see "Open" below), production build. **Not** verified against the live Firebase project or a real Apps Script run.
+
+### Security
+1. **The sync accepted two keys written in the code** (`tsc-sync-secret-2026`, `CHANGE_ME_...`), so anyone who knew them could overwrite agent data and give any Gmail access. Only `SYNC_KEY` (or `config/app.syncKey`) works now, and only in the `X-Sync-Key` header (no `?key=`, which ends up in access logs). With no key configured, the sync answers 503.
+2. **`snehatsc@gmail.com` was a Manager by code** and could not be removed. She is moved once into `config/app.managers` (flag `legacyManagerMigrated`), so she stays a Manager and the Admin tab can now remove her.
+3. **`/api/leaderboard` returned every agent's total incentive to any signed-in agent.** Now staff only; a TL reads only their own location (as in `firestore.rules`).
+4. **Day-on-Day:** a TL could pass `?location=` to see another branch's roster. Agents and TLs now stay in their own location.
+5. `firestore.rules`: a TL sees agents by location only when the agent has no TL at all, the same rule as the API. **Publish the rules in the Firebase console.**
+6. Removed an unused sign-in helper that accepted the login token in the URL.
+
+### Sign-in mapping (Leader_Mapping)
+7. **Leader_Mapping headers had to match exactly** (`Agent_Email_Personal`, ...); any other spelling was silently ignored and the agent could not sign in. Headers are now matched ignoring case, spaces and punctuation, like MainSheet.
+8. **Leader_Mapping's Gmail now wins** over a different one in MainSheet, with a sync warning naming both. Old access records are kept, so nobody loses access.
+9. **A sync warning names every mapped agent with no MainSheet rows in the cycle** (they cannot sign in until they have one).
+
+### Free-tier limits (Firestore and Vercel)
+10. **Fewer Firestore reads:** config, cycle, agents, excluded agents, access records and raw data are cached for 30 s per server instance and dropped after every sync, import or Admin change. Page loads used to re-read the whole agents collection each time (about 500 page loads a day reached the free 50,000-read quota with 100 agents).
+11. **Raw orders and visits are split into documents of 1,000 rows** (`data/rawRecords/chunks/*`). One document holds at most 1 MiB, which a full cycle of orders exceeds. Older single-document data still reads.
+12. **Big syncs are gzip-compressed** by the Apps Script (over 3.5 MB; Vercel refuses bodies over about 4.5 MB). **Paste the new `apps-script/Code.gs` into the script editor.**
+13. `vercel.json`: the API may run up to 60 s (a sync waits up to 35 s for Gemini).
+
+### Other
+14. `.github/workflows/ci.yml` runs the type-check, both test suites and the build on every push, and checks that the committed `api/index.js` matches the source.
+15. README: `firebase-applet-config.json` is committed (it said git-ignored); `FIREBASE_SERVICE_ACCOUNT` documented for Vercel.
+
+### Open: talk-time unit (needs a decision, affects payouts)
+Every talk-time column, including `Talk_Time_(seconds)`, is read as **minutes** (`normalizeRawMainRow`). If the live sheet holds seconds, every talk-time bonus is in the High band. The server test "demo Store: Class A, total 25,380" fails because of this (it gets 25,880). Not changed until the live sheet's unit is confirmed.
+
+---
+
 ## v3, 28 Sep 2026: bug fixes and go-live tooling
 
 Built on v2 (below). Verified by: type-check (0 errors), 28 calculation test cases (also in three time zones), ~150 server checks (`npm run test:server`), ~50 screen checks in a simulated browser, Apps Script checks against stubbed Google services, a production build, and a boot of both the published server and the dev server. **Not** verified: the real Firebase project, Google sign-in, the AI Studio publish, a real phone.

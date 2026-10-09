@@ -25,21 +25,21 @@ Spec: the Design Document (Hamza, 25 Sep 2026). What changed in each drop: [CHAN
 You need Node 20+ (or Bun). AI Studio uses `bun.lock`; `npm install` works too.
 
 1. `npm install`
-2. Create `firebase-applet-config.json` from `firebase-config.example.json` with your Firebase project's web settings. **This file is git-ignored on purpose**: the test and live projects have different files, and a pull must never point the live app at the test database.
+2. Check `firebase-applet-config.json` (the Firebase project's web settings; `firebase-config.example.json` shows the shape). It is **committed**, because the Vercel build needs it. These values are public by design (they ship to every browser), but they decide which project the app uses: check it points at the **live** project before every release.
 3. Copy `.env.example` to `.env.local` and set at least `SYNC_KEY`.
 4. `npm run dev` (development, http://localhost:3000) or `npm run build && npm start` (as published).
 
-The server needs Google credentials to reach Firestore. On Cloud Run (the published app) this is automatic. On a PC, set `GOOGLE_APPLICATION_CREDENTIALS` to a service-account key of the Firebase project, or use `DB_MODE=local` for a throw-away in-memory database (development only; the browser cannot see it).
+The server needs Google credentials to reach Firestore. On **Vercel** (the published app) set `FIREBASE_SERVICE_ACCOUNT` to the service-account key JSON (or its base64) in Project Settings > Environment Variables. On Cloud Run this is automatic. On a PC, set `GOOGLE_APPLICATION_CREDENTIALS` to a service-account key of the Firebase project, or use `DB_MODE=local` for a throw-away in-memory database (development only; the browser cannot see it).
 
 ## Tests
 
 ```
-npm test            # 28 calculation test cases (they also run in the Admin tab)
-npm run test:server # ~150 checks: database layer + every API route, no network needed
+npm test            # 29 calculation test cases (they also run in the Admin tab)
+npm run test:server # ~220 checks: database layer + every API route, no network needed
 npm run lint        # type-check
 ```
 
-Run all three before each release (Design Document, section 13).
+Run all three before each release (Design Document, section 13). GitHub runs them on every push (`.github/workflows/ci.yml`).
 
 ## Release (private GitHub repository to the live account)
 
