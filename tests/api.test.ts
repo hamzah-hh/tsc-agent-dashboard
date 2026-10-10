@@ -34,7 +34,7 @@ function mainRow(o: Record<string, any>) {
   return {
     Date: '2026-10-01', Month: 'Oct-26', Agent_Name: '', Agent_Email_Official: '', Agent_Email_Personal: '',
     Agent_Location: 'Dighe', Agent_Tier: 'HO Callers', Count_of_Orders: 4, Sales: 200000, Average_Order_Value: 50000,
-    Unique_Connects: 150, 'Talk_Time_(seconds)': 11000, TL_Official_Email: 'tl@x.in', TL_Personal_Email: '',
+    Unique_Connects: 150, Talk_Time_Minutes: 183, TL_Official_Email: 'tl@x.in', TL_Personal_Email: '',
     Store_Visits_Booked: 3, Store_Visits_Attributed: 3, Day: 1, Inbound_Calls: '', Avg_TT_per_day: '', ...o,
   };
 }
@@ -135,7 +135,7 @@ export async function runApiTests() {
     const dSt = agents.get('demo.store@test.local')!;
     const dPs = agents.get('demo.presales@test.local')!;
     check('demo HO: Class B, total 35,175', dHo?.result.className === 'B' && dHo.result.total === 35175, JSON.stringify(dHo?.result.total));
-    check('demo Store: Class A, total 25,380', dSt?.result.className === 'A' && dSt.result.total === 25380, JSON.stringify(dSt?.result));
+    check('demo Store: Class A, total 25,380 (168 talk minutes a day = Mid)', dSt?.result.className === 'A' && dSt.result.total === 25380 && dSt.result.talk.value === 168, JSON.stringify(dSt?.result));
     check('demo Pre Sales: gate met, 118 calls/day tier 2, 195 s tier 2, total 2,000', dPs?.result.preSales?.eligible === true && dPs.result.preSales.calls.tier === 2 && dPs.result.preSales.talk.tier === 2 && dPs.result.total === 2000);
     check('all three are flagged isTest', dHo.isTest === true && dSt.isTest === true && dPs.isTest === true);
 
@@ -285,7 +285,7 @@ export async function runApiTests() {
     // ------------------------------------------------------------------
     section('roster rows: agents can sign in before their first working day');
     const roster = [
-      mainRow({ Date: '2026-10-01', Agent_Name: 'New Nia', Agent_Email_Official: 'nia@co.in', Agent_Email_Personal: 'nia.login@gmail.com', TL_Personal_Email: L.tlDighe, Count_of_Orders: '', Sales: '', Average_Order_Value: '', Unique_Connects: '', 'Talk_Time_(seconds)': '', Store_Visits_Booked: '', Store_Visits_Attributed: '', Day: 0 }),
+      mainRow({ Date: '2026-10-01', Agent_Name: 'New Nia', Agent_Email_Official: 'nia@co.in', Agent_Email_Personal: 'nia.login@gmail.com', TL_Personal_Email: L.tlDighe, Count_of_Orders: '', Sales: '', Average_Order_Value: '', Unique_Connects: '', Talk_Time_Minutes: '', Store_Visits_Booked: '', Store_Visits_Attributed: '', Day: 0 }),
     ];
     r = await call('POST', '/api/sync', { headers: { 'X-Sync-Key': process.env.SYNC_KEY! }, body: { mainRows: [...realRows(), ...roster], qualityRows: realQuality } });
     check('a roster row (blank numbers, Day 0) is accepted: 3 agents', r.json.result === 'ok' && r.json.agents === 3, r.text);

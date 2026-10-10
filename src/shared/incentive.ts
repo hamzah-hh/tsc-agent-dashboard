@@ -101,8 +101,8 @@ export function parseToISTDateString(val: any): string {
 
 /**
  * A) aggregateAgent(rows, qualityRow)
- * - Sum Sales, Count_of_Orders, Unique_Connects, Talk_Time_(seconds), Store_Visits_Booked, Store_Visits_Attributed, Day.
- * - activeDays = sum of Day (a half day is 0.5).
+ * - Sum Sales, Count_of_Orders, Unique_Connects, Talk_Time_Minutes (stored as seconds), Store_Visits, Day.
+ * - activeDays = sum of Day (a half day is 0.5). A blank Day on a row with Inbound_Calls > 0 (Pre Sales) counts as 1.
  * - A blank number is 0.
  * - Profile fields (name, emails, location, tier, TL) come from the row with the latest Date.
  * - daily = one entry for each date, sorted by date.
@@ -130,6 +130,11 @@ export function aggregateAgent(
   // Sort rows by parsed date ascending
   const normalizedRows = rows.map((r) => {
     const dateStr = parseToISTDateString(r.Date);
+    const calls = safeNum(r.Inbound_Calls);
+    // Pre Sales rows in MainSheet leave Day blank: a row with inbound calls is then one worked day.
+    // A Day that is filled in (1, 0.5, 0) is always used as it is. HO / Store rows have no Inbound_Calls.
+    const dayBlank = r.Day === undefined || r.Day === null || String(r.Day).trim() === '';
+    const day = dayBlank && calls > 0 ? 1 : safeNum(r.Day);
     return {
       raw: r,
       date: dateStr,
@@ -139,8 +144,8 @@ export function aggregateAgent(
       talkSeconds: safeNum(r.Talk_Time_Minutes) * 60,
       visitsBooked: safeNum(r.Store_Visits),
       visitsAttributed: safeNum(r.Store_Visits),
-      day: safeNum(r.Day),
-      calls: safeNum(r.Inbound_Calls),
+      day,
+      calls,
       avgTalkSec: safeNum(r.Avg_TT_per_day),
     };
   });

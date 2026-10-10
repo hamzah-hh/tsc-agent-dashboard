@@ -34,7 +34,7 @@ The server needs Google credentials to reach Firestore. On **Vercel** (the publi
 ## Tests
 
 ```
-npm test            # 29 calculation test cases (they also run in the Admin tab)
+npm test            # 30 calculation test cases (they also run in the Admin tab)
 npm run test:server # ~220 checks: database layer + every API route, no network needed
 npm run lint        # type-check
 ```

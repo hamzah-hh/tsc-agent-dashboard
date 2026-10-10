@@ -188,7 +188,7 @@ export function generateDummyData(
           Sales: '',
           Average_Order_Value: '',
           Unique_Connects: '',
-          'Talk_Time_(seconds)': '',
+          Talk_Time_Minutes: '',
           Store_Visits_Booked: '',
           Store_Visits_Attributed: '',
           Inbound_Calls: scale(p.inboundCalls),
@@ -202,7 +202,8 @@ export function generateDummyData(
           Sales: sales,
           Average_Order_Value: orders > 0 ? Math.round(sales / orders) : 0,
           Unique_Connects: scale(p.connects),
-          'Talk_Time_(seconds)': scale(p.talkSeconds),
+          // MainSheet holds talk time in MINUTES (Talk_Time_Minutes); the profile keeps seconds
+          Talk_Time_Minutes: Math.round((p.talkSeconds / 60) * day * 100) / 100,
           // Store Callers do not have Visits Booked (blank in the sheet)
           Store_Visits_Booked: agent.kind === 'HO' ? scale(p.visitsBooked) : '',
           Store_Visits_Attributed: scale(p.visitsAttributed),

@@ -732,6 +732,9 @@ function parseToISTDateString(val) {
 function aggregateAgent(rows, qualityRow) {
   const normalizedRows = rows.map((r) => {
     const dateStr = parseToISTDateString(r.Date);
+    const calls = safeNum(r.Inbound_Calls);
+    const dayBlank = r.Day === void 0 || r.Day === null || String(r.Day).trim() === "";
+    const day = dayBlank && calls > 0 ? 1 : safeNum(r.Day);
     return {
       raw: r,
       date: dateStr,
@@ -741,8 +744,8 @@ function aggregateAgent(rows, qualityRow) {
       talkSeconds: safeNum(r.Talk_Time_Minutes) * 60,
       visitsBooked: safeNum(r.Store_Visits),
       visitsAttributed: safeNum(r.Store_Visits),
-      day: safeNum(r.Day),
-      calls: safeNum(r.Inbound_Calls),
+      day,
+      calls,
       avgTalkSec: safeNum(r.Avg_TT_per_day)
     };
   });

@@ -6,7 +6,7 @@ Newest first. How to demo and go live: [docs/GUIDELINE.md](docs/GUIDELINE.md).
 
 ## v4, 10 Oct 2026: security, sign-in mapping and free-tier limits
 
-Verified by: type-check, 29 calculation tests, server tests (one known failure, see "Open" below), production build. **Not** verified against the live Firebase project or a real Apps Script run.
+Verified by: type-check, 30 calculation tests, 220 server checks, production build, and the Pre Sales calculation run on the live MainSheet rows. **Not** verified against the live Firebase project or a real Apps Script run.
 
 ### Security
 1. **The sync accepted two keys written in the code** (`tsc-sync-secret-2026`, `CHANGE_ME_...`), so anyone who knew them could overwrite agent data and give any Gmail access. Only `SYNC_KEY` (or `config/app.syncKey`) works now, and only in the `X-Sync-Key` header (no `?key=`, which ends up in access logs). With no key configured, the sync answers 503.
@@ -31,8 +31,11 @@ Verified by: type-check, 29 calculation tests, server tests (one known failure, 
 14. `.github/workflows/ci.yml` runs the type-check, both test suites and the build on every push, and checks that the committed `api/index.js` matches the source.
 15. README: `firebase-applet-config.json` is committed (it said git-ignored); `FIREBASE_SERVICE_ACCOUNT` documented for Vercel.
 
-### Open: talk-time unit (needs a decision, affects payouts)
-Every talk-time column, including `Talk_Time_(seconds)`, is read as **minutes** (`normalizeRawMainRow`). If the live sheet holds seconds, every talk-time bonus is in the High band. The server test "demo Store: Class A, total 25,380" fails because of this (it gets 25,880). Not changed until the live sheet's unit is confirmed.
+### Pre Sales: calls per day was 0 for every agent
+16. **Pre Sales rows in MainSheet leave `Day` blank**, and Active Days is the sum of `Day`, so every Pre Sales agent had 0 active days and 0 calls per day (and no calls incentive). A row with `Day` blank and `Inbound_Calls` above 0 now counts as one worked day; a `Day` that is filled in (1, 0.5, 0) is used as it is. HO and Store rows have no `Inbound_Calls`, so they are unchanged. Checked against the live sheet: all 17 Pre Sales agents match calls ÷ rows (for example 578 calls over 5 rows = 116 a day). Calculation test #30. **Run Sync Now after the deploy** so the stored records are recalculated.
+
+### Talk time is in minutes (confirmed)
+17. The live sheet's `Talk_Time_Minutes` holds minutes, which is how the app reads it. The demo data and test fixtures sent seconds under `Talk_Time_(seconds)` (so the demo Store Caller showed 25,880 instead of 25,380); they now send minutes under `Talk_Time_Minutes`, and the docs say minutes.
 
 ---
 

@@ -129,7 +129,7 @@ You can sync data into the dashboard in two ways:
 | `Sales` | Number | Net revenue in ₹ (Revenue branches) |
 | `Average_Order_Value` | Number | AOV in ₹ |
 | `Unique_Connects` | Number | Outbound connects count |
-| `Talk_Time_(seconds)` | Number | Outbound talk time in seconds |
+| `Talk_Time_Minutes` | Number | Outbound talk time in **minutes** |
 | `Inbound_Calls` | Number | Inbound calls answered (**Pre Sales**) |
 | `Avg_TT_per_day` | Number | Average inbound call talk time in seconds (**Pre Sales**) |
 | `TL_Official_Email` | String | Team Leader official email |

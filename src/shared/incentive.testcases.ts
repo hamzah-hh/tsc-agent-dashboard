@@ -34,7 +34,7 @@ function hoRecordWithQuality(score: number): AgentRecord {
     Sales: 200000,
     Count_of_Orders: 4,
     Unique_Connects: 150,
-    'Talk_Time_(seconds)': 11000,
+    Talk_Time_Minutes: 183,
     Store_Visits_Attributed: 3,
     Day: 1,
   }));
@@ -856,6 +856,38 @@ export const testCases: TestCaseDefinition[] = [
       const expected =
         '1:Huned Shaikh, 2:Mid Seller, 3:Big Bucket | 1:Store One, 2:Store Two | 1:PS High Incentive, 2:PS Low Incentive | ' +
         '1:Huned Shaikh, 2:Mid Seller, 3:Big Bucket | ps rows untouched true';
+      return { passed: actual === expected, expected, actual };
+    },
+  },
+  // 30. Pre Sales rows in the live MainSheet leave Day blank. Calls per day must not fall to 0.
+  {
+    id: 30,
+    description:
+      'Pre Sales with Day blank (as in MainSheet): 108 + 133 calls on 2 rows = 2 active days, 121/day (Tier 2); a filled-in Day is kept; HO rows unchanged',
+    run: () => {
+      const base = { Agent_Email_Official: 'ps@test.local', Agent_Location: 'Dighe', Agent_Tier: 'PreSales' };
+      const blankDay = aggregateAgent(
+        [
+          { ...base, Date: '2026-10-01', Inbound_Calls: 108, Avg_TT_per_day: 93.26, Day: '' },
+          { ...base, Date: '2026-10-02', Inbound_Calls: 133, Avg_TT_per_day: 102.04, Day: '' },
+          { ...base, Date: '2026-10-03', Inbound_Calls: '', Avg_TT_per_day: '', Day: '' },
+        ],
+        { Agent_Email_Official: 'ps@test.local', Total_Audits: 3, Average_Audit_Score: 90 }
+      );
+      const m = preSalesMetricsFromTotals(blankDay.totals, blankDay.quality, defaultPreSalesPlan);
+      const res = calculatePreSales(m, defaultPreSalesPlan);
+      // A Day that is filled in wins, even with calls: half day 0.5 + full day 1
+      const filled = aggregateAgent([
+        { ...base, Date: '2026-10-01', Inbound_Calls: 60, Avg_TT_per_day: 100, Day: 0.5 },
+        { ...base, Date: '2026-10-02', Inbound_Calls: 120, Avg_TT_per_day: 100, Day: 1 },
+      ]);
+      // HO rows (no Inbound_Calls) with a blank Day still count 0 days
+      const ho = aggregateAgent([
+        { Agent_Email_Official: 'ho@test.local', Agent_Tier: 'HO Callers', Date: '2026-10-01', Sales: 1000, Day: '' },
+      ]);
+      const actual = `days ${blankDay.totals.activeDays}, calls ${blankDay.totals.calls}, avgCalls ${m.avgCalls}, tier ${res.preSales?.calls.tier}, ` +
+        `filled days ${filled.totals.activeDays}, HO days ${ho.totals.activeDays}`;
+      const expected = 'days 2, calls 241, avgCalls 121, tier 2, filled days 1.5, HO days 0';
       return { passed: actual === expected, expected, actual };
     },
   },
