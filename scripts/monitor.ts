@@ -12,6 +12,7 @@
  * aggregateAgent) and compares them with what the app holds. Prints a Markdown report, also written to
  * monitor-report.md, ending with one line:  STATUS: OK  or  STATUS: ISSUES errors=N warnings=M
  */
+import { execFileSync } from 'child_process';
 import { writeFileSync } from 'fs';
 import { buildFromCleanSheet, sheetDateTime } from '../server-clean-sheet';
 import { aggregateAgent, normalizeEmail } from '../src/shared/incentive';
@@ -56,9 +57,27 @@ function parseCsv(text: string): Record<string, string>[] {
     .map((r) => Object.fromEntries(header.map((h, i) => [h, r[i] ?? ''] as [string, string]).filter(([h]) => h !== '')));
 }
 
+/**
+ * GET a URL. Node's fetch ignores HTTPS_PROXY, so in a sandbox that only reaches the internet through a
+ * proxy (the scheduled cloud agent) it fails; curl uses the proxy, so it is the fallback.
+ */
 async function getText(url: string, headers: Record<string, string> = {}): Promise<{ status: number; text: string; type: string }> {
-  const res = await fetch(url, { headers, redirect: 'follow' });
-  return { status: res.status, text: await res.text(), type: res.headers.get('content-type') || '' };
+  try {
+    const res = await fetch(url, { headers, redirect: 'follow' });
+    return { status: res.status, text: await res.text(), type: res.headers.get('content-type') || '' };
+  } catch (fetchErr: any) {
+    const marker = '\n__CURL_META__';
+    const args = ['-sSL', '--max-time', '60', '-w', `${marker}%{http_code} %{content_type}`, url];
+    for (const [k, v] of Object.entries(headers)) args.unshift('-H', `${k}: ${v}`);
+    try {
+      const out = execFileSync('curl', args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+      const at = out.lastIndexOf(marker);
+      const [code, ...type] = out.slice(at + marker.length).trim().split(' ');
+      return { status: Number(code) || 0, text: out.slice(0, at), type: type.join(' ') };
+    } catch (curlErr: any) {
+      throw new Error(`${url}: fetch failed (${fetchErr?.cause?.code || fetchErr?.message}) and curl failed (${String(curlErr?.stderr || curlErr?.message).trim().slice(0, 300)})`);
+    }
+  }
 }
 
 async function readSheet(): Promise<Record<keyof typeof TABS, any[]> | null> {
