@@ -15,7 +15,7 @@ Six input tabs: paste exports as values, no formulas. Headers are matched ignori
 | Tab | One row per | Columns |
 | :--- | :--- | :--- |
 | `Agents` | person | `Agent_Name`, `Agent_Email_Official`, `Agent_Email_Personal`, `Agent_Location`, `Agent_Tier`, `TL_Official_Email`, `TL_Personal_Email`, `Status` |
-| `Orders` | order | `Order ID`, `Order Value`, `Date`, `Credited_Date`, `Order Time`, `Order Phone / Alternate Phone`, `Agent`, `Talk Time Cohort`, `Category`, `Agent Category`, `Channel` |
+| `Orders` | order | `Order ID`, `Order Value`, `Date`, `Credit_Date`, `Order Time`, `Order Phone / Alternate Phone`, `Agent`, `Talk Time Cohort`, `Category`, `Agent Category`, `Channel` |
 | `Visits` | visit | `Visit Date Time`, `Phone`, `Agent_Email`, `Location`, `Talk_Time_(s)`, `source` |
 | `Dialer` | agent per day | `Date`, `Agent_ID`, `Day_Type`, `Total_Unique_Connected_Calls`, `Total_Talk_Time_sec` (other columns are ignored) |
 | `PreSales` | agent per day | `Date`, `Agent_ID`, `Calls`, `TT_Per_Call_(sec)` |
@@ -23,7 +23,7 @@ Six input tabs: paste exports as values, no formulas. Headers are matched ignori
 
 Rules:
 - **Only people in `Agents` count.** Rows for any other email are left out (the sync warning lists them). A `Status` other than `Active` excludes the person (this replaces `Excluded_Agents`). Every active agent can sign in, even before their first data.
-- **Orders** count on `Credited_Date`; leave it blank to use the order `Date`. Orders credited outside the cycle are left out. One agent gets an `Order ID` once; an order under two agents counts in full for both. `Category` gives the team revenue split (`Shopify`, `Bought From Another Number`, `Marketplace`, `POS OC`).
+- **Orders** count on `Credit_Date` (`Credited_Date` also works); leave it blank to use the order `Date`. Orders credited outside the cycle are left out. One agent gets an `Order ID` once; an order under two agents counts in full for both. `Category` gives the team revenue split (`Shopify`, `Bought From Another Number`, `Marketplace`, `POS OC`).
 - **Visits:** one agent gets a phone number's visit once (the earliest). A visit under two agents counts for both. Visits from another number can be added later with their real visit date.
 - **Worked days** come from `Dialer` only: `Day_Type` 1 or 0.5 (or `Full Day` / `Half Day`). A Pre Sales day with calls counts as one worked day.
 - **Pre Sales talk time** is `TT_Per_Call_(sec)`, weighted by `Calls` over the cycle. A cell that is not a number (`#VALUE!`) is skipped with a warning.

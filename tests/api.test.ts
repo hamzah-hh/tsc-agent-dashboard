@@ -840,7 +840,7 @@ export async function runApiTests() {
           { 'Order ID': 'O1', ' Order Value ': 1000, Date: '2026-10-02', Agent: 'cia@co.in', Category: '1. Shopify' },
           { 'Order ID': 'O1', ' Order Value ': 1000, Date: '2026-10-02', Agent: 'CIA@co.in', Category: '1. Shopify' },
           { 'Order ID': 'O1', ' Order Value ': 1000, Date: '2026-10-02', Agent: 'cal@co.in', Category: '1. Shopify' },
-          { 'Order ID': 'O2', ' Order Value ': 500, Date: '2026-09-28', Credited_Date: '2026-10-03', Agent: 'cia@co.in', Category: '2. Bought From Another Number' },
+          { 'Order ID': 'O2', ' Order Value ': 500, Date: '2026/09/28', Credit_Date: '2026/10/03', Agent: 'cia@co.in', Category: '2. Bought From Another Number' },
           { 'Order ID': 'O3', ' Order Value ': 700, Date: '2026-09-20', Agent: 'cia@co.in', Category: '1. Shopify' },
           { 'Order ID': 'O4', ' Order Value ': 900, Date: '2026-10-02', Agent: 'stranger@co.in', Category: '1. Shopify' },
           { 'Order ID': 'O5', ' Order Value ': 800, Date: '2026-10-02', Agent: 'cgone@co.in', Category: '1. Shopify' },
@@ -875,7 +875,7 @@ export async function runApiTests() {
       cw.some((w) => w.includes('#VALUE!')), JSON.stringify(cw));
     agents = await readAgents();
     const cia = agents.get('cia@co.in')!;
-    check('orders: a repeat counts once, Credited_Date moves an order into the cycle, a day-first date and "1,250" work',
+    check('orders: a repeat counts once, Credit_Date (the live header, slash dates) moves an order into the cycle, a day-first date and "1,250" work',
       cia.totals.orders === 3 && cia.totals.sales === 2750 && cia.daily.find((d) => d.date === '2026-10-03')?.orders === 1 && cia.daily.find((d) => d.date === '2026-10-05')?.sales === 1250,
       JSON.stringify({ totals: cia.totals, daily: cia.daily.map((d) => [d.date, d.orders, d.sales]) }));
     check('visits: a phone number counts once per agent (the earliest), an Excel date number works',
@@ -912,6 +912,23 @@ export async function runApiTests() {
     check('Visit Activity: newest visit first', rv.map((v) => v.visitDateTime).join() === [...rv.map((v) => v.visitDateTime)].sort().reverse().join(), JSON.stringify(rv.map((v) => v.visitDateTime)));
     r = await call('GET', '/api/raw-data?search=clean%20cal', { token: tok(L.admin) });
     check('search finds visits and orders by caller name', r.json?.visits?.length === 1 && r.json?.orders?.length === 1, r.text.slice(0, 200));
+
+    // ------------------------------------------------------------------
+    section('monitor endpoint: read-only, its own key');
+    delete process.env.MONITOR_KEY;
+    r = await call('GET', '/api/monitor', { headers: { 'X-Monitor-Key': 'x' } });
+    check('no MONITOR_KEY on the server: 503', r.status === 503, r.text);
+    process.env.MONITOR_KEY = 'monitor-key-for-tests-123456';
+    r = await call('GET', '/api/monitor', { headers: { 'X-Monitor-Key': process.env.SYNC_KEY! } });
+    check('the sync key does not open it: 401', r.status === 401, r.text);
+    r = await call('GET', '/api/monitor', { headers: { 'X-Monitor-Key': process.env.MONITOR_KEY } });
+    const mon = r.json;
+    check('with the key: agents, raw counts and sync logs',
+      r.status === 200 && mon.agents.some((a: any) => a.officialEmail === 'cia@co.in' && a.totals.orders === 3) &&
+      mon.raw.visitsCount === 3 && mon.syncLogs.length > 0 && mon.cycle.id === CYCLE, r.text.slice(0, 300));
+    r = await call('POST', '/api/monitor', { headers: { 'X-Monitor-Key': process.env.MONITOR_KEY }, body: {} });
+    check('it cannot write (no POST route)', r.status === 404 || r.status === 405, String(r.status));
+    delete process.env.MONITOR_KEY;
   } finally {
     setGeminiForTests(null);
     await new Promise<void>((resolve) => server.close(() => resolve()));

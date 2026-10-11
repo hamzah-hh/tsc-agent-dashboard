@@ -293,6 +293,58 @@ export function createApiApp(options: ApiOptions = {}): express.Express {
     })
   );
 
+  // ------------------------------------------------------------------ monitor (read-only, scheduled checks)
+
+  /**
+   * What the app holds, for the scheduled monitor (scripts/monitor.ts) to compare with the sheet.
+   * Read-only, and only with the MONITOR_KEY header: a separate key from SYNC_KEY, which can write.
+   */
+  api.get(
+    '/api/monitor',
+    route(async (req, res) => {
+      const key = process.env.MONITOR_KEY;
+      if (!key) throw new HttpError(503, 'Monitor is not configured: set MONITOR_KEY on the server.');
+      const given = req.headers['x-monitor-key'];
+      if (typeof given !== 'string' || !given || !sameSecret(given, key)) {
+        throw new HttpError(401, 'Unauthorized: invalid or missing X-Monitor-Key header.');
+      }
+      const { appConfig, cycle } = await ensureSeedData();
+      const cycleId = appConfig.activeCycleId;
+      const [agents, raw, logsSnap] = await Promise.all([
+        loadAgents(cycleId),
+        getOrLoadRawRecords(cycleId),
+        adminDb.collection('syncLogs').orderBy('time', 'desc').limit(10).get(),
+      ]);
+      return res.json({
+        generatedAt: new Date().toISOString(),
+        cycle: { id: cycleId, startDate: cycle.startDate, endDate: cycle.endDate },
+        testMode: appConfig.testMode,
+        agents: agents.map((a) => ({
+          officialEmail: a.officialEmail,
+          name: a.name,
+          location: a.location,
+          agentType: a.agentType,
+          isTest: Boolean(a.isTest),
+          hasLogin: Boolean(a.personalEmail),
+          lastDataDate: a.lastDataDate,
+          totals: a.totals,
+          quality: a.quality,
+          total: a.result?.total ?? 0,
+        })),
+        raw: {
+          ordersCount: raw.orders.length,
+          visitsCount: raw.visits.length,
+          updatedAt: raw.updatedAt || null,
+          syncStatus: raw.syncStatus || null,
+        },
+        syncLogs: logsSnap.docs.map((d: any) => {
+          const l = d.data();
+          return { time: l.time, source: l.source, result: l.result, rows: l.rows, agents: l.agents, lastDataDate: l.lastDataDate, warnings: l.warnings || [], error: l.error || null };
+        }),
+      });
+    })
+  );
+
   // ------------------------------------------------------------------ Super Admin: import / test data
 
   api.post(

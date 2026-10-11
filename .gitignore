@@ -13,3 +13,4 @@ local-db.json
 # Firebase Admin service-account key (contains a private key). Never commit it; provide it
 # locally or through the host's secret settings instead.
 service-account.json
+monitor-report.md

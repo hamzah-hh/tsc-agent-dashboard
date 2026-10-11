@@ -2685,6 +2685,8 @@ function dayValue(text) {
   if (t.includes("full")) return 1;
   return numberOf(text) ?? 0;
 }
+var CREDIT_DATE_HEADERS = ["Credit_Date", "Credited_Date", "Credit Date", "Credited Date"];
+var CREDIT_DATE_KEYS = new Set(CREDIT_DATE_HEADERS.map(headerKey2));
 var NO_EMAIL = /* @__PURE__ */ new Set(["", "none", "null", "na", "n/a", "-", "#n/a"]);
 function listOf(items, max = 10) {
   return items.length <= max ? items.join(", ") : `${items.slice(0, max).join(", ")} and ${items.length - max} more`;
@@ -2738,6 +2740,10 @@ function buildFromCleanSheet(tabs, cycle) {
     return byDay.get(day);
   };
   const bad = [];
+  const ordersHaveCreditDate = (tabs.ordersRows || []).slice(0, 50).some((row) => Object.keys(row || {}).some((k) => CREDIT_DATE_KEYS.has(headerKey2(k))));
+  if ((tabs.ordersRows || []).length > 0 && !ordersHaveCreditDate) {
+    warnings.push("Orders has no Credit_Date column, so every order counts on its order Date.");
+  }
   const rawRevenueTabRows = [];
   const revenueRows = [];
   const seenOrders = /* @__PURE__ */ new Set();
@@ -2747,7 +2753,7 @@ function buildFromCleanSheet(tabs, cycle) {
     const p = personOf(normalizeEmail(pick2(row, "Agent", "Agent_Email", "Agent Email", "Agent_ID")));
     if (!p) return;
     const orderId = pick2(row, "Order ID", "Order_ID", "OrderID");
-    const credited = sheetDateTime(cell(row, "Credited_Date", "Credited Date") || cell(row, "Date", "Order Date"));
+    const credited = sheetDateTime(cell(row, ...CREDIT_DATE_HEADERS) || cell(row, "Date", "Order Date"));
     const value = numberOf(pick2(row, "Order Value", "Order_Value"));
     if (!credited || value === null) {
       bad.push(`Orders row ${i + 2} (${orderId || "no Order ID"}): ${!credited ? "no valid date" : "Order Value is not a number"}`);
@@ -4249,6 +4255,51 @@ function createApiApp(options = {}) {
         if (err instanceof HttpError) throw err;
         return res.json({ result: "error", error: err?.message || String(err) });
       }
+    })
+  );
+  api.get(
+    "/api/monitor",
+    route(async (req, res) => {
+      const key = process.env.MONITOR_KEY;
+      if (!key) throw new HttpError(503, "Monitor is not configured: set MONITOR_KEY on the server.");
+      const given = req.headers["x-monitor-key"];
+      if (typeof given !== "string" || !given || !sameSecret(given, key)) {
+        throw new HttpError(401, "Unauthorized: invalid or missing X-Monitor-Key header.");
+      }
+      const { appConfig, cycle } = await ensureSeedData();
+      const cycleId = appConfig.activeCycleId;
+      const [agents, raw, logsSnap] = await Promise.all([
+        loadAgents(cycleId),
+        getOrLoadRawRecords(cycleId),
+        adminDb.collection("syncLogs").orderBy("time", "desc").limit(10).get()
+      ]);
+      return res.json({
+        generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        cycle: { id: cycleId, startDate: cycle.startDate, endDate: cycle.endDate },
+        testMode: appConfig.testMode,
+        agents: agents.map((a) => ({
+          officialEmail: a.officialEmail,
+          name: a.name,
+          location: a.location,
+          agentType: a.agentType,
+          isTest: Boolean(a.isTest),
+          hasLogin: Boolean(a.personalEmail),
+          lastDataDate: a.lastDataDate,
+          totals: a.totals,
+          quality: a.quality,
+          total: a.result?.total ?? 0
+        })),
+        raw: {
+          ordersCount: raw.orders.length,
+          visitsCount: raw.visits.length,
+          updatedAt: raw.updatedAt || null,
+          syncStatus: raw.syncStatus || null
+        },
+        syncLogs: logsSnap.docs.map((d) => {
+          const l = d.data();
+          return { time: l.time, source: l.source, result: l.result, rows: l.rows, agents: l.agents, lastDataDate: l.lastDataDate, warnings: l.warnings || [], error: l.error || null };
+        })
+      });
     })
   );
   api.post(

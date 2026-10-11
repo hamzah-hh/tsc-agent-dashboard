@@ -3,7 +3,7 @@
  *
  *   Agents    one row per person  (Agent_Email_Official, Agent_Name, Agent_Email_Personal, Agent_Location,
  *                                  Agent_Tier, TL_Official_Email, TL_Personal_Email, Status)
- *   Orders    one row per order   (Order ID, Order Value, Date, Credited_Date, Order Time, phone, Agent,
+ *   Orders    one row per order   (Order ID, Order Value, Date, Credit_Date, Order Time, phone, Agent,
  *                                  Talk Time Cohort, Category, Agent Category, Channel)
  *   Visits    one row per visit   (Visit Date Time, Phone, Agent_Email, Location, Talk_Time_(s), source)
  *   Dialer    agent per day       (Date, Agent_ID, Day_Type, Total_Unique_Connected_Calls, Total_Talk_Time_sec)
@@ -15,7 +15,7 @@
  *
  * - Only people in Agents count. Rows for anyone else are left out (one warning lists them).
  *   A Status other than "Active" excludes the person, like a row in Excluded_Agents did.
- * - An order counts on its Credited_Date; a blank Credited_Date means the order date.
+ * - An order counts on its Credit_Date (Credited_Date also works); a blank one means the order date.
  *   Orders credited outside the cycle are left out.
  * - Each agent gets an order once (same Order ID twice for one agent = once). An order under two
  *   agents counts in full for both.
@@ -135,6 +135,10 @@ function dayValue(text: string): number {
   return numberOf(text) ?? 0;
 }
 
+/** The Orders column with the date an order is credited on (the sheet calls it Credit_Date). */
+const CREDIT_DATE_HEADERS = ['Credit_Date', 'Credited_Date', 'Credit Date', 'Credited Date'];
+const CREDIT_DATE_KEYS = new Set(CREDIT_DATE_HEADERS.map(headerKey));
+
 const NO_EMAIL = new Set(['', 'none', 'null', 'na', 'n/a', '-', '#n/a']);
 
 /** "a, b, c and 4 more" */
@@ -225,6 +229,12 @@ export function buildFromCleanSheet(tabs: CleanSheetTabs, cycle: { startDate: st
   const bad: string[] = [];
 
   // ---- Orders
+  const ordersHaveCreditDate = (tabs.ordersRows || [])
+    .slice(0, 50)
+    .some((row) => Object.keys(row || {}).some((k) => CREDIT_DATE_KEYS.has(headerKey(k))));
+  if ((tabs.ordersRows || []).length > 0 && !ordersHaveCreditDate) {
+    warnings.push('Orders has no Credit_Date column, so every order counts on its order Date.');
+  }
   const rawRevenueTabRows: any[] = [];
   const revenueRows: any[] = [];
   const seenOrders = new Set<string>();
@@ -234,7 +244,7 @@ export function buildFromCleanSheet(tabs: CleanSheetTabs, cycle: { startDate: st
     const p = personOf(normalizeEmail(pick(row, 'Agent', 'Agent_Email', 'Agent Email', 'Agent_ID')));
     if (!p) return;
     const orderId = pick(row, 'Order ID', 'Order_ID', 'OrderID');
-    const credited = sheetDateTime(cell(row, 'Credited_Date', 'Credited Date') || cell(row, 'Date', 'Order Date'));
+    const credited = sheetDateTime(cell(row, ...CREDIT_DATE_HEADERS) || cell(row, 'Date', 'Order Date'));
     const value = numberOf(pick(row, 'Order Value', 'Order_Value'));
     if (!credited || value === null) {
       bad.push(`Orders row ${i + 2} (${orderId || 'no Order ID'}): ${!credited ? 'no valid date' : 'Order Value is not a number'}`);

@@ -39,7 +39,9 @@ npm run test:server # ~220 checks: database layer + every API route, no network 
 npm run lint        # type-check
 ```
 
-Run all three before each release (Design Document, section 13). GitHub runs them on every push (`.github/workflows/ci.yml`).
+Run all three before each release (Design Document, section 13).
+
+**Monitor.** `npx tsx scripts/monitor.ts` checks the Google Sheet (missing tabs, spreadsheet errors, unknown agents, shared logins, stale tabs) and, with `APP_URL` and `MONITOR_KEY` set, compares every agent's numbers in the app with the sheet and checks the last sync. A scheduled cloud agent runs it and emails the report when something is wrong. `MONITOR_KEY` must also be set on the server (Vercel); `/api/monitor` is read-only. GitHub runs them on every push (`.github/workflows/ci.yml`).
 
 ## Release (private GitHub repository to the live account)
 

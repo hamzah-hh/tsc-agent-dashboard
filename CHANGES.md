@@ -4,6 +4,18 @@ Newest first. How to demo and go live: [docs/GUIDELINE.md](docs/GUIDELINE.md).
 
 ---
 
+## v6, 12 Oct 2026: Visit Activity, Credit_Date, monitor
+
+Verified by: type-check, 30 calculation tests, 241 server checks, production build, and `scripts/monitor.ts` run on the live sheet.
+
+1. **Orders' `Credit_Date` column was ignored** (the code looked for `Credited_Date`), so 11 orders dated in September (Rs 5.06 lakh) were left out and 43 more counted on their order day instead of their credit day. Both names work now, and a sync warns when Orders has neither.
+2. **Visit Activity (Raw Data > visits):** every visit showed "Store Caller", callers showed as emails, the oldest visit came first, and the Visit ID / "1 Credit" columns meant nothing. Now: caller name, the real caller type (HO / Store), newest first, search by name.
+3. **Orders table:** an order credited to two agents used the same row key, so rows could be dropped or repeated.
+4. With the clean sheet, empty raw data no longer triggers a download of the old Raw_Revenue / Raw_Visit tabs (Google answers with the first tab instead).
+5. **Monitor:** read-only `/api/monitor` (needs `MONITOR_KEY` on Vercel) and `scripts/monitor.ts`, run by a scheduled cloud agent.
+
+---
+
 ## v5, 11 Oct 2026: clean sheet layout
 
 Verified by: type-check, 30 calculation tests, 234 server checks (14 new for this layout), production build, and the sample workbook `Test_Agent.xlsx` converted and compared with the live MainSheet agent by agent. **Not** verified with a real Apps Script run on the new tabs.
