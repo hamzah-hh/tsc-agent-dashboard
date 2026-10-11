@@ -904,6 +904,14 @@ export async function runApiTests() {
       raw.orders.length === 4 && raw.visits.length === 3 && raw.orders.find((o) => o.agentEmail === 'cal@co.in')?.location === 'Andheri' &&
       raw.orders.find((o) => o.orderId === 'O2')?.date === '2026-10-03' && raw.orders.find((o) => o.orderId === 'O6')?.orderTime === '2026-10-05 20:15:00',
       JSON.stringify(raw.orders.map((o) => [o.orderId, o.agentEmail, o.date, o.location, o.orderTime])));
+    r = await call('GET', '/api/raw-data', { token: tok(L.admin) });
+    const rv: any[] = r.json?.visits || [];
+    check('Visit Activity: caller name and type come from the agent (an HO caller is not a "Store Caller")',
+      rv.length === 3 && rv.filter((v) => v.agentEmail === 'cia@co.in').every((v) => v.type === 'HO' && v.agentName === 'Clean Cia') &&
+      rv.find((v) => v.agentEmail === 'cal@co.in')?.type === 'STORE', JSON.stringify(rv.map((v) => [v.agentEmail, v.type, v.agentName])));
+    check('Visit Activity: newest visit first', rv.map((v) => v.visitDateTime).join() === [...rv.map((v) => v.visitDateTime)].sort().reverse().join(), JSON.stringify(rv.map((v) => v.visitDateTime)));
+    r = await call('GET', '/api/raw-data?search=clean%20cal', { token: tok(L.admin) });
+    check('search finds visits and orders by caller name', r.json?.visits?.length === 1 && r.json?.orders?.length === 1, r.text.slice(0, 200));
   } finally {
     setGeminiForTests(null);
     await new Promise<void>((resolve) => server.close(() => resolve()));

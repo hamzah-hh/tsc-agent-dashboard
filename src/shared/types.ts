@@ -405,6 +405,8 @@ export interface RawOrderRecord {
   agentCategory: string;
   location: string;
   channel: string;
+  /** Added by /api/raw-data from the agent record (not stored). */
+  agentName?: string;
 }
 
 export interface RawVisitRecord {
@@ -420,6 +422,8 @@ export interface RawVisitRecord {
   visitSource: string;
   interestedSubStatus?: string;
   attributedVisit?: number;
+  /** Added by /api/raw-data from the agent record (not stored). */
+  agentName?: string;
 }
 
 export interface LocationRevenueAgentRow {

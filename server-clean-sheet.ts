@@ -84,7 +84,7 @@ const pad = (n: number) => String(n).padStart(2, '0');
 /**
  * The calendar day and time a cell shows, as 'YYYY-MM-DD' and 'YYYY-MM-DD HH:mm:ss'. Times are never
  * shifted between time zones: what the sheet shows is what counts.
- * - text: "2026-10-01", "2026-10-01 20:26:11", or day-first "01-10-2026" / "01/10/2026 1:17"
+ * - text: "2026-10-01", "2026/10/01 20:26:11", or day-first "01-10-2026" / "01/10/2026 1:17"
  * - an Excel date number (from an uploaded .xlsx)
  * - a Date (read in India time)
  */
@@ -102,7 +102,7 @@ export function sheetDateTime(value: any): { day: string; time: string } | null 
   } else {
     const str = String(value).trim();
     const time = '(?:[ T](\\d{1,2}):(\\d{2})(?::(\\d{2}))?)?';
-    let m = new RegExp('^(\\d{4})-(\\d{1,2})-(\\d{1,2})' + time).exec(str);
+    let m = new RegExp('^(\\d{4})[-/.](\\d{1,2})[-/.](\\d{1,2})' + time).exec(str);
     if (m) {
       [y, mo, d] = [+m[1], +m[2], +m[3]];
     } else {

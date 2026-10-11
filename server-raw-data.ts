@@ -493,6 +493,11 @@ async function getOrLoadRawRecordsUncached(cycleId: string): Promise<RawRecordsD
   }
 
   const empty: RawRecordsDoc = { orders: [], visits: [], locationSummaries: {}, syncStatus: status };
+  // The last sync sent the raw rows itself (the clean sheet has no Raw_Revenue / Raw_Visit tabs), so
+  // empty means empty. Downloading those tab names would get Google's first tab (Agents) instead.
+  if (status?.ok && status.source === 'sync-payload') {
+    return empty;
+  }
   if (status && !status.ok && Date.now() - new Date(status.at).getTime() < RAW_RETRY_COOLDOWN_MS) {
     return empty;
   }

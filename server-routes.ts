@@ -1399,6 +1399,20 @@ function isAgentOfTl(
 
       const allAgents = await loadAgents(cycleId);
 
+      // Name and caller type come from the agent record: the raw rows only carry an email, and the
+      // stored visit type is always STORE (an HO caller's visit used to show as "Store Caller").
+      // Newest first, so today's activity is at the top.
+      const agentByEmail = new Map(allAgents.map((a) => [normalizeEmail(a.officialEmail), a]));
+      orders = orders
+        .map((o) => ({ ...o, agentName: agentByEmail.get(normalizeEmail(o.agentEmail))?.name || '' }))
+        .sort((a, b) => (b.orderTime || b.date).localeCompare(a.orderTime || a.date));
+      visits = visits
+        .map((v) => {
+          const agent = agentByEmail.get(normalizeEmail(v.agentEmail));
+          return { ...v, agentName: agent?.name || '', type: agent?.agentType === 'HO' ? ('HO' as const) : ('STORE' as const) };
+        })
+        .sort((a, b) => (b.visitDateTime || b.date).localeCompare(a.visitDateTime || a.date));
+
       let allowedAgents: Array<{ officialEmail: string; name: string; location: string }> = [];
 
       // RBAC Scoping
@@ -1460,6 +1474,7 @@ function isAgentOfTl(
           (o) =>
             o.orderId.toLowerCase().includes(search) ||
             o.agentEmail.toLowerCase().includes(search) ||
+            (o.agentName || '').toLowerCase().includes(search) ||
             o.orderPhone.includes(search) ||
             o.category.toLowerCase().includes(search) ||
             o.channel.toLowerCase().includes(search)
@@ -1468,6 +1483,7 @@ function isAgentOfTl(
           (v) =>
             v.phoneNumber.includes(search) ||
             v.agentEmail.toLowerCase().includes(search) ||
+            (v.agentName || '').toLowerCase().includes(search) ||
             v.location.toLowerCase().includes(search) ||
             v.visitSource.toLowerCase().includes(search)
         );

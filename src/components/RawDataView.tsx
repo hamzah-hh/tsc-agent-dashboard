@@ -173,6 +173,7 @@ export function RawDataView({
         'Type',
         'Date',
         'Visit_Date_Time',
+        'Agent_Name',
         'Agent_Email',
         'Location',
         'Phone_Number',
@@ -185,6 +186,7 @@ export function RawDataView({
         `"${v.type}"`,
         `"${v.date}"`,
         `"${v.visitDateTime}"`,
+        `"${v.agentName || ''}"`,
         `"${v.agentEmail}"`,
         `"${v.location}"`,
         `"${v.phoneNumber}"`,
@@ -378,7 +380,7 @@ export function RawDataView({
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search Order ID, Phone, Caller..."
+                placeholder={activeTab === 'orders' ? 'Search Order ID, Phone, Caller...' : 'Search Phone, Caller, Location...'}
                 className="bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 w-48 sm:w-60"
               />
             </form>
@@ -488,8 +490,9 @@ export function RawDataView({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {orders.map((o) => (
-                    <tr key={o.orderId} className="hover:bg-slate-50/80 transition-colors">
+                  {orders.map((o, i) => (
+                    // One order can be credited to several agents, so the Order ID alone is not a unique key
+                    <tr key={`${o.orderId}|${o.agentEmail}|${i}`} className="hover:bg-slate-50/80 transition-colors">
                       <td className="py-3 px-4 font-mono font-bold text-slate-900 whitespace-nowrap">
                         {o.orderId}
                       </td>
@@ -502,8 +505,8 @@ export function RawDataView({
                         )}
                       </td>
                       <td className="py-3 px-4 whitespace-nowrap">
-                        <span className="font-semibold text-slate-900 block">{o.agentEmail}</span>
-                        <span className="text-[10px] text-slate-400 block">{o.agentCategory}</span>
+                        <span className="font-semibold text-slate-900 block">{o.agentName || o.agentEmail}</span>
+                        <span className="text-[10px] text-slate-400 block">{o.agentName ? o.agentEmail : o.agentCategory}</span>
                       </td>
                       <td className="py-3 px-3 whitespace-nowrap">
                         <span className="inline-flex items-center gap-1 font-medium text-slate-700">
@@ -555,71 +558,53 @@ export function RawDataView({
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-mono uppercase tracking-wider text-slate-500 font-bold">
-                    <th className="py-3 px-4">Visit ID</th>
-                    <th className="py-3 px-3">Type</th>
-                    <th className="py-3 px-3">Date & Time</th>
+                    <th className="py-3 px-4">Date & Time</th>
                     <th className="py-3 px-4">Caller</th>
+                    <th className="py-3 px-3">Type</th>
                     <th className="py-3 px-3">Location</th>
                     <th className="py-3 px-3 font-mono">Customer Phone</th>
-                    <th className="py-3 px-3 text-right">Talk Duration</th>
+                    <th className="py-3 px-3 text-right">Talk Before Visit</th>
                     <th className="py-3 px-3">Source</th>
-                    <th className="py-3 px-3 text-center">Attributed Credit</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {visits.map((v) => (
-                    <tr key={v.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-4 font-mono font-bold text-slate-900 whitespace-nowrap">
-                        {v.id}
-                      </td>
-                      <td className="py-3 px-3 whitespace-nowrap">
-                        <span
-                          className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
-                            v.type === 'STORE'
-                              ? 'bg-blue-100 text-blue-800'
-                              : 'bg-emerald-100 text-emerald-800'
-                          }`}
-                        >
-                          {v.type === 'STORE' ? 'Store Caller' : 'HO Caller'}
-                        </span>
-                      </td>
-                      <td className="py-3 px-3 font-mono text-slate-700 whitespace-nowrap">
-                        {v.visitDateTime || v.date}
-                        {v.bookingDate && (
-                          <span className="text-[10px] text-slate-400 block">
-                            Booked: {v.bookingDate}
+                  {visits.map((v, i) => {
+                    const [visitDay, visitTime] = (v.visitDateTime || v.date).split(' ');
+                    return (
+                      <tr key={`${v.id}|${i}`} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-3 px-4 font-mono whitespace-nowrap">
+                          <span className="font-bold text-slate-900 block">{visitDay}</span>
+                          {visitTime && <span className="text-[10px] text-slate-400 block">{visitTime}</span>}
+                        </td>
+                        <td className="py-3 px-4 whitespace-nowrap">
+                          <span className="font-semibold text-slate-900 block">{v.agentName || v.agentEmail}</span>
+                          {v.agentName && <span className="text-[10px] text-slate-400 block">{v.agentEmail}</span>}
+                        </td>
+                        <td className="py-3 px-3 whitespace-nowrap">
+                          <span
+                            className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
+                              v.type === 'HO' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
+                            }`}
+                          >
+                            {v.type === 'HO' ? 'HO Caller' : 'Store Caller'}
                           </span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 whitespace-nowrap font-medium text-slate-900">
-                        {v.agentEmail}
-                      </td>
-                      <td className="py-3 px-3 whitespace-nowrap">
-                        <span className="inline-flex items-center gap-1 font-medium text-slate-700">
-                          <MapPin className="w-3 h-3 text-slate-400" />
-                          {v.location}
-                        </span>
-                      </td>
-                      <td className="py-3 px-3 font-mono text-slate-600 whitespace-nowrap">
-                        {v.phoneNumber}
-                      </td>
-                      <td className="py-3 px-3 text-right font-mono whitespace-nowrap">
-                        <span className="font-bold text-slate-900">{v.talkTimeSeconds}s</span>
-                        <span className="text-[10px] text-slate-400 block">
-                          ({Math.floor(v.talkTimeSeconds / 60)}m {v.talkTimeSeconds % 60}s)
-                        </span>
-                      </td>
-                      <td className="py-3 px-3 text-slate-600 whitespace-nowrap">
-                        {v.visitSource}
-                      </td>
-                      <td className="py-3 px-3 text-center whitespace-nowrap">
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                          1 Credit
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="py-3 px-3 whitespace-nowrap">
+                          <span className="inline-flex items-center gap-1 font-medium text-slate-700">
+                            <MapPin className="w-3 h-3 text-slate-400" />
+                            {v.location}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 font-mono text-slate-600 whitespace-nowrap">{v.phoneNumber}</td>
+                        <td className="py-3 px-3 text-right font-mono whitespace-nowrap">
+                          <span className="font-bold text-slate-900">
+                            {Math.floor(v.talkTimeSeconds / 60)}m {v.talkTimeSeconds % 60}s
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-slate-600 whitespace-nowrap">{v.visitSource}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

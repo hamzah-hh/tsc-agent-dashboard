@@ -2588,6 +2588,9 @@ async function getOrLoadRawRecordsUncached(cycleId) {
     return { ...saved, syncStatus: status };
   }
   const empty = { orders: [], visits: [], locationSummaries: {}, syncStatus: status };
+  if (status?.ok && status.source === "sync-payload") {
+    return empty;
+  }
   if (status && !status.ok && Date.now() - new Date(status.at).getTime() < RAW_RETRY_COOLDOWN_MS) {
     return empty;
   }
@@ -2654,7 +2657,7 @@ function sheetDateTime(value) {
   } else {
     const str = String(value).trim();
     const time = "(?:[ T](\\d{1,2}):(\\d{2})(?::(\\d{2}))?)?";
-    let m = new RegExp("^(\\d{4})-(\\d{1,2})-(\\d{1,2})" + time).exec(str);
+    let m = new RegExp("^(\\d{4})[-/.](\\d{1,2})[-/.](\\d{1,2})" + time).exec(str);
     if (m) {
       [y, mo, d] = [+m[1], +m[2], +m[3]];
     } else {
@@ -5079,6 +5082,12 @@ function createApiApp(options = {}) {
       orders = orders.filter((o) => !excludedEmails.has(normalizeEmail(o.agentEmail)));
       visits = visits.filter((v) => !excludedEmails.has(normalizeEmail(v.agentEmail)));
       const allAgents = await loadAgents(cycleId);
+      const agentByEmail = new Map(allAgents.map((a) => [normalizeEmail(a.officialEmail), a]));
+      orders = orders.map((o) => ({ ...o, agentName: agentByEmail.get(normalizeEmail(o.agentEmail))?.name || "" })).sort((a, b) => (b.orderTime || b.date).localeCompare(a.orderTime || a.date));
+      visits = visits.map((v) => {
+        const agent = agentByEmail.get(normalizeEmail(v.agentEmail));
+        return { ...v, agentName: agent?.name || "", type: agent?.agentType === "HO" ? "HO" : "STORE" };
+      }).sort((a, b) => (b.visitDateTime || b.date).localeCompare(a.visitDateTime || a.date));
       let allowedAgents = [];
       if (identity.role === "agent") {
         const userOfficial = normalizeEmail(identity.access?.officialEmail || user.email);
@@ -5128,10 +5137,10 @@ function createApiApp(options = {}) {
       const search = req.query.search?.trim().toLowerCase();
       if (search) {
         orders = orders.filter(
-          (o) => o.orderId.toLowerCase().includes(search) || o.agentEmail.toLowerCase().includes(search) || o.orderPhone.includes(search) || o.category.toLowerCase().includes(search) || o.channel.toLowerCase().includes(search)
+          (o) => o.orderId.toLowerCase().includes(search) || o.agentEmail.toLowerCase().includes(search) || (o.agentName || "").toLowerCase().includes(search) || o.orderPhone.includes(search) || o.category.toLowerCase().includes(search) || o.channel.toLowerCase().includes(search)
         );
         visits = visits.filter(
-          (v) => v.phoneNumber.includes(search) || v.agentEmail.toLowerCase().includes(search) || v.location.toLowerCase().includes(search) || v.visitSource.toLowerCase().includes(search)
+          (v) => v.phoneNumber.includes(search) || v.agentEmail.toLowerCase().includes(search) || (v.agentName || "").toLowerCase().includes(search) || v.location.toLowerCase().includes(search) || v.visitSource.toLowerCase().includes(search)
         );
       }
       const totalRevenue = orders.reduce((sum, o) => sum + o.orderValue, 0);
