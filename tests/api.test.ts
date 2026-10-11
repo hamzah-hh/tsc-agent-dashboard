@@ -816,6 +816,94 @@ export async function runApiTests() {
     const left = await adminDb.collection('cycles').doc(CYCLE).collection('data').doc('rawRecords').collection('chunks').doc('orders-2').get();
     invalidateRawCache();
     check('a smaller save removes the leftover chunks', !left.exists && (await getOrLoadRawRecords(CYCLE)).orders.length === 1);
+
+    // ------------------------------------------------------------------
+    section('clean sheet: Agents, Orders, Visits, Dialer, PreSales, Quality (no MainSheet)');
+    const person = (email: string, name: string, tier: string, location: string, extra: Record<string, any> = {}) => ({
+      Agent_Name: name, Agent_Email_Official: email, Agent_Email_Personal: email.replace('@co.in', '.login@gmail.com'),
+      Agent_Location: location, Agent_Tier: tier, TL_Official_Email: 'tl@x.in', TL_Personal_Email: L.tlDighe, Status: 'Active\n', ...extra,
+    });
+    const excelSerial = (iso: string) => (Date.parse(iso + 'Z') - Date.UTC(1899, 11, 30)) / 86400000;
+    const fetchesBefore = sheet.calls;
+    r = await call('POST', '/api/sync', {
+      headers: { 'X-Sync-Key': process.env.SYNC_KEY! },
+      body: {
+        format: 'clean-v1',
+        agentsRows: [
+          person('cia@co.in', 'Clean Cia', 'HO Callers', 'Dighe'),
+          person('cal@co.in', 'Clean Cal', 'Store Callers', 'Andheri'),
+          person('cps@co.in', 'Clean Pre', 'PreSales', 'Dighe'),
+          person('cnew@co.in', 'Clean New', 'HO Callers', 'Dighe'),
+          person('cgone@co.in', 'Clean Gone', 'HO Callers', 'Dighe', { Status: 'Inactive' }),
+        ],
+        ordersRows: [
+          { 'Order ID': 'O1', ' Order Value ': 1000, Date: '2026-10-02', Agent: 'cia@co.in', Category: '1. Shopify' },
+          { 'Order ID': 'O1', ' Order Value ': 1000, Date: '2026-10-02', Agent: 'CIA@co.in', Category: '1. Shopify' },
+          { 'Order ID': 'O1', ' Order Value ': 1000, Date: '2026-10-02', Agent: 'cal@co.in', Category: '1. Shopify' },
+          { 'Order ID': 'O2', ' Order Value ': 500, Date: '2026-09-28', Credited_Date: '2026-10-03', Agent: 'cia@co.in', Category: '2. Bought From Another Number' },
+          { 'Order ID': 'O3', ' Order Value ': 700, Date: '2026-09-20', Agent: 'cia@co.in', Category: '1. Shopify' },
+          { 'Order ID': 'O4', ' Order Value ': 900, Date: '2026-10-02', Agent: 'stranger@co.in', Category: '1. Shopify' },
+          { 'Order ID': 'O5', ' Order Value ': 800, Date: '2026-10-02', Agent: 'cgone@co.in', Category: '1. Shopify' },
+          { 'Order ID': 'O6', ' Order Value ': '1,250', Date: '05-10-2026', 'Order Time': '05-10-2026 20:15', Agent: 'cia@co.in', Category: '4. POS OC' },
+        ],
+        visitsRows: [
+          { 'Visit Date Time': '2026-10-04 10:00:00', Phone: 111, Agent_Email: 'cia@co.in', Location: 'Dighe', 'Talk_Time_(s)': 200, source: 'Same Number' },
+          { 'Visit Date Time': '2026-10-02 18:00:00', Phone: 111, Agent_Email: 'cia@co.in', Location: 'Dighe', 'Talk_Time_(s)': 300, source: 'Same Number' },
+          { 'Visit Date Time': '2026-10-02 18:00:00', Phone: 111, Agent_Email: 'cal@co.in', Location: 'Andheri', 'Talk_Time_(s)': 300, source: 'Same Number' },
+          { 'Visit Date Time': excelSerial('2026-10-03T19:12:00'), Phone: 222, Agent_Email: 'cia@co.in', Location: 'Dighe', 'Talk_Time_(s)': 150, source: 'Alternate Number' },
+        ],
+        dialerRows: [
+          { Date: '2026-10-02 00:00:00', Agent_ID: 'cia@co.in', Day_Type: 'Full Day', Total_Unique_Connected_Calls: 100, Total_Talk_Time_sec: 6000 },
+          { Date: '2026-10-03 00:00:00', Agent_ID: 'cia@co.in', Day_Type: 0.5, Total_Unique_Connected_Calls: 40, Total_Talk_Time_sec: 1200 },
+          { Date: '2026-10-02 00:00:00', Agent_ID: 'cal@co.in', Day_Type: 1, Total_Unique_Connected_Calls: 80, Total_Talk_Time_sec: 3000 },
+        ],
+        preSalesRows: [
+          { Date: '2026-10-02', Agent_ID: 'cps@co.in', Calls: 100, 'TT_Per_Call_(sec)': 120 },
+          { Date: '2026-10-03', Agent_ID: 'cps@co.in', Calls: 50, 'TT_Per_Call_(sec)': '#VALUE!' },
+        ],
+        qualityRows: [{ Agent_Email: 'cia@co.in', Total_Audits: 2, Average_Score: 95 }],
+      },
+    });
+    check('clean sync: ok, 4 active agents (the Inactive one is left out)', r.json?.result === 'ok' && r.json.agents === 4, r.text.slice(0, 400));
+    check('the old sheet tabs are never downloaded for a clean sync', sheet.calls === fetchesBefore);
+    const cw: string[] = r.json?.warnings || [];
+    check('warnings: unknown email, order outside the cycle, repeats, unreadable talk time',
+      cw.some((w) => w.includes('stranger@co.in') && /not in Agents/.test(w)) &&
+      cw.some((w) => /1 order\(s\) credited outside/.test(w)) &&
+      cw.some((w) => /Orders: 1 repeated/.test(w)) &&
+      cw.some((w) => /Visits: 1 repeat/.test(w)) &&
+      cw.some((w) => w.includes('#VALUE!')), JSON.stringify(cw));
+    agents = await readAgents();
+    const cia = agents.get('cia@co.in')!;
+    check('orders: a repeat counts once, Credited_Date moves an order into the cycle, a day-first date and "1,250" work',
+      cia.totals.orders === 3 && cia.totals.sales === 2750 && cia.daily.find((d) => d.date === '2026-10-03')?.orders === 1 && cia.daily.find((d) => d.date === '2026-10-05')?.sales === 1250,
+      JSON.stringify({ totals: cia.totals, daily: cia.daily.map((d) => [d.date, d.orders, d.sales]) }));
+    check('visits: a phone number counts once per agent (the earliest), an Excel date number works',
+      cia.totals.visitsAttributed === 2 && cia.daily.find((d) => d.date === '2026-10-02')?.visitsAttributed === 1 && cia.daily.find((d) => d.date === '2026-10-03')?.visitsAttributed === 1,
+      JSON.stringify(cia.daily.map((d) => [d.date, d.visitsAttributed])));
+    check('Dialer: connects, talk seconds and "Full Day" / 0.5 worked days', cia.totals.connects === 140 && cia.totals.talkSeconds === 7200 && cia.totals.activeDays === 1.5, JSON.stringify(cia.totals));
+    check('Quality tab with the new header names', cia.quality.score === 95 && cia.quality.audits === 2, JSON.stringify(cia.quality));
+    const cal = agents.get('cal@co.in')!;
+    check('an order and a visit under two agents count in full for both', cal.totals.orders === 1 && cal.totals.sales === 1000 && cal.totals.visitsAttributed === 1 && cal.totals.activeDays === 1, JSON.stringify(cal.totals));
+    const cps = agents.get('cps@co.in')!;
+    check('PreSales: calls add up, each day with calls is worked, #VALUE! talk time is skipped',
+      cps.agentType === 'PRE_SALES' && cps.totals.calls === 150 && cps.totals.activeDays === 2 && cps.result.preSales?.talk.value === 120,
+      JSON.stringify({ totals: cps.totals, talk: cps.result.preSales?.talk }));
+    check('an active agent with no data yet gets a record (0 days)', agents.get('cnew@co.in')?.totals.activeDays === 0);
+    r = await call('GET', '/api/auth/session', { token: tok('cnew.login@gmail.com') });
+    check('and can sign in', r.status === 200 && r.json.role === 'agent' && r.json.officialEmail === 'cnew@co.in', r.text);
+    check('Inactive in Agents: no record, and on the excluded list', !agents.has('cgone@co.in') &&
+      ((await adminDb.collection('cycles').doc(CYCLE).collection('data').doc('excludedAgents').get()).data()?.list || []).some((x: any) => x.agentEmail === 'cgone@co.in' && x.active));
+    const rev = (await adminDb.collection('cycles').doc(CYCLE).collection('teamRevenue').doc('Dighe').get()).data();
+    check('team revenue split comes from the Orders Category column',
+      rev.categories.shopify.sales === 1000 && rev.categories.bfan.sales === 500 && rev.categories.posoc.sales === 1250 && rev.totalSales === 2750,
+      JSON.stringify(rev.categories));
+    invalidateRawCache();
+    const raw = await getOrLoadRawRecords(CYCLE);
+    check('raw orders and visits are the counted ones, with the agent\'s own location',
+      raw.orders.length === 4 && raw.visits.length === 3 && raw.orders.find((o) => o.agentEmail === 'cal@co.in')?.location === 'Andheri' &&
+      raw.orders.find((o) => o.orderId === 'O2')?.date === '2026-10-03' && raw.orders.find((o) => o.orderId === 'O6')?.orderTime === '2026-10-05 20:15:00',
+      JSON.stringify(raw.orders.map((o) => [o.orderId, o.agentEmail, o.date, o.location, o.orderTime])));
   } finally {
     setGeminiForTests(null);
     await new Promise<void>((resolve) => server.close(() => resolve()));

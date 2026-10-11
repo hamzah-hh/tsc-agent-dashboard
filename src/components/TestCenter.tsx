@@ -93,6 +93,8 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken, t
     revenueRows?: any[];
     leaderMappingRows?: any[];
     excludedAgentsRows?: any[];
+    // Clean layout workbook (Agents, Orders, Visits, Dialer, PreSales, Quality tabs)
+    cleanTabs?: Record<string, any[]>;
   } | null>(null);
   const [importStatus, setImportStatus] = useState<{
     loading: boolean;
@@ -568,6 +570,22 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken, t
         // so every imported date shifted back by one day and the first cycle day was dropped.
         const workbook = XLSX.read(data, { type: 'array' });
 
+        // Clean layout: an Agents tab. The six tabs are sent as they are; the server builds the daily rows.
+        if (workbook.SheetNames.includes('Agents')) {
+          const tabRows = (name: string) =>
+            workbook.SheetNames.includes(name) ? (XLSX.utils.sheet_to_json(workbook.Sheets[name], { defval: '' }) as any[]) : [];
+          const cleanTabs = {
+            agentsRows: tabRows('Agents'),
+            ordersRows: tabRows('Orders'),
+            visitsRows: tabRows('Visits'),
+            dialerRows: tabRows('Dialer'),
+            preSalesRows: tabRows('PreSales'),
+            qualityRows: tabRows('Quality'),
+          };
+          setFileStats({ mainCount: 0, qualityCount: cleanTabs.qualityRows.length, mainRows: [], qualityRows: [], cleanTabs });
+          return;
+        }
+
         let mainRows: RawMainRow[] = [];
         let qualityRows: RawQualityRow[] = [];
 
@@ -643,7 +661,7 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken, t
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
+        body: JSON.stringify(fileStats.cleanTabs ? { ...fileStats.cleanTabs, source: 'import' } : {
           mainRows: fileStats.mainRows,
           qualityRows: fileStats.qualityRows,
           revenueRows: fileStats.revenueRows,
@@ -1286,7 +1304,7 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken, t
         ) : (
           <div>
             <p className="text-xs text-slate-600 mb-4">
-              Upload an Excel workbook (.xlsx) containing sheets <span className="font-semibold text-slate-800">MainSheet</span>, optional <span className="font-semibold text-slate-800">D-1_QualityAudit_Summary</span>, and optional <span className="font-semibold text-slate-800">Revenue</span>.
+              Upload an Excel workbook (.xlsx) in the clean layout (<span className="font-semibold text-slate-800">Agents, Orders, Visits, Dialer, PreSales, Quality</span>), or the old one with <span className="font-semibold text-slate-800">MainSheet</span>, optional <span className="font-semibold text-slate-800">D-1_QualityAudit_Summary</span>, and optional <span className="font-semibold text-slate-800">Revenue</span>.
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
@@ -1323,7 +1341,12 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken, t
               <div className="mt-4 p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between text-xs text-slate-700">
                 <div>
                   <span className="font-semibold">Selected:</span> {selectedFile.name} (
-                  {fileStats.mainCount} rows in MainSheet, {fileStats.qualityCount} rows in Quality, {fileStats.revenueCount || 0} rows in Revenue)
+                  {fileStats.cleanTabs
+                    ? Object.entries(fileStats.cleanTabs)
+                        .map(([k, rows]) => `${rows.length} ${k.replace('Rows', '')}`)
+                        .join(', ')
+                    : `${fileStats.mainCount} rows in MainSheet, ${fileStats.qualityCount} rows in Quality, ${fileStats.revenueCount || 0} rows in Revenue`}
+                  )
                 </div>
               </div>
             )}

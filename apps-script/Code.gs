@@ -66,6 +66,12 @@ function syncNow() {
     return;
   }
 
+  // Clean layout (an Agents tab): send the six input tabs and stop here
+  if (ss.getSheetByName('Agents')) {
+    sendPayload_(interactive, ss, syncUrl, syncKey, cleanPayload_(ss));
+    return;
+  }
+
   var mainSheet = ss.getSheetByName('MainSheet');
   var qualitySheet = ss.getSheetByName('D-1_QualityAudit_Summary');
 
@@ -241,7 +247,7 @@ function syncNow() {
   }
 
   // 8. Send POST request
-  var payload = JSON.stringify({
+  sendPayload_(interactive, ss, syncUrl, syncKey, {
     mainRows: mainRows,
     qualityRows: qualityRows,
     revenueRows: revenueRows,
@@ -250,6 +256,11 @@ function syncNow() {
     rawVisitRows: rawVisitRows,
     rawRevenueTabRows: rawRevenueTabRows,
   });
+}
+
+/** Posts the rows to the dashboard (gzip-compressed when large) and reports the outcome. */
+function sendPayload_(interactive, ss, syncUrl, syncKey, data) {
+  var payload = JSON.stringify(data);
 
   var endpoint = syncUrl.replace(/\/+$/, '') + '/api/sync';
   var headers = {
@@ -296,6 +307,54 @@ function syncNow() {
   } else {
     report_(interactive, ss, 'Sync Failed', 'Sync failed (' + responseCode + '): ' + (json.error || responseText), true);
   }
+}
+
+/**
+ * The clean layout: Agents, Orders, Visits, Dialer, PreSales and Quality, with no MainSheet.
+ * Every tab is sent as it is; the dashboard builds the daily values from them.
+ * Dates are sent as the sheet shows them (the spreadsheet's own time zone), as 'yyyy-MM-dd HH:mm:ss'.
+ */
+var CLEAN_TABS_ = {
+  agentsRows: 'Agents',
+  ordersRows: 'Orders',
+  visitsRows: 'Visits',
+  dialerRows: 'Dialer',
+  preSalesRows: 'PreSales',
+  qualityRows: 'Quality',
+};
+
+function readTab_(ss, name, timeZone) {
+  var sheet = ss.getSheetByName(name);
+  if (!sheet) return [];
+  var data = sheet.getDataRange().getValues();
+  var rows = [];
+  if (data.length < 2) return rows;
+  var headers = data[0];
+  for (var i = 1; i < data.length; i++) {
+    var obj = {};
+    var filled = false;
+    for (var j = 0; j < headers.length; j++) {
+      var header = String(headers[j]).trim();
+      if (!header) continue;
+      var val = data[i][j];
+      if (val instanceof Date) {
+        val = Utilities.formatDate(val, timeZone, 'yyyy-MM-dd HH:mm:ss');
+      }
+      if (val !== '' && val !== null) filled = true;
+      obj[header] = val;
+    }
+    if (filled) rows.push(obj);
+  }
+  return rows;
+}
+
+function cleanPayload_(ss) {
+  var timeZone = ss.getSpreadsheetTimeZone() || 'Asia/Kolkata';
+  var data = { format: 'clean-v1' };
+  for (var key in CLEAN_TABS_) {
+    data[key] = readTab_(ss, CLEAN_TABS_[key], timeZone);
+  }
+  return data;
 }
 
 function installDailyTrigger() {

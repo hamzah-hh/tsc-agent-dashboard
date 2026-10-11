@@ -7,6 +7,29 @@ This Apps Script integrates the master sales & audit spreadsheet with the **TSC 
 ## Setup Steps
 
 ### 1. Open the Google Spreadsheet
+The script reads one of two layouts. When the sheet has an **`Agents`** tab it uses the clean layout; otherwise the old one (`MainSheet` and friends, below).
+
+#### Clean layout (recommended)
+Six input tabs: paste exports as values, no formulas. Headers are matched ignoring case, spaces and punctuation, so column order does not matter. The dashboard builds every agent's daily numbers from these tabs.
+
+| Tab | One row per | Columns |
+| :--- | :--- | :--- |
+| `Agents` | person | `Agent_Name`, `Agent_Email_Official`, `Agent_Email_Personal`, `Agent_Location`, `Agent_Tier`, `TL_Official_Email`, `TL_Personal_Email`, `Status` |
+| `Orders` | order | `Order ID`, `Order Value`, `Date`, `Credited_Date`, `Order Time`, `Order Phone / Alternate Phone`, `Agent`, `Talk Time Cohort`, `Category`, `Agent Category`, `Channel` |
+| `Visits` | visit | `Visit Date Time`, `Phone`, `Agent_Email`, `Location`, `Talk_Time_(s)`, `source` |
+| `Dialer` | agent per day | `Date`, `Agent_ID`, `Day_Type`, `Total_Unique_Connected_Calls`, `Total_Talk_Time_sec` (other columns are ignored) |
+| `PreSales` | agent per day | `Date`, `Agent_ID`, `Calls`, `TT_Per_Call_(sec)` |
+| `Quality` | agent | `Agent_Email`, `Total_Audits`, `Average_Score` |
+
+Rules:
+- **Only people in `Agents` count.** Rows for any other email are left out (the sync warning lists them). A `Status` other than `Active` excludes the person (this replaces `Excluded_Agents`). Every active agent can sign in, even before their first data.
+- **Orders** count on `Credited_Date`; leave it blank to use the order `Date`. Orders credited outside the cycle are left out. One agent gets an `Order ID` once; an order under two agents counts in full for both. `Category` gives the team revenue split (`Shopify`, `Bought From Another Number`, `Marketplace`, `POS OC`).
+- **Visits:** one agent gets a phone number's visit once (the earliest). A visit under two agents counts for both. Visits from another number can be added later with their real visit date.
+- **Worked days** come from `Dialer` only: `Day_Type` 1 or 0.5 (or `Full Day` / `Half Day`). A Pre Sales day with calls counts as one worked day.
+- **Pre Sales talk time** is `TT_Per_Call_(sec)`, weighted by `Calls` over the cycle. A cell that is not a number (`#VALUE!`) is skipped with a warning.
+- Dates may be real dates or text (`2026-10-01`, `01-10-2026`).
+
+#### Old layout
 Open the Google Sheet containing the `MainSheet` and `D-1_QualityAudit_Summary` tabs.
 
 **MainSheet columns.** The sync finds columns by header name, so column order does not matter. Besides the original columns it reads two Pre Sales columns:

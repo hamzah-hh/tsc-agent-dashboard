@@ -4,6 +4,19 @@ Newest first. How to demo and go live: [docs/GUIDELINE.md](docs/GUIDELINE.md).
 
 ---
 
+## v5, 11 Oct 2026: clean sheet layout
+
+Verified by: type-check, 30 calculation tests, 234 server checks (14 new for this layout), production build, and the sample workbook `Test_Agent.xlsx` converted and compared with the live MainSheet agent by agent. **Not** verified with a real Apps Script run on the new tabs.
+
+1. **New sheet layout with six input tabs** (`Agents`, `Orders`, `Visits`, `Dialer`, `PreSales`, `Quality`) and no MainSheet, Leader_Mapping, Excluded_Agents or DoD_AgentRevenue. The dashboard builds the daily numbers itself (`server-clean-sheet.ts`) and runs them through the unchanged incentive code. The rules are in `apps-script/README.md`. A sheet with no `Agents` tab still syncs the old way.
+2. **`Code.gs`:** with an `Agents` tab it sends the six tabs; dates are sent as the sheet shows them (the spreadsheet's time zone). **Paste the new `apps-script/Code.gs` into the script editor before switching the sheet.**
+3. **Admin > Import .xlsx** accepts a workbook in the new layout.
+4. Raw orders take their location from the agent's `Agents` row (the old `Raw_Revenue` had its columns shifted, so every order was counted under Dighe and the Shopify / Alt / MP / POS split was 0).
+
+Expected changes at switchover, compared with MainSheet: orders bought from another number move to their `Credited_Date`; Pre Sales talk time uses the sheet's per-call figures; Rubiay, Saif and Rakshitha get their 2 Oct back; agents who were missing from MainSheet (Azman and others) appear; talk minutes are exact instead of rounded to 2 decimals.
+
+---
+
 ## v4, 10 Oct 2026: security, sign-in mapping and free-tier limits
 
 Verified by: type-check, 30 calculation tests, 220 server checks, production build, and the Pre Sales calculation run on the live MainSheet rows. **Not** verified against the live Firebase project or a real Apps Script run.

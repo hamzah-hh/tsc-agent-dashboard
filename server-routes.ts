@@ -9,9 +9,11 @@ import {
   invalidateReadCache,
   loadAgents,
   processImport,
+  processCleanSheetImport,
   rebuildLeaderboards,
   saveAiText,
 } from './server-import';
+import { isCleanSheetPayload } from './server-clean-sheet';
 import { buildReadiness } from './server-readiness';
 import { generateAiText, isAiConfigured, runBatchAiGeneration } from './server-ai';
 import { normalizeEmail } from './src/shared/incentive';
@@ -272,6 +274,9 @@ export function createApiApp(options: ApiOptions = {}): express.Express {
         if (!isAuthorized) {
           throw new HttpError(401, 'Unauthorized: Invalid or missing X-Sync-Key header.');
         }
+        if (isCleanSheetPayload(req.body)) {
+          return res.json(await processCleanSheetImport('apps-script', req.body));
+        }
         const { mainRows, qualityRows, revenueRows, leaderMappingRows, excludedAgentsRows, rawVisitRows, rawRevenueTabRows } = req.body || {};
         const result = await processImport('apps-script', mainRows || [], qualityRows || [], {
           revenueRows: revenueRows || [],
@@ -296,6 +301,9 @@ export function createApiApp(options: ApiOptions = {}): express.Express {
       await requireSuperAdmin(req);
       const { mainRows, qualityRows, revenueRows, leaderMappingRows, excludedAgentsRows, rawVisitRows, rawRevenueTabRows, source } = req.body || {};
       const importSource = source === 'test' ? 'test' : 'import';
+      if (isCleanSheetPayload(req.body)) {
+        return res.json(await processCleanSheetImport(importSource, req.body));
+      }
       const result = await processImport(importSource, mainRows || [], qualityRows || [], {
         revenueRows: revenueRows || [],
         leaderMappingRows: leaderMappingRows || [],

@@ -31,6 +31,7 @@ import {
 } from './src/shared/types';
 import { isAiConfigured, runBatchAiGeneration } from './server-ai';
 import { DEFAULT_RAW_SHEET_URL, saveRawPayload, syncRawSheetData } from './server-raw-data';
+import { buildFromCleanSheet, CleanSheetTabs } from './server-clean-sheet';
 
 const REQUIRED_MAIN_HEADERS = [
   'Date',
@@ -668,6 +669,12 @@ export interface ProcessImportOptions {
   excludedAgentsRows?: any[];
   rawVisitRows?: any[];
   rawRevenueTabRows?: any[];
+  /** Clean sheet: Agents decides who is excluded, so an empty list clears the old exclusions. */
+  replaceExcludedAgents?: boolean;
+  /** Clean sheet: the raw orders / visits always come in the payload (never from the old tabs' CSV). */
+  rawFromPayloadOnly?: boolean;
+  /** Warnings found before the import (shown first in the result and the sync log). */
+  extraWarnings?: string[];
 }
 
 export async function processImport(
@@ -676,7 +683,7 @@ export async function processImport(
   qualityRows: RawQualityRow[] = [],
   options: ProcessImportOptions = {}
 ): Promise<ProcessImportResult> {
-  const warnings: string[] = [];
+  const warnings: string[] = [...(options.extraWarnings || [])];
   const revenueRows = options.revenueRows || [];
   let rawData: ProcessImportResult['rawData'];
 
@@ -745,7 +752,7 @@ export async function processImport(
     }
 
     // Merge new excludes if provided
-    if (options.excludedAgentsRows && options.excludedAgentsRows.length > 0) {
+    if (options.excludedAgentsRows && (options.excludedAgentsRows.length > 0 || options.replaceExcludedAgents)) {
       excludedEmails.clear();
       excludedAgentsList = [];
       for (const row of options.excludedAgentsRows) {
@@ -774,6 +781,7 @@ export async function processImport(
 
     // Save raw visits and raw revenue detailed tables
     const hasRawPayload =
+      options.rawFromPayloadOnly ||
       (options.rawVisitRows && options.rawVisitRows.length > 0) ||
       (options.rawRevenueTabRows && options.rawRevenueTabRows.length > 0);
 
@@ -1248,6 +1256,30 @@ export async function processImport(
       error: errorMsg,
     };
   }
+}
+
+/**
+ * A sync or import in the clean layout (Agents, Orders, Visits, Dialer, PreSales, Quality tabs):
+ * the daily rows are built from those tabs (server-clean-sheet.ts) and then imported as before.
+ */
+export async function processCleanSheetImport(
+  source: 'apps-script' | 'import' | 'test',
+  tabs: CleanSheetTabs,
+  options: Pick<ProcessImportOptions, 'aiBudgetMs'> = {}
+): Promise<ProcessImportResult> {
+  const { cycle } = await ensureSeedData();
+  const built = buildFromCleanSheet(tabs, cycle);
+  return processImport(source, built.mainRows, built.qualityRows, {
+    ...options,
+    revenueRows: built.revenueRows,
+    leaderMappingRows: built.leaderMappingRows,
+    excludedAgentsRows: built.excludedAgentsRows,
+    replaceExcludedAgents: true,
+    rawVisitRows: built.rawVisitRows,
+    rawRevenueTabRows: built.rawRevenueTabRows,
+    rawFromPayloadOnly: true,
+    extraWarnings: built.warnings,
+  });
 }
 
 async function logSync(

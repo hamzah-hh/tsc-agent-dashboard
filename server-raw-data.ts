@@ -106,7 +106,8 @@ export function normalizeRawOrders(rawOrders: any[], excludedSet: Set<string>): 
       consideredForOverall: true,
       consideredForAgent: true,
       agentCategory,
-      location: branchOf(agentCategory || pick(o, 'Location'), 'Dighe'),
+      // The clean sheet sends the agent's own Location; the old Raw_Revenue tab only has Agent Category
+      location: branchOf(pick(o, 'Location') || agentCategory, 'Dighe'),
       channel: pick(o, 'Channel'),
     };
   }).filter((o) => !excludedSet.has(normalizeEmail(o.agentEmail)));

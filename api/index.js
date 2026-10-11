@@ -2306,7 +2306,8 @@ function normalizeRawOrders(rawOrders, excludedSet) {
       consideredForOverall: true,
       consideredForAgent: true,
       agentCategory,
-      location: branchOf(agentCategory || pick(o, "Location"), "Dighe"),
+      // The clean sheet sends the agent's own Location; the old Raw_Revenue tab only has Agent Category
+      location: branchOf(pick(o, "Location") || agentCategory, "Dighe"),
       channel: pick(o, "Channel")
     };
   }).filter((o) => !excludedSet.has(normalizeEmail(o.agentEmail)));
@@ -2614,6 +2615,308 @@ async function getOrLoadRawRecordsUncached(cycleId) {
   };
 }
 
+// server-clean-sheet.ts
+function isCleanSheetPayload(body) {
+  return Array.isArray(body?.agentsRows) && body.agentsRows.length > 0;
+}
+function headerKey2(h) {
+  return String(h ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+function cell(row, ...names) {
+  const values = /* @__PURE__ */ new Map();
+  for (const [k, v] of Object.entries(row || {})) values.set(headerKey2(k), v);
+  for (const name of names) {
+    const v = values.get(headerKey2(name));
+    if (v !== void 0 && v !== null && String(v).trim() !== "") return v;
+  }
+  return "";
+}
+function pick2(row, ...names) {
+  return String(cell(row, ...names)).trim();
+}
+function numberOf(text) {
+  if (text === "") return null;
+  const n = Number(text.replace(/,/g, ""));
+  return Number.isFinite(n) ? n : null;
+}
+var pad = (n) => String(n).padStart(2, "0");
+function sheetDateTime(value) {
+  if (value === void 0 || value === null || value === "") return null;
+  let y, mo, d, h = 0, mi = 0, s = 0;
+  if (typeof value === "number") {
+    if (!Number.isFinite(value) || value <= 0) return null;
+    const t = new Date(Date.UTC(1899, 11, 30) + Math.round(value * 86400) * 1e3);
+    [y, mo, d, h, mi, s] = [t.getUTCFullYear(), t.getUTCMonth() + 1, t.getUTCDate(), t.getUTCHours(), t.getUTCMinutes(), t.getUTCSeconds()];
+  } else if (value instanceof Date) {
+    if (isNaN(value.getTime())) return null;
+    const t = new Date(value.getTime() + 330 * 60 * 1e3);
+    [y, mo, d, h, mi, s] = [t.getUTCFullYear(), t.getUTCMonth() + 1, t.getUTCDate(), t.getUTCHours(), t.getUTCMinutes(), t.getUTCSeconds()];
+  } else {
+    const str = String(value).trim();
+    const time = "(?:[ T](\\d{1,2}):(\\d{2})(?::(\\d{2}))?)?";
+    let m = new RegExp("^(\\d{4})-(\\d{1,2})-(\\d{1,2})" + time).exec(str);
+    if (m) {
+      [y, mo, d] = [+m[1], +m[2], +m[3]];
+    } else {
+      m = new RegExp("^(\\d{1,2})[-/.](\\d{1,2})[-/.](\\d{4})" + time).exec(str);
+      if (!m) return null;
+      [d, mo, y] = [+m[1], +m[2], +m[3]];
+    }
+    [h, mi, s] = [+(m[4] || 0), +(m[5] || 0), +(m[6] || 0)];
+  }
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  const day = `${y}-${pad(mo)}-${pad(d)}`;
+  return { day, time: `${day} ${pad(h)}:${pad(mi)}:${pad(s)}` };
+}
+function revenueBucket(category) {
+  const c = category.toLowerCase();
+  if (c.includes("shopify")) return "shopify";
+  if (c.includes("another number") || c.includes("alternate")) return "bfan";
+  if (c.includes("marketplace")) return "bfmp";
+  if (c.includes("pos")) return "posoc";
+  return null;
+}
+function dayValue(text) {
+  const t = text.toLowerCase();
+  if (t.includes("half")) return 0.5;
+  if (t.includes("full")) return 1;
+  return numberOf(text) ?? 0;
+}
+var NO_EMAIL = /* @__PURE__ */ new Set(["", "none", "null", "na", "n/a", "-", "#n/a"]);
+function listOf(items, max = 10) {
+  return items.length <= max ? items.join(", ") : `${items.slice(0, max).join(", ")} and ${items.length - max} more`;
+}
+function buildFromCleanSheet(tabs, cycle) {
+  const warnings = [];
+  const inCycle = (day) => day >= cycle.startDate && day <= cycle.endDate;
+  const empty = [["Orders", tabs.ordersRows], ["Visits", tabs.visitsRows], ["Dialer", tabs.dialerRows], ["PreSales", tabs.preSalesRows], ["Quality", tabs.qualityRows]].filter(([, rows]) => !rows || rows.length === 0).map(([name]) => name);
+  if (empty.length) warnings.push(`Tab(s) missing or empty: ${empty.join(", ")}. Their numbers are 0 for everyone.`);
+  const people = /* @__PURE__ */ new Map();
+  const duplicates = [];
+  for (const row of tabs.agentsRows || []) {
+    const official = normalizeEmail(pick2(row, "Agent_Email_Official", "Agent_Official_Email", "Official_Email", "Agent_Email"));
+    if (!official) continue;
+    if (people.has(official)) {
+      duplicates.push(official);
+      continue;
+    }
+    const personal = normalizeEmail(pick2(row, "Agent_Email_Personal", "Agent_Personal_Email", "Personal_Email", "Agent_Gmail", "Gmail", "Login_Email"));
+    const status = pick2(row, "Status").replace(/\s+/g, " ").trim();
+    people.set(official, {
+      official,
+      name: pick2(row, "Agent_Name", "Name") || official,
+      personal: NO_EMAIL.has(personal) ? "" : personal,
+      location: pick2(row, "Agent_Location", "Location"),
+      tier: pick2(row, "Agent_Tier", "Tier"),
+      tlOfficial: normalizeEmail(pick2(row, "TL_Official_Email", "TL_Email_Official", "Leader_Official_Email")),
+      tlPersonal: normalizeEmail(pick2(row, "TL_Personal_Email", "TL_Email_Personal", "Leader_Personal_Email", "TL_Gmail")),
+      active: status === "" || status.toLowerCase() === "active"
+    });
+  }
+  if (duplicates.length) warnings.push(`Agents: ${duplicates.length} email(s) appear twice; the first row is used: ${listOf(duplicates)}`);
+  const noLogin = [...people.values()].filter((p) => p.active && !p.personal).map((p) => `${p.name} (${p.official})`);
+  if (noLogin.length) warnings.push(`Agents: ${noLogin.length} active agent(s) have no personal email, so they cannot sign in: ${listOf(noLogin)}`);
+  const unknown = /* @__PURE__ */ new Map();
+  const personOf = (email) => {
+    const p = people.get(email);
+    if (!p) {
+      if (email) unknown.set(email, (unknown.get(email) || 0) + 1);
+      return null;
+    }
+    return p.active ? p : null;
+  };
+  const totals = /* @__PURE__ */ new Map();
+  const dayOf = (agent, day) => {
+    if (!totals.has(agent)) totals.set(agent, /* @__PURE__ */ new Map());
+    const byDay = totals.get(agent);
+    if (!byDay.has(day)) {
+      byDay.set(day, { orders: 0, sales: 0, visits: 0, connects: 0, talkSec: 0, day: null, calls: null, ttNum: 0, ttCalls: 0 });
+    }
+    return byDay.get(day);
+  };
+  const bad = [];
+  const rawRevenueTabRows = [];
+  const revenueRows = [];
+  const seenOrders = /* @__PURE__ */ new Set();
+  let repeatOrders = 0;
+  let outOfCycleOrders = 0;
+  (tabs.ordersRows || []).forEach((row, i) => {
+    const p = personOf(normalizeEmail(pick2(row, "Agent", "Agent_Email", "Agent Email", "Agent_ID")));
+    if (!p) return;
+    const orderId = pick2(row, "Order ID", "Order_ID", "OrderID");
+    const credited = sheetDateTime(cell(row, "Credited_Date", "Credited Date") || cell(row, "Date", "Order Date"));
+    const value = numberOf(pick2(row, "Order Value", "Order_Value"));
+    if (!credited || value === null) {
+      bad.push(`Orders row ${i + 2} (${orderId || "no Order ID"}): ${!credited ? "no valid date" : "Order Value is not a number"}`);
+      return;
+    }
+    if (!inCycle(credited.day)) {
+      outOfCycleOrders++;
+      return;
+    }
+    if (orderId) {
+      const key = `${p.official}|${orderId}`;
+      if (seenOrders.has(key)) {
+        repeatOrders++;
+        return;
+      }
+      seenOrders.add(key);
+    }
+    const t = dayOf(p.official, credited.day);
+    t.orders += 1;
+    t.sales += value;
+    const category = pick2(row, "Category");
+    const bucket = revenueBucket(category);
+    if (bucket) revenueRows.push({ Location: p.location, Date: credited.day, Category: bucket, Orders: 1, Sales: value });
+    rawRevenueTabRows.push({
+      "Order ID": orderId,
+      "Order Value": value,
+      Date: credited.day,
+      "Order Time": sheetDateTime(cell(row, "Order Time", "Order_Time"))?.time || "",
+      "Order Phone / Alternate Phone": pick2(row, "Order Phone / Alternate Phone", "Phone/Alternate Phone", "Phone"),
+      Agent: p.official,
+      "Talk Time Cohort": pick2(row, "Talk Time Cohort"),
+      Category: category,
+      "Original Phone / Marketplace Name (for Alt/MP Orders)": pick2(row, "Original Phone / Marketplace Name (for Alt/MP Orders)", "Original Phone/Marketplace Name"),
+      "Agent Category": pick2(row, "Agent Category"),
+      Channel: pick2(row, "Channel"),
+      Location: p.location
+    });
+  });
+  if (repeatOrders) warnings.push(`Orders: ${repeatOrders} repeated row(s) (same Order ID for the same agent) counted once.`);
+  if (outOfCycleOrders) warnings.push(`Orders: ${outOfCycleOrders} order(s) credited outside ${cycle.startDate} to ${cycle.endDate} left out.`);
+  const visits = [];
+  (tabs.visitsRows || []).forEach((row, i) => {
+    const p = personOf(normalizeEmail(pick2(row, "Agent_Email", "Agent Email", "Agent ID", "Agent")));
+    if (!p) return;
+    const when = sheetDateTime(cell(row, "Visit Date Time", "Visit_Date_Time", "Date"));
+    if (!when) {
+      bad.push(`Visits row ${i + 2}: no valid Visit Date Time`);
+      return;
+    }
+    if (!inCycle(when.day)) return;
+    visits.push({ p, when, phone: pick2(row, "Phone", "Phone Number", "Phone_Number"), row });
+  });
+  visits.sort((a, b) => a.when.time.localeCompare(b.when.time));
+  const seenVisits = /* @__PURE__ */ new Set();
+  let repeatVisits = 0;
+  const rawVisitRows = [];
+  for (const v of visits) {
+    if (v.phone) {
+      const key = `${v.p.official}|${v.phone}`;
+      if (seenVisits.has(key)) {
+        repeatVisits++;
+        continue;
+      }
+      seenVisits.add(key);
+    }
+    dayOf(v.p.official, v.when.day).visits += 1;
+    rawVisitRows.push({
+      "Visit Date Time": v.when.time,
+      "Phone Number": v.phone,
+      "Agent Email": v.p.official,
+      Location: pick2(v.row, "Location") || v.p.location,
+      "Talk Time (before Visit)": numberOf(pick2(v.row, "Talk_Time_(s)", "Talk Time (before Visit)", "Talk_Time_sec")) ?? 0,
+      "Visit Source": pick2(v.row, "source", "Visit Source")
+    });
+  }
+  if (repeatVisits) warnings.push(`Visits: ${repeatVisits} repeat visit(s) by a phone number already credited to the same agent counted once.`);
+  const twiceDialer = [];
+  (tabs.dialerRows || []).forEach((row, i) => {
+    const p = personOf(normalizeEmail(pick2(row, "Agent_ID", "Agent_Email", "Agent Email", "Agent")));
+    if (!p) return;
+    const when = sheetDateTime(cell(row, "Date"));
+    if (!when) {
+      bad.push(`Dialer row ${i + 2}: no valid Date`);
+      return;
+    }
+    if (!inCycle(when.day)) return;
+    const t = dayOf(p.official, when.day);
+    if (t.day !== null) twiceDialer.push(`${p.official} ${when.day}`);
+    t.connects += numberOf(pick2(row, "Total_Unique_Connected_Calls", "Unique_Connects")) ?? 0;
+    t.talkSec += numberOf(pick2(row, "Total_Talk_Time_sec", "Talk_Time_sec")) ?? 0;
+    t.day = Math.max(t.day ?? 0, dayValue(pick2(row, "Day_Type", "Day", "Active_Day_Count")));
+  });
+  if (twiceDialer.length) warnings.push(`Dialer: ${twiceDialer.length} agent-day(s) appear twice; their numbers are added up: ${listOf(twiceDialer)}`);
+  const twicePs = [];
+  (tabs.preSalesRows || []).forEach((row, i) => {
+    const p = personOf(normalizeEmail(pick2(row, "Agent_ID", "Agent_Email", "Agent Email", "Agent")));
+    if (!p) return;
+    const when = sheetDateTime(cell(row, "Date"));
+    if (!when) {
+      bad.push(`PreSales row ${i + 2}: no valid Date`);
+      return;
+    }
+    if (!inCycle(when.day)) return;
+    const calls = numberOf(pick2(row, "Calls", "Inbound_Calls")) ?? 0;
+    const ttText = pick2(row, "TT_Per_Call_(sec)", "TT_Per_Call", "Avg_TT_per_day");
+    const tt = numberOf(ttText);
+    if (ttText !== "" && tt === null) bad.push(`PreSales row ${i + 2} (${p.official}, ${when.day}): talk time '${ttText}' is not a number`);
+    const t = dayOf(p.official, when.day);
+    if (t.calls !== null) twicePs.push(`${p.official} ${when.day}`);
+    t.calls = (t.calls ?? 0) + calls;
+    if (tt !== null && tt > 0) {
+      t.ttNum += tt * calls;
+      t.ttCalls += calls;
+    }
+  });
+  if (twicePs.length) warnings.push(`PreSales: ${twicePs.length} agent-day(s) appear twice; calls are added up: ${listOf(twicePs)}`);
+  if (unknown.size) {
+    const names = [...unknown.entries()].map(([e, n]) => `${e} (${n})`);
+    warnings.push(`${unknown.size} email(s) have data but are not in Agents, so their rows are left out: ${listOf(names)}`);
+  }
+  if (bad.length) warnings.push(`${bad.length} row(s) could not be read and were left out: ${listOf(bad)}`);
+  const mainRows = [];
+  for (const p of people.values()) {
+    if (!p.active) continue;
+    const profile = {
+      Agent_Name: p.name,
+      Agent_Email_Official: p.official,
+      Agent_Email_Personal: p.personal,
+      Agent_Location: p.location,
+      Agent_Tier: p.tier,
+      TL_Official_Email: p.tlOfficial,
+      TL_Personal_Email: p.tlPersonal
+    };
+    const byDay = totals.get(p.official);
+    if (!byDay || byDay.size === 0) {
+      mainRows.push({ ...profile, Date: cycle.startDate, Count_of_Orders: "", Sales: "", Unique_Connects: "", Talk_Time_Minutes: "", Store_Visits: "", Day: 0, Inbound_Calls: "", Avg_TT_per_day: "" });
+      continue;
+    }
+    for (const day of [...byDay.keys()].sort()) {
+      const t = byDay.get(day);
+      mainRows.push({
+        ...profile,
+        Date: day,
+        Count_of_Orders: t.orders,
+        Sales: t.sales,
+        Average_Order_Value: t.orders > 0 ? Math.round(t.sales / t.orders) : 0,
+        Unique_Connects: t.connects,
+        Talk_Time_Minutes: t.talkSec / 60,
+        Store_Visits: t.visits,
+        // Blank Day + calls = one Pre Sales worked day; otherwise only a Dialer row makes a worked day
+        Day: t.day ?? (t.calls ? "" : 0),
+        Inbound_Calls: t.calls ?? "",
+        Avg_TT_per_day: t.ttCalls > 0 ? t.ttNum / t.ttCalls : ""
+      });
+    }
+  }
+  const qualityRows = (tabs.qualityRows || []).map((row) => ({
+    Agent_Email_Official: normalizeEmail(pick2(row, "Agent_Email", "Agent_Email_Official", "Email")),
+    Total_Audits: pick2(row, "Total_Audits", "Audits"),
+    Average_Audit_Score: pick2(row, "Average_Score", "Average_Audit_Score", "Score")
+  })).filter((q) => q.Agent_Email_Official);
+  const leaderMappingRows = [...people.values()].filter((p) => p.active).map((p) => ({
+    Agent_Email_Official: p.official,
+    Agent_Email_Personal: p.personal,
+    TL_Official_Email: p.tlOfficial,
+    TL_Personal_Email: p.tlPersonal,
+    Status: "Active"
+  }));
+  const excludedAgentsRows = [...people.values()].filter((p) => !p.active).map((p) => ({ Agent_Email_Official: p.official, Reason: "Status in Agents is not Active", Excluded_Since: "", Active_Exclusion: "TRUE" }));
+  return { mainRows, qualityRows, revenueRows, leaderMappingRows, excludedAgentsRows, rawRevenueTabRows, rawVisitRows, warnings };
+}
+
 // server-import.ts
 var REQUIRED_MAIN_HEADERS = [
   "Date",
@@ -2693,14 +2996,14 @@ function canonicalizeMainHeader(rawHeader) {
   }
   return clean;
 }
-function headerKey2(h) {
+function headerKey3(h) {
   return String(h ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 function pickColumn(row, ...names) {
   const values = /* @__PURE__ */ new Map();
-  for (const [k, v] of Object.entries(row || {})) values.set(headerKey2(k), v);
+  for (const [k, v] of Object.entries(row || {})) values.set(headerKey3(k), v);
   for (const name of names) {
-    const v = values.get(headerKey2(name));
+    const v = values.get(headerKey3(name));
     if (v !== void 0 && v !== null && String(v).trim() !== "") return String(v).trim();
   }
   return "";
@@ -2965,7 +3268,7 @@ async function saveAiText(cycleId, agents) {
   await batch.commit();
 }
 async function processImport(source, mainRows, qualityRows = [], options = {}) {
-  const warnings = [];
+  const warnings = [...options.extraWarnings || []];
   const revenueRows = options.revenueRows || [];
   let rawData;
   try {
@@ -3020,7 +3323,7 @@ async function processImport(source, mainRows, qualityRows = [], options = {}) {
     } catch (e) {
       console.warn("Failed to load existing excluded agents:", e);
     }
-    if (options.excludedAgentsRows && options.excludedAgentsRows.length > 0) {
+    if (options.excludedAgentsRows && (options.excludedAgentsRows.length > 0 || options.replaceExcludedAgents)) {
       excludedEmails.clear();
       excludedAgentsList = [];
       for (const row of options.excludedAgentsRows) {
@@ -3044,7 +3347,7 @@ async function processImport(source, mainRows, qualityRows = [], options = {}) {
         updatedAt: (/* @__PURE__ */ new Date()).toISOString()
       });
     }
-    const hasRawPayload = options.rawVisitRows && options.rawVisitRows.length > 0 || options.rawRevenueTabRows && options.rawRevenueTabRows.length > 0;
+    const hasRawPayload = options.rawFromPayloadOnly || options.rawVisitRows && options.rawVisitRows.length > 0 || options.rawRevenueTabRows && options.rawRevenueTabRows.length > 0;
     try {
       if (hasRawPayload) {
         rawData = await saveRawPayload(cycleId, options.rawRevenueTabRows || [], options.rawVisitRows || [], excludedEmails);
@@ -3403,6 +3706,21 @@ async function processImport(source, mainRows, qualityRows = [], options = {}) {
       error: errorMsg
     };
   }
+}
+async function processCleanSheetImport(source, tabs, options = {}) {
+  const { cycle } = await ensureSeedData();
+  const built = buildFromCleanSheet(tabs, cycle);
+  return processImport(source, built.mainRows, built.qualityRows, {
+    ...options,
+    revenueRows: built.revenueRows,
+    leaderMappingRows: built.leaderMappingRows,
+    excludedAgentsRows: built.excludedAgentsRows,
+    replaceExcludedAgents: true,
+    rawVisitRows: built.rawVisitRows,
+    rawRevenueTabRows: built.rawRevenueTabRows,
+    rawFromPayloadOnly: true,
+    extraWarnings: built.warnings
+  });
 }
 async function logSync(source, result, rows, agents, lastDataDate, warnings, error) {
   try {
@@ -3912,6 +4230,9 @@ function createApiApp(options = {}) {
         if (!isAuthorized) {
           throw new HttpError(401, "Unauthorized: Invalid or missing X-Sync-Key header.");
         }
+        if (isCleanSheetPayload(req.body)) {
+          return res.json(await processCleanSheetImport("apps-script", req.body));
+        }
         const { mainRows, qualityRows, revenueRows, leaderMappingRows, excludedAgentsRows, rawVisitRows, rawRevenueTabRows } = req.body || {};
         const result = await processImport("apps-script", mainRows || [], qualityRows || [], {
           revenueRows: revenueRows || [],
@@ -3933,6 +4254,9 @@ function createApiApp(options = {}) {
       await requireSuperAdmin(req);
       const { mainRows, qualityRows, revenueRows, leaderMappingRows, excludedAgentsRows, rawVisitRows, rawRevenueTabRows, source } = req.body || {};
       const importSource = source === "test" ? "test" : "import";
+      if (isCleanSheetPayload(req.body)) {
+        return res.json(await processCleanSheetImport(importSource, req.body));
+      }
       const result = await processImport(importSource, mainRows || [], qualityRows || [], {
         revenueRows: revenueRows || [],
         leaderMappingRows: leaderMappingRows || [],
