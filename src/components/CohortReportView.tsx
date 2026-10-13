@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronUp, Download, Lock, Plus, RefreshCw, X } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { toBlob } from 'html-to-image';
+import { ChevronDown, ChevronUp, Copy, Download, Lock, Plus, RefreshCw, X } from 'lucide-react';
 import { formatNumberINR } from '../shared/incentive';
 import {
   COHORT_CATEGORIES,
@@ -55,6 +56,10 @@ export function CohortReportView({ getIdToken }: CohortReportViewProps) {
   const [error, setError] = useState<string | null>(null);
   // periods[0] is the base period; the rest are comparisons
   const [periods, setPeriods] = useState<CohortPeriod[]>([]);
+  // A clicked cohort is highlighted in every table; clicking it again clears it
+  const [picked, setPicked] = useState<string | null>(null);
+  const [copyState, setCopyState] = useState<'idle' | 'busy' | 'copied' | 'saved' | 'error'>('idle');
+  const tablesRef = useRef<HTMLDivElement>(null);
   // The title and filters can be folded away so the tables alone can be screenshotted (remembered per browser)
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try {
@@ -160,10 +165,61 @@ export function CohortReportView({ getIdToken }: CohortReportViewProps) {
     URL.revokeObjectURL(url);
   };
 
+  // All tables as one PNG on the clipboard; where the browser cannot copy images, the PNG is downloaded
+  const copyPng = async () => {
+    if (!tablesRef.current) return;
+    setCopyState('busy');
+    try {
+      const dark = document.documentElement.classList.contains('dark');
+      const node = tablesRef.current;
+      // The full table width, also the part that would need side scrolling on a small screen
+      const width = Math.max(node.scrollWidth, ...Array.from(node.querySelectorAll('table')).map((t) => t.scrollWidth + 8));
+      const blob = await toBlob(node, {
+        pixelRatio: 2,
+        width,
+        style: { width: `${width}px` },
+        backgroundColor: dark ? '#020617' : '#f8fafc',
+      });
+      if (!blob) throw new Error('The image could not be made.');
+      try {
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        setCopyState('copied');
+      } catch {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `talk_time_cohort_${base.from}_to_${base.to}.png`;
+        a.click();
+        URL.revokeObjectURL(url);
+        setCopyState('saved');
+      }
+    } catch (err) {
+      console.error('Copy as PNG failed:', err);
+      setCopyState('error');
+    }
+    setTimeout(() => setCopyState('idle'), 2500);
+  };
+  const copyLabel =
+    copyState === 'busy'
+      ? 'Copying...'
+      : copyState === 'copied'
+      ? 'Copied!'
+      : copyState === 'saved'
+      ? 'Saved as PNG'
+      : copyState === 'error'
+      ? 'Copy failed'
+      : 'Copy as PNG';
+  const copyButton = (
+    <button onClick={copyPng} disabled={copyState === 'busy'} className={`${smallBtn} inline-flex items-center gap-1 disabled:opacity-60`} title="Copy all tables as one image">
+      <Copy className="w-3.5 h-3.5" /> {copyLabel}
+    </button>
+  );
+
   return (
     <div className="space-y-6">
       {collapsed ? (
-        <div className="flex justify-end -mb-3">
+        <div className="flex justify-end items-center gap-2 -mb-3">
+          {copyButton}
           <button
             onClick={() => toggleCollapsed(false)}
             className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-semibold text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
@@ -185,6 +241,7 @@ export function CohortReportView({ getIdToken }: CohortReportViewProps) {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            {copyButton}
             <button onClick={() => toggleCollapsed(true)} className={`${smallBtn} inline-flex items-center gap-1`} title="Hide the title and filters (for a clean screenshot)">
               <ChevronUp className="w-3.5 h-3.5" /> Hide
             </button>
@@ -259,28 +316,57 @@ export function CohortReportView({ getIdToken }: CohortReportViewProps) {
       </div>
       )}
 
-      <CohortTable title={`Base: ${periodText(base)}`} table={tables[0]} comparisons={comparisons.map((c) => ({ label: c.tag ? `${c.tag} (${periodText(c.period)})` : periodText(c.period), table: c.table }))} />
-      {comparisons.map((c, i) => (
-        <CohortTable key={i} title={`Comparison ${i + 1}: ${periodText(c.period)}${c.tag ? ` · ${c.tag}` : ''}`} table={c.table} comparisons={[]} />
-      ))}
+      {/* Every table has the same columns at the same widths, so they line up; each comparison table
+          carries the base period's growth against that period, next to that period's numbers. */}
+      <div ref={tablesRef} className="space-y-4 p-1">
+        <CohortTable title={`Base: ${periodText(base)}`} table={tables[0]} growthLabel={null} picked={picked} onPick={setPicked} />
+        {comparisons.map((c, i) => (
+          <CohortTable
+            key={i}
+            title={`Comparison ${i + 1}: ${periodText(c.period)}${c.tag ? ` · ${c.tag}` : ''}`}
+            table={c.table}
+            base={tables[0]}
+            growthLabel={`${periodText(base)} vs ${periodText(c.period)}`}
+            picked={picked}
+            onPick={setPicked}
+          />
+        ))}
+      </div>
     </div>
   );
 }
 
-function CohortTable({
+export function CohortTable({
   title,
   table,
-  comparisons,
+  base,
+  growthLabel,
+  picked,
+  onPick,
 }: {
   title: string;
   table: CohortTableRow[];
-  comparisons: Array<{ label: string; table: CohortTableRow[] }>;
+  /** The base period's table: growth = base vs this table. Absent for the base table itself. */
+  base?: CohortTableRow[];
+  growthLabel: string | null;
+  picked: string | null;
+  onPick: (cohort: string | null) => void;
 }) {
   return (
     <section className={`${card} overflow-hidden`}>
-      <h3 className="px-5 py-3 text-sm font-bold text-slate-950 dark:text-white border-b border-slate-200 dark:border-slate-800">{title}</h3>
+      <h3 className="px-4 py-2.5 text-sm font-bold text-slate-950 dark:text-white border-b border-slate-200 dark:border-slate-800">{title}</h3>
       <div className="overflow-x-auto">
-        <table className="w-full text-xs border-collapse">
+        {/* Fixed layout and the same columns in every table: the columns line up from table to table */}
+        <table className="w-full text-xs border-collapse table-fixed min-w-[1100px]">
+          <colgroup>
+            <col style={{ width: '10.5rem' }} />
+            {Array.from({ length: COHORT_CATEGORIES.length * 2 + 3 }, (_, i) => (
+              <col key={i} />
+            ))}
+            <col style={{ width: '4.75rem' }} />
+            <col style={{ width: '4.75rem' }} />
+            <col style={{ width: '4.75rem' }} />
+          </colgroup>
           <thead>
             <tr className="bg-slate-50 dark:bg-slate-800/60">
               <th className={`${th} text-left`}>Talk Time Cohort</th>
@@ -293,42 +379,59 @@ function CohortTable({
               <th className={th}>Total Orders</th>
               <th className={th}>Total Revenue</th>
               <th className={th}>AOV</th>
-              {comparisons.map((c, i) => (
-                <th key={i} colSpan={3} className={`${th} text-center border-l-2 border-slate-300 dark:border-slate-600`}>
-                  vs {c.label}
-                  <div className="flex justify-around font-normal normal-case tracking-normal text-slate-500 mt-0.5">
-                    <span>Orders</span>
-                    <span>Revenue</span>
-                    <span>AOV</span>
-                  </div>
-                </th>
-              ))}
+              <th colSpan={3} className={`${th} text-center border-l-2 border-slate-300 dark:border-slate-600`}>
+                {growthLabel ? (
+                  <>
+                    Growth {growthLabel}
+                    <div className="grid grid-cols-3 font-normal normal-case tracking-normal text-slate-500 mt-0.5">
+                      <span>Orders</span>
+                      <span>Revenue</span>
+                      <span>AOV</span>
+                    </div>
+                  </>
+                ) : (
+                  <span className="font-normal normal-case tracking-normal text-slate-400">Base period</span>
+                )}
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-            {table.map((r) => (
-              <tr key={r.cohort} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                <td className="py-1.5 px-2 text-[11px] font-semibold text-slate-900 dark:text-white whitespace-nowrap">{r.cohort}</td>
-                {COHORT_CATEGORIES.map((c) => (
-                  <React.Fragment key={c.key}>
-                    <td className={td}>{formatNumberINR(r.byCategory[c.key].orders)}</td>
-                    <td className={td}>{money(r.byCategory[c.key].revenue)}</td>
-                  </React.Fragment>
-                ))}
-                <td className={`${td} font-bold text-slate-900 dark:text-white`}>{formatNumberINR(r.orders)}</td>
-                <td className={`${td} font-bold text-slate-900 dark:text-white`}>{money(r.revenue)}</td>
-                <td className={td}>{money(r.aov)}</td>
-                {comparisons.map((c, ci) => {
-                  const o = c.table.find((x) => x.cohort === r.cohort);
-                  const g = [growth(r.orders, o?.orders ?? null), growth(r.revenue, o?.revenue ?? null), growth(r.aov, o?.aov ?? null)];
-                  return g.map((v, i) => (
-                    <td key={`${ci}-${i}`} className={`${td} ${growthClass(v)} ${i === 0 ? 'border-l-2 border-slate-300 dark:border-slate-600' : ''}`}>
-                      {pct(v)}
-                    </td>
-                  ));
-                })}
-              </tr>
-            ))}
+            {table.map((r) => {
+              const on = picked === r.cohort;
+              const b = base?.find((x) => x.cohort === r.cohort);
+              // Growth of the base period over this (comparison) period
+              const g = b ? [growth(b.orders, r.orders), growth(b.revenue, r.revenue), growth(b.aov, r.aov)] : null;
+              return (
+                <tr
+                  key={r.cohort}
+                  onClick={() => onPick(on ? null : r.cohort)}
+                  title="Click to highlight this cohort in every table"
+                  className={`cursor-pointer ${on ? 'bg-amber-100 dark:bg-amber-900/40 outline outline-2 outline-amber-400 -outline-offset-2' : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'}`}
+                >
+                  <td className={`py-1.5 px-2 text-[11px] font-semibold whitespace-nowrap truncate ${on ? 'text-amber-900 dark:text-amber-200' : 'text-slate-900 dark:text-white'}`}>
+                    {r.cohort}
+                  </td>
+                  {COHORT_CATEGORIES.map((c) => (
+                    <React.Fragment key={c.key}>
+                      <td className={td}>{formatNumberINR(r.byCategory[c.key].orders)}</td>
+                      <td className={td}>{money(r.byCategory[c.key].revenue)}</td>
+                    </React.Fragment>
+                  ))}
+                  <td className={`${td} font-bold text-slate-900 dark:text-white`}>{formatNumberINR(r.orders)}</td>
+                  <td className={`${td} font-bold text-slate-900 dark:text-white`}>{money(r.revenue)}</td>
+                  <td className={td}>{money(r.aov)}</td>
+                  {g ? (
+                    g.map((v, i) => (
+                      <td key={i} className={`${td} ${growthClass(v)} ${i === 0 ? 'border-l-2 border-slate-300 dark:border-slate-600' : ''}`}>
+                        {pct(v)}
+                      </td>
+                    ))
+                  ) : (
+                    <td colSpan={3} className="border-l-2 border-slate-300 dark:border-slate-600" />
+                  )}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
