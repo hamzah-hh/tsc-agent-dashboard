@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Download, Lock, Plus, RefreshCw, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Download, Lock, Plus, RefreshCw, X } from 'lucide-react';
 import { formatNumberINR } from '../shared/incentive';
 import {
   COHORT_CATEGORIES,
@@ -55,6 +55,22 @@ export function CohortReportView({ getIdToken }: CohortReportViewProps) {
   const [error, setError] = useState<string | null>(null);
   // periods[0] is the base period; the rest are comparisons
   const [periods, setPeriods] = useState<CohortPeriod[]>([]);
+  // The title and filters can be folded away so the tables alone can be screenshotted (remembered per browser)
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('cohortReport.collapsed') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const toggleCollapsed = (next: boolean) => {
+    setCollapsed(next);
+    try {
+      localStorage.setItem('cohortReport.collapsed', next ? '1' : '0');
+    } catch {
+      // private window: the choice is simply not remembered
+    }
+  };
 
   const load = async () => {
     setLoading(true);
@@ -146,6 +162,17 @@ export function CohortReportView({ getIdToken }: CohortReportViewProps) {
 
   return (
     <div className="space-y-6">
+      {collapsed ? (
+        <div className="flex justify-end -mb-3">
+          <button
+            onClick={() => toggleCollapsed(false)}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-semibold text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+            title="Show the report title and date filters"
+          >
+            <ChevronDown className="w-3 h-3" /> Filters
+          </button>
+        </div>
+      ) : (
       <div className={`${card} p-5 space-y-4`}>
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
           <div>
@@ -158,6 +185,9 @@ export function CohortReportView({ getIdToken }: CohortReportViewProps) {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <button onClick={() => toggleCollapsed(true)} className={`${smallBtn} inline-flex items-center gap-1`} title="Hide the title and filters (for a clean screenshot)">
+              <ChevronUp className="w-3.5 h-3.5" /> Hide
+            </button>
             <button onClick={() => setPeriods(defaults())} className={smallBtn} title="This month to date vs the same days last month">
               Reset: MTD vs SDLM
             </button>
@@ -227,6 +257,7 @@ export function CohortReportView({ getIdToken }: CohortReportViewProps) {
           </button>
         </div>
       </div>
+      )}
 
       <CohortTable title={`Base: ${periodText(base)}`} table={tables[0]} comparisons={comparisons.map((c) => ({ label: c.tag ? `${c.tag} (${periodText(c.period)})` : periodText(c.period), table: c.table }))} />
       {comparisons.map((c, i) => (
