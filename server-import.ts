@@ -32,6 +32,7 @@ import {
 import { isAiConfigured, runBatchAiGeneration } from './server-ai';
 import { DEFAULT_RAW_SHEET_URL, saveRawPayload, syncRawSheetData } from './server-raw-data';
 import { buildFromCleanSheet, CleanSheetTabs } from './server-clean-sheet';
+import { saveTeamOps } from './server-team-ops';
 
 const REQUIRED_MAIN_HEADERS = [
   'Date',
@@ -1267,9 +1268,10 @@ export async function processCleanSheetImport(
   tabs: CleanSheetTabs,
   options: Pick<ProcessImportOptions, 'aiBudgetMs'> = {}
 ): Promise<ProcessImportResult> {
-  const { cycle } = await ensureSeedData();
+  const { appConfig, cycle } = await ensureSeedData();
+  const activeCycleId = appConfig.activeCycleId;
   const built = buildFromCleanSheet(tabs, cycle);
-  return processImport(source, built.mainRows, built.qualityRows, {
+  const result = await processImport(source, built.mainRows, built.qualityRows, {
     ...options,
     revenueRows: built.revenueRows,
     leaderMappingRows: built.leaderMappingRows,
@@ -1280,6 +1282,15 @@ export async function processCleanSheetImport(
     rawFromPayloadOnly: true,
     extraWarnings: built.warnings,
   });
+  // Breaks and Targets feed only the Overall Team Summary page, so a failure there is a warning
+  if (result.result === 'ok') {
+    try {
+      await saveTeamOps(activeCycleId, built.breaks, built.targets);
+    } catch (err: any) {
+      result.warnings.push(`Breaks / Targets not saved: ${err?.message || String(err)}`);
+    }
+  }
+  return result;
 }
 
 async function logSync(

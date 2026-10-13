@@ -862,6 +862,16 @@ export async function runApiTests() {
           { Date: '2026-10-03', Agent_ID: 'cps@co.in', Calls: 50, 'TT_Per_Call_(sec)': '#VALUE!' },
         ],
         qualityRows: [{ Agent_Email: 'cia@co.in', Total_Audits: 2, Average_Score: 95 }],
+        breaksRows: [
+          { Date: '2026-10-02', Agent_ID: 'cia@co.in', Agent_Location: 'Dighe', Day_Type: 'Full Day', Bio_or_Misc: 886, First_Break: 887, Lunch_Break: '1,784', Last_Break: 954, Total_Break: '4,511', After_Call_Work: 708, Idle_Time: '9,577', Staffed_Duration: '35,024', 'Idle_Time_+_After_Call_Work': '10,285', 'Idle_Time+ACW_%': '29.40%', '': '' },
+          { Date: '2026-10-02', Agent_ID: 'cia@co.in', Bio_or_Misc: 1 },
+          { Date: '2026-10-03', Agent_ID: 'cal@co.in', Day_Type: 'Half Day', Bio_or_Misc: 1500, Staffed_Duration: 16000, 'Idle_Time_+_After_Call_Work': 6000 },
+          { Date: '2026-10-03', Agent_ID: 'stranger@co.in', Bio_or_Misc: 100 },
+        ],
+        targetsRows: [
+          { Manager_Email: 'tl@x.in', 'Total Sales in Diwali Period': '24,134,538.84', 'Total Target in Diwali Period': '205,500,000.00', 'Total Achievement': '11.7%' },
+          { Manager_Email: 'boss@x.in', 'Total Sales in Diwali Period': '53,924,871.00', 'Total Target in Diwali Period': '567,500,000.00' },
+        ],
       },
     });
     check('clean sync: ok, 4 active agents (the Inactive one is left out)', r.json?.result === 'ok' && r.json.agents === 4, r.text.slice(0, 400));
@@ -912,6 +922,25 @@ export async function runApiTests() {
     check('Visit Activity: newest visit first', rv.map((v) => v.visitDateTime).join() === [...rv.map((v) => v.visitDateTime)].sort().reverse().join(), JSON.stringify(rv.map((v) => v.visitDateTime)));
     r = await call('GET', '/api/raw-data?search=clean%20cal', { token: tok(L.admin) });
     check('search finds visits and orders by caller name', r.json?.visits?.length === 1 && r.json?.orders?.length === 1, r.text.slice(0, 200));
+
+    // ------------------------------------------------------------------
+    section('Overall Team Summary and Targets');
+    r = await call('GET', '/api/team-summary', { token: tok(L.ho) });
+    check('an agent cannot open it', r.status === 403, r.text);
+    r = await call('GET', '/api/team-summary', { token: tok(L.admin) });
+    const ts = r.json;
+    const ciaBreak = ts?.breaks?.find((b: any) => b.agentEmail === 'cia@co.in');
+    check('breaks: seconds read ("1,784"), one row per agent-day, people not in Agents left out',
+      r.status === 200 && ts.breaks.length === 2 && ciaBreak?.lunch === 1784 && ciaBreak?.total === 4511 && ciaBreak?.idleAcw === 10285 && ciaBreak?.staffed === 35024 &&
+      ts.breaks.find((b: any) => b.agentEmail === 'cal@co.in')?.dayType === 0.5, JSON.stringify(ts?.breaks));
+    check('productivity: worked Dialer days only, with connects and talk seconds',
+      ts.productivity.filter((d: any) => d.agentEmail === 'cia@co.in').map((d: any) => `${d.date}:${d.day}:${d.connects}:${d.talkSeconds}`).join() === '2026-10-02:1:100:6000,2026-10-03:0.5:40:1200' &&
+      !ts.productivity.some((d: any) => d.agentEmail === 'cps@co.in'), JSON.stringify(ts.productivity));
+    check('a Manager / Super Admin sees every target row', ts.targets.length === 2 && ts.targets[0].target === 205500000 && ts.targets[0].sales === 24134538.84, JSON.stringify(ts.targets));
+    r = await call('GET', '/api/team-summary', { token: tok(L.tlDighe) });
+    check('a TL sees only their own target row and their own agents',
+      r.status === 200 && r.json.targets.length === 1 && r.json.targets[0].managerEmail === 'tl@x.in' &&
+      r.json.agents.every((a: any) => a.tlOfficialEmail === 'tl@x.in' || a.officialEmail === 'riya@co.in'), r.text.slice(0, 400));
 
     // ------------------------------------------------------------------
     section('monitor endpoint: read-only, its own key');

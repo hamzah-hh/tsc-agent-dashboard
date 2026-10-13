@@ -5,6 +5,7 @@ import { SyncStatus } from './SyncStatus';
 import { AgentView } from './AgentView';
 import { RawDataView } from './RawDataView';
 import { DayOnDayView } from './DayOnDayView';
+import { TeamSummaryView } from './TeamSummaryView';
 
 // The Admin console (with the Excel reader) is only for the Super Admin, so it is loaded on demand and
 // never slows down the phones of agents, TLs and managers.
@@ -19,6 +20,7 @@ import {
   MapPin,
   FileSpreadsheet,
   CalendarDays,
+  Gauge,
 } from 'lucide-react';
 
 interface StaffPortalProps {
@@ -31,7 +33,7 @@ interface StaffPortalProps {
   getIdToken: () => Promise<string>;
 }
 
-type StaffTab = 'team' | 'leaderboards' | 'dod' | 'rawData' | 'syncStatus' | 'admin';
+type StaffTab = 'team' | 'summary' | 'leaderboards' | 'dod' | 'rawData' | 'syncStatus' | 'admin';
 
 export function StaffPortal({
   userRole,
@@ -108,6 +110,18 @@ export function StaffPortal({
           >
             <Users className="w-3.5 h-3.5" />
             Team
+          </button>
+
+          <button
+            onClick={() => setActiveTab('summary')}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+              activeTab === 'summary'
+                ? 'bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-400 shadow-xs font-bold'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Gauge className="w-3.5 h-3.5" />
+            Team Summary & Targets
           </button>
 
           <button
@@ -188,6 +202,8 @@ export function StaffPortal({
           onOpenAgent={(officialEmail) => setSelectedAgentEmail(officialEmail)}
         />
       )}
+
+      {activeTab === 'summary' && <TeamSummaryView userRole={userRole} getIdToken={getIdToken} />}
 
       {activeTab === 'leaderboards' && (
         <Leaderboards

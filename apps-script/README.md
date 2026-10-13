@@ -20,6 +20,10 @@ Six input tabs: paste exports as values, no formulas. Headers are matched ignori
 | `Dialer` | agent per day | `Date`, `Agent_ID`, `Day_Type`, `Total_Unique_Connected_Calls`, `Total_Talk_Time_sec` (other columns are ignored) |
 | `PreSales` | agent per day | `Date`, `Agent_ID`, `Calls`, `TT_Per_Call_(sec)` |
 | `Quality` | agent | `Agent_Email`, `Total_Audits`, `Average_Score` |
+| `Breaks` | agent per day | `Date`, `Agent_ID`, `Day_Type`, `Bio_or_Misc`, `First_Break`, `Lunch_Break`, `Last_Break`, `Total_Break`, `After_Call_Work`, `Idle_Time`, `Staffed_Duration`, `Idle_Time_+_After_Call_Work` (seconds; `Idle_Time+ACW_%` is recalculated) |
+| `Targets` | TL / Manager | `Manager_Email`, `Total Sales in Diwali Period`, `Total Target in Diwali Period` |
+
+`Breaks` and `Targets` feed only the **Team Summary & Targets** page (TLs and Managers). Other tabs (`TL_AM_Ref`, ...) are ignored.
 
 Rules:
 - **Only people in `Agents` count.** Rows for any other email are left out (the sync warning lists them). A `Status` other than `Active` excludes the person (this replaces `Excluded_Agents`). Every active agent can sign in, even before their first data.

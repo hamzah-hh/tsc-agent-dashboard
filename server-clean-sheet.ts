@@ -26,6 +26,7 @@
  * - Every active agent gets a login, even with no data yet (a roster row, Day 0).
  */
 import { normalizeEmail } from './src/shared/incentive';
+import { BreakDay, TargetRow } from './src/shared/teamOps';
 
 export interface CleanSheetTabs {
   agentsRows?: any[];
@@ -34,6 +35,8 @@ export interface CleanSheetTabs {
   dialerRows?: any[];
   preSalesRows?: any[];
   qualityRows?: any[];
+  breaksRows?: any[];
+  targetsRows?: any[];
 }
 
 export interface CleanSheetResult {
@@ -44,6 +47,9 @@ export interface CleanSheetResult {
   excludedAgentsRows: any[];
   rawRevenueTabRows: any[];
   rawVisitRows: any[];
+  /** null when the sync did not send the tab (an older Apps Script): keep what is saved. */
+  breaks: BreakDay[] | null;
+  targets: TargetRow[] | null;
   warnings: string[];
 }
 
@@ -369,6 +375,63 @@ export function buildFromCleanSheet(tabs: CleanSheetTabs, cycle: { startDate: st
   });
   if (twicePs.length) warnings.push(`PreSales: ${twicePs.length} agent-day(s) appear twice; calls are added up: ${listOf(twicePs)}`);
 
+  // ---- Breaks (seconds per agent per day; only people in Agents)
+  let breaks: BreakDay[] | null = null;
+  if (tabs.breaksRows) {
+    breaks = [];
+    const twiceBreaks: string[] = [];
+    const seenBreaks = new Set<string>();
+    tabs.breaksRows.forEach((row, i) => {
+      const p = personOf(normalizeEmail(pick(row, 'Agent_ID', 'Agent_Email', 'Agent Email', 'Agent')));
+      if (!p) return;
+      const when = sheetDateTime(cell(row, 'Date'));
+      if (!when) {
+        bad.push(`Breaks row ${i + 2}: no valid Date`);
+        return;
+      }
+      if (!inCycle(when.day)) return;
+      const k = `${p.official}|${when.day}`;
+      if (seenBreaks.has(k)) {
+        twiceBreaks.push(`${p.official} ${when.day}`);
+        return;
+      }
+      seenBreaks.add(k);
+      const sec = (...names: string[]) => numberOf(pick(row, ...names)) ?? 0;
+      breaks!.push({
+        date: when.day,
+        agentEmail: p.official,
+        dayType: dayValue(pick(row, 'Day_Type', 'Day')) || 1,
+        bio: sec('Bio_or_Misc'),
+        first: sec('First_Break'),
+        lunch: sec('Lunch_Break'),
+        last: sec('Last_Break'),
+        total: sec('Total_Break'),
+        acw: sec('After_Call_Work'),
+        idle: sec('Idle_Time'),
+        staffed: sec('Staffed_Duration'),
+        idleAcw: sec('Idle_Time_+_After_Call_Work', 'Idle_Time_After_Call_Work'),
+      });
+    });
+    if (twiceBreaks.length) warnings.push(`Breaks: ${twiceBreaks.length} agent-day(s) appear twice; the first row is used: ${listOf(twiceBreaks)}`);
+  }
+
+  // ---- Targets (one row per TL / Manager)
+  let targets: TargetRow[] | null = null;
+  if (tabs.targetsRows) {
+    targets = [];
+    for (const row of tabs.targetsRows) {
+      const managerEmail = normalizeEmail(pick(row, 'Manager_Email', 'TL_Email', 'Email'));
+      if (!managerEmail) continue;
+      const target = numberOf(pick(row, 'Total Target in Diwali Period', 'Total_Target', 'Target'));
+      const sales = numberOf(pick(row, 'Total Sales in Diwali Period', 'Total_Sales', 'Sales'));
+      if (target === null) {
+        bad.push(`Targets: ${managerEmail} has no readable target`);
+        continue;
+      }
+      targets.push({ managerEmail, target, sales: sales ?? 0 });
+    }
+  }
+
   if (unknown.size) {
     const names = [...unknown.entries()].map(([e, n]) => `${e} (${n})`);
     warnings.push(`${unknown.size} email(s) have data but are not in Agents, so their rows are left out: ${listOf(names)}`);
@@ -435,5 +498,5 @@ export function buildFromCleanSheet(tabs: CleanSheetTabs, cycle: { startDate: st
     .filter((p) => !p.active)
     .map((p) => ({ Agent_Email_Official: p.official, Reason: 'Status in Agents is not Active', Excluded_Since: '', Active_Exclusion: 'TRUE' }));
 
-  return { mainRows, qualityRows, revenueRows, leaderMappingRows, excludedAgentsRows, rawRevenueTabRows, rawVisitRows, warnings };
+  return { mainRows, qualityRows, revenueRows, leaderMappingRows, excludedAgentsRows, rawRevenueTabRows, rawVisitRows, breaks, targets, warnings };
 }

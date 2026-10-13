@@ -14,6 +14,8 @@ import {
   saveAiText,
 } from './server-import';
 import { isCleanSheetPayload } from './server-clean-sheet';
+import { loadTeamOps } from './server-team-ops';
+import { TeamSummaryResponse } from './src/shared/teamOps';
 import { buildReadiness } from './server-readiness';
 import { generateAiText, isAiConfigured, runBatchAiGeneration } from './server-ai';
 import { normalizeEmail } from './src/shared/incentive';
@@ -290,6 +292,57 @@ export function createApiApp(options: ApiOptions = {}): express.Express {
         if (err instanceof HttpError) throw err;
         return res.json({ result: 'error', error: err?.message || String(err) });
       }
+    })
+  );
+
+  // ------------------------------------------------------------------ Overall Team Summary and Targets
+
+  /**
+   * Productivity (Dialer days from the agent records), Breaks and Targets for the staff page.
+   * A TL gets only their own team's agents and their own Targets row; Managers and the Super Admin get all.
+   */
+  api.get(
+    '/api/team-summary',
+    route(async (req, res) => {
+      const user = await authenticate(req);
+      const { appConfig, cycle } = await ensureSeedData();
+      const identity = await identify(user.email, appConfig);
+      if (!identity || identity.role === 'agent') throw new HttpError(403, 'Staff only.');
+      const cycleId = appConfig.activeCycleId;
+
+      const excluded = await getExcludedEmails(cycleId);
+      let agents = (await loadAgents(cycleId)).filter((a) => !excluded.has(normalizeEmail(a.officialEmail)));
+      if (!appConfig.testMode && identity.role !== 'superAdmin') {
+        agents = agents.filter((a) => !a.isTest && !isTestAgentIdentifier(a.officialEmail, a.name));
+      }
+      if (identity.role === 'tl') agents = agents.filter((a) => isAgentOfTl(a, user.email, identity.access));
+      const inScope = new Set(agents.map((a) => normalizeEmail(a.officialEmail)));
+
+      const ops = await loadTeamOps(cycleId);
+      const myEmails = new Set([normalizeEmail(user.email), normalizeEmail(identity.access?.officialEmail)].filter(Boolean));
+
+      const body: TeamSummaryResponse = {
+        cycle: { id: cycleId, name: cycle.name, startDate: cycle.startDate, endDate: cycle.endDate },
+        agents: agents.map((a) => ({
+          officialEmail: a.officialEmail,
+          name: a.name,
+          location: a.location,
+          agentType: a.agentType,
+          tlOfficialEmail: a.tlOfficialEmail || '',
+        })),
+        // Worked Dialer days only (a day with orders but no Dialer row has day 0); Pre Sales has no Dialer
+        productivity: agents
+          .filter((a) => a.agentType !== 'PRE_SALES')
+          .flatMap((a) =>
+            (a.daily || [])
+              .filter((d) => d.day > 0)
+              .map((d) => ({ agentEmail: a.officialEmail, date: d.date, day: d.day, connects: d.connects, talkSeconds: d.talkSeconds }))
+          ),
+        breaks: ops.breaks.filter((b) => inScope.has(normalizeEmail(b.agentEmail))),
+        targets: identity.role === 'tl' ? ops.targets.filter((t) => myEmails.has(normalizeEmail(t.managerEmail))) : ops.targets,
+        breaksUpdatedAt: ops.updatedAt,
+      };
+      return res.json(body);
     })
   );
 

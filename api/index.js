@@ -2870,6 +2870,59 @@ function buildFromCleanSheet(tabs, cycle) {
     }
   });
   if (twicePs.length) warnings.push(`PreSales: ${twicePs.length} agent-day(s) appear twice; calls are added up: ${listOf(twicePs)}`);
+  let breaks = null;
+  if (tabs.breaksRows) {
+    breaks = [];
+    const twiceBreaks = [];
+    const seenBreaks = /* @__PURE__ */ new Set();
+    tabs.breaksRows.forEach((row, i) => {
+      const p = personOf(normalizeEmail(pick2(row, "Agent_ID", "Agent_Email", "Agent Email", "Agent")));
+      if (!p) return;
+      const when = sheetDateTime(cell(row, "Date"));
+      if (!when) {
+        bad.push(`Breaks row ${i + 2}: no valid Date`);
+        return;
+      }
+      if (!inCycle(when.day)) return;
+      const k = `${p.official}|${when.day}`;
+      if (seenBreaks.has(k)) {
+        twiceBreaks.push(`${p.official} ${when.day}`);
+        return;
+      }
+      seenBreaks.add(k);
+      const sec = (...names) => numberOf(pick2(row, ...names)) ?? 0;
+      breaks.push({
+        date: when.day,
+        agentEmail: p.official,
+        dayType: dayValue(pick2(row, "Day_Type", "Day")) || 1,
+        bio: sec("Bio_or_Misc"),
+        first: sec("First_Break"),
+        lunch: sec("Lunch_Break"),
+        last: sec("Last_Break"),
+        total: sec("Total_Break"),
+        acw: sec("After_Call_Work"),
+        idle: sec("Idle_Time"),
+        staffed: sec("Staffed_Duration"),
+        idleAcw: sec("Idle_Time_+_After_Call_Work", "Idle_Time_After_Call_Work")
+      });
+    });
+    if (twiceBreaks.length) warnings.push(`Breaks: ${twiceBreaks.length} agent-day(s) appear twice; the first row is used: ${listOf(twiceBreaks)}`);
+  }
+  let targets = null;
+  if (tabs.targetsRows) {
+    targets = [];
+    for (const row of tabs.targetsRows) {
+      const managerEmail = normalizeEmail(pick2(row, "Manager_Email", "TL_Email", "Email"));
+      if (!managerEmail) continue;
+      const target = numberOf(pick2(row, "Total Target in Diwali Period", "Total_Target", "Target"));
+      const sales = numberOf(pick2(row, "Total Sales in Diwali Period", "Total_Sales", "Sales"));
+      if (target === null) {
+        bad.push(`Targets: ${managerEmail} has no readable target`);
+        continue;
+      }
+      targets.push({ managerEmail, target, sales: sales ?? 0 });
+    }
+  }
   if (unknown.size) {
     const names = [...unknown.entries()].map(([e, n]) => `${e} (${n})`);
     warnings.push(`${unknown.size} email(s) have data but are not in Agents, so their rows are left out: ${listOf(names)}`);
@@ -2923,7 +2976,60 @@ function buildFromCleanSheet(tabs, cycle) {
     Status: "Active"
   }));
   const excludedAgentsRows = [...people.values()].filter((p) => !p.active).map((p) => ({ Agent_Email_Official: p.official, Reason: "Status in Agents is not Active", Excluded_Since: "", Active_Exclusion: "TRUE" }));
-  return { mainRows, qualityRows, revenueRows, leaderMappingRows, excludedAgentsRows, rawRevenueTabRows, rawVisitRows, warnings };
+  return { mainRows, qualityRows, revenueRows, leaderMappingRows, excludedAgentsRows, rawRevenueTabRows, rawVisitRows, breaks, targets, warnings };
+}
+
+// server-team-ops.ts
+var CHUNK = 1e3;
+var TTL_MS = 3e4;
+var cache = /* @__PURE__ */ new Map();
+var headRef = (cycleId) => adminDb.collection("cycles").doc(cycleId).collection("data").doc("teamOps");
+var chunksCol = (cycleId) => headRef(cycleId).collection("chunks");
+function invalidateTeamOpsCache() {
+  cache.clear();
+}
+async function saveTeamOps(cycleId, breaks, targets) {
+  if (breaks === null && targets === null) return;
+  const prev = await headRef(cycleId).get();
+  const prevData = prev.exists ? prev.data() : {};
+  const batch = adminDb.batch();
+  const head = {
+    breakChunks: prevData.breakChunks || 0,
+    breaksCount: prevData.breaksCount || 0,
+    targets: prevData.targets || [],
+    updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+  };
+  if (breaks !== null) {
+    const parts = [];
+    for (let i = 0; i < breaks.length; i += CHUNK) parts.push(breaks.slice(i, i + CHUNK));
+    parts.forEach((rows, i) => batch.set(chunksCol(cycleId).doc(`breaks-${i}`), { rows }));
+    for (let i = parts.length; i < (prevData.breakChunks || 0); i++) batch.delete(chunksCol(cycleId).doc(`breaks-${i}`));
+    head.breakChunks = parts.length;
+    head.breaksCount = breaks.length;
+  }
+  if (targets !== null) head.targets = targets;
+  batch.set(headRef(cycleId), head);
+  await batch.commit();
+  invalidateTeamOpsCache();
+}
+async function loadTeamOps(cycleId) {
+  const hit = cache.get(cycleId);
+  if (hit && Date.now() - hit.at < TTL_MS) return structuredClone(hit.value);
+  const snap = await headRef(cycleId).get();
+  let value = { breaks: [], targets: [], updatedAt: null };
+  if (snap.exists) {
+    const d = snap.data();
+    const parts = await Promise.all(
+      Array.from({ length: d.breakChunks || 0 }, (_, i) => chunksCol(cycleId).doc(`breaks-${i}`).get())
+    );
+    value = {
+      breaks: parts.flatMap((p) => p.exists ? p.data()?.rows || [] : []),
+      targets: d.targets || [],
+      updatedAt: d.updatedAt || null
+    };
+  }
+  cache.set(cycleId, { at: Date.now(), value: structuredClone(value) });
+  return value;
 }
 
 // server-import.ts
@@ -3717,9 +3823,10 @@ async function processImport(source, mainRows, qualityRows = [], options = {}) {
   }
 }
 async function processCleanSheetImport(source, tabs, options = {}) {
-  const { cycle } = await ensureSeedData();
+  const { appConfig, cycle } = await ensureSeedData();
+  const activeCycleId = appConfig.activeCycleId;
   const built = buildFromCleanSheet(tabs, cycle);
-  return processImport(source, built.mainRows, built.qualityRows, {
+  const result = await processImport(source, built.mainRows, built.qualityRows, {
     ...options,
     revenueRows: built.revenueRows,
     leaderMappingRows: built.leaderMappingRows,
@@ -3730,6 +3837,14 @@ async function processCleanSheetImport(source, tabs, options = {}) {
     rawFromPayloadOnly: true,
     extraWarnings: built.warnings
   });
+  if (result.result === "ok") {
+    try {
+      await saveTeamOps(activeCycleId, built.breaks, built.targets);
+    } catch (err) {
+      result.warnings.push(`Breaks / Targets not saved: ${err?.message || String(err)}`);
+    }
+  }
+  return result;
 }
 async function logSync(source, result, rows, agents, lastDataDate, warnings, error) {
   try {
@@ -4255,6 +4370,43 @@ function createApiApp(options = {}) {
         if (err instanceof HttpError) throw err;
         return res.json({ result: "error", error: err?.message || String(err) });
       }
+    })
+  );
+  api.get(
+    "/api/team-summary",
+    route(async (req, res) => {
+      const user = await authenticate(req);
+      const { appConfig, cycle } = await ensureSeedData();
+      const identity = await identify(user.email, appConfig);
+      if (!identity || identity.role === "agent") throw new HttpError(403, "Staff only.");
+      const cycleId = appConfig.activeCycleId;
+      const excluded = await getExcludedEmails(cycleId);
+      let agents = (await loadAgents(cycleId)).filter((a) => !excluded.has(normalizeEmail(a.officialEmail)));
+      if (!appConfig.testMode && identity.role !== "superAdmin") {
+        agents = agents.filter((a) => !a.isTest && !isTestAgentIdentifier(a.officialEmail, a.name));
+      }
+      if (identity.role === "tl") agents = agents.filter((a) => isAgentOfTl(a, user.email, identity.access));
+      const inScope = new Set(agents.map((a) => normalizeEmail(a.officialEmail)));
+      const ops = await loadTeamOps(cycleId);
+      const myEmails = new Set([normalizeEmail(user.email), normalizeEmail(identity.access?.officialEmail)].filter(Boolean));
+      const body = {
+        cycle: { id: cycleId, name: cycle.name, startDate: cycle.startDate, endDate: cycle.endDate },
+        agents: agents.map((a) => ({
+          officialEmail: a.officialEmail,
+          name: a.name,
+          location: a.location,
+          agentType: a.agentType,
+          tlOfficialEmail: a.tlOfficialEmail || ""
+        })),
+        // Worked Dialer days only (a day with orders but no Dialer row has day 0); Pre Sales has no Dialer
+        productivity: agents.filter((a) => a.agentType !== "PRE_SALES").flatMap(
+          (a) => (a.daily || []).filter((d) => d.day > 0).map((d) => ({ agentEmail: a.officialEmail, date: d.date, day: d.day, connects: d.connects, talkSeconds: d.talkSeconds }))
+        ),
+        breaks: ops.breaks.filter((b) => inScope.has(normalizeEmail(b.agentEmail))),
+        targets: identity.role === "tl" ? ops.targets.filter((t) => myEmails.has(normalizeEmail(t.managerEmail))) : ops.targets,
+        breaksUpdatedAt: ops.updatedAt
+      };
+      return res.json(body);
     })
   );
   api.get(

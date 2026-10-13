@@ -321,6 +321,8 @@ var CLEAN_TABS_ = {
   dialerRows: 'Dialer',
   preSalesRows: 'PreSales',
   qualityRows: 'Quality',
+  breaksRows: 'Breaks',
+  targetsRows: 'Targets',
 };
 
 function readTab_(ss, name, timeZone) {
