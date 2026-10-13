@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { toBlob } from 'html-to-image';
+import { elementToPng } from '../utils/captureImage';
 import { ChevronDown, ChevronUp, Copy, Download, Lock, Plus, RefreshCw, X } from 'lucide-react';
 import { formatNumberINR } from '../shared/incentive';
 import {
@@ -170,28 +170,8 @@ export function CohortReportView({ getIdToken }: CohortReportViewProps) {
     setCopyState('busy');
     try {
       const dark = document.documentElement.classList.contains('dark');
-      const node = tablesRef.current;
-      // While the picture is taken, the scroll boxes show their full width (no scrollbars in the image)
-      const boxes = Array.from(node.querySelectorAll<HTMLElement>('[data-scroll-box]'));
-      const width = Math.max(node.scrollWidth, ...Array.from(node.querySelectorAll('table')).map((t) => t.scrollWidth + 8));
-      // html-to-image copies each element's on-screen size, so the container itself is widened for the
-      // moment of the capture (a brief flash on a small screen), then put back
-      boxes.forEach((b) => (b.style.overflow = 'visible'));
-      const oldWidth = node.style.width;
-      node.style.width = `${width}px`;
-      let blob: Blob | null = null;
-      try {
-        blob = await toBlob(node, {
-          pixelRatio: 2,
-          width,
-          style: { width: `${width}px` },
-          backgroundColor: dark ? '#020617' : '#f8fafc',
-        });
-      } finally {
-        boxes.forEach((b) => (b.style.overflow = ''));
-        node.style.width = oldWidth;
-      }
-      if (!blob) throw new Error('The image could not be made.');
+      // An off-screen full-width copy without scroll boxes: no scrollbars, nothing cut off
+      const blob = await elementToPng(tablesRef.current, { background: dark ? '#020617' : '#f8fafc' });
       try {
         await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
         setCopyState('copied');
