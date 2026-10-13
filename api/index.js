@@ -3086,6 +3086,11 @@ async function saveCohortRows(rows) {
   batch.set(headRef2(), { chunks: parts.length, count: rows.length, updatedAt: (/* @__PURE__ */ new Date()).toISOString() });
   await batch.commit();
 }
+async function cohortReportStatus() {
+  const head = await headRef2().get();
+  const d = head.exists ? head.data() : {};
+  return { count: d.count || 0, updatedAt: d.updatedAt || null };
+}
 async function loadCohortRows() {
   const head = await headRef2().get();
   if (!head.exists) return { rows: [], updatedAt: null };
@@ -3242,6 +3247,7 @@ function normalizeRawQualityRow(row) {
 var PRE_SALES_HEADERS = ["Inbound_Calls", "Avg_TT_per_day"];
 var DEFAULT_SUPER_ADMIN = "agha.h489@gmail.com";
 var DEFAULT_AI_SYNC_BUDGET_MS = 35e3;
+var AI_START_DEADLINE_MS = 32e3;
 function envEmails(name) {
   loadEnv();
   return (process.env[name] || "").split(/[,;\s]+/).map(normalizeEmail).filter(Boolean);
@@ -3445,6 +3451,7 @@ async function saveAiText(cycleId, agents) {
   await batch.commit();
 }
 async function processImport(source, mainRows, qualityRows = [], options = {}) {
+  const startedAt = options.startedAt ?? Date.now();
   const warnings = [...options.extraWarnings || []];
   const revenueRows = options.revenueRows || [];
   let rawData;
@@ -3842,8 +3849,15 @@ async function processImport(source, mainRows, qualityRows = [], options = {}) {
           );
         } else {
           try {
-            const budget = options.aiBudgetMs ?? (Number(process.env.AI_SYNC_BUDGET_MS) || DEFAULT_AI_SYNC_BUDGET_MS);
+            const configured = options.aiBudgetMs ?? (Number(process.env.AI_SYNC_BUDGET_MS) || DEFAULT_AI_SYNC_BUDGET_MS);
+            const left = (Number(process.env.AI_START_DEADLINE_MS) || AI_START_DEADLINE_MS) - (Date.now() - startedAt);
+            const budget = Math.max(0, Math.min(configured, left));
             const run = await runBatchAiGeneration(need, cycle, appConfig, { budgetMs: budget });
+            if (run.pendingCount > 0) {
+              warnings.push(
+                `AI text: ${run.pendingCount} agent(s) left for the next sync (time limit). The Admin tab's "Generate AI text" can finish them now.`
+              );
+            }
             ai.ok = run.okCount;
             ai.failed = run.failedCount;
             ai.pending = run.pendingCount;
@@ -3885,11 +3899,28 @@ async function processImport(source, mainRows, qualityRows = [], options = {}) {
   }
 }
 async function processCleanSheetImport(source, tabs, options = {}) {
+  const startedAt = Date.now();
   const { appConfig, cycle } = await ensureSeedData();
   const activeCycleId = appConfig.activeCycleId;
   const built = buildFromCleanSheet(tabs, cycle);
-  const result = await processImport(source, built.mainRows, built.qualityRows, {
+  const early = [];
+  try {
+    await saveTeamOps(activeCycleId, built.breaks, built.targets);
+  } catch (err) {
+    early.push(`Breaks / Targets not saved: ${err?.message || String(err)}`);
+  }
+  if (tabs.cohortRows) {
+    try {
+      const parsed = parseCohortRows(tabs.cohortRows);
+      await saveCohortRows(parsed.rows);
+      if (parsed.skipped) early.push(`Anirban_Ref: ${parsed.skipped} row(s) could not be read and were left out.`);
+    } catch (err) {
+      early.push(`Anirban_Ref not saved: ${err?.message || String(err)}`);
+    }
+  }
+  return processImport(source, built.mainRows, built.qualityRows, {
     ...options,
+    startedAt,
     revenueRows: built.revenueRows,
     leaderMappingRows: built.leaderMappingRows,
     excludedAgentsRows: built.excludedAgentsRows,
@@ -3897,25 +3928,8 @@ async function processCleanSheetImport(source, tabs, options = {}) {
     rawVisitRows: built.rawVisitRows,
     rawRevenueTabRows: built.rawRevenueTabRows,
     rawFromPayloadOnly: true,
-    extraWarnings: built.warnings
+    extraWarnings: [...built.warnings, ...early]
   });
-  if (result.result === "ok") {
-    try {
-      await saveTeamOps(activeCycleId, built.breaks, built.targets);
-    } catch (err) {
-      result.warnings.push(`Breaks / Targets not saved: ${err?.message || String(err)}`);
-    }
-    if (tabs.cohortRows) {
-      try {
-        const parsed = parseCohortRows(tabs.cohortRows);
-        await saveCohortRows(parsed.rows);
-        if (parsed.skipped) result.warnings.push(`Anirban_Ref: ${parsed.skipped} row(s) could not be read and were left out.`);
-      } catch (err) {
-        result.warnings.push(`Anirban_Ref not saved: ${err?.message || String(err)}`);
-      }
-    }
-  }
-  return result;
 }
 async function logSync(source, result, rows, agents, lastDataDate, warnings, error) {
   try {
@@ -4500,10 +4514,12 @@ function createApiApp(options = {}) {
       }
       const { appConfig, cycle } = await ensureSeedData();
       const cycleId = appConfig.activeCycleId;
-      const [agents, raw, logsSnap] = await Promise.all([
+      const [agents, raw, logsSnap, ops, cohort] = await Promise.all([
         loadAgents(cycleId),
         getOrLoadRawRecords(cycleId),
-        adminDb.collection("syncLogs").orderBy("time", "desc").limit(10).get()
+        adminDb.collection("syncLogs").orderBy("time", "desc").limit(10).get(),
+        loadTeamOps(cycleId),
+        cohortReportStatus()
       ]);
       return res.json({
         generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
@@ -4527,6 +4543,9 @@ function createApiApp(options = {}) {
           updatedAt: raw.updatedAt || null,
           syncStatus: raw.syncStatus || null
         },
+        // Counts only: the cohort report itself is private
+        teamOps: { breaksCount: ops.breaks.length, targetsCount: ops.targets.length, updatedAt: ops.updatedAt },
+        cohortReport: cohort,
         syncLogs: logsSnap.docs.map((d) => {
           const l = d.data();
           return { time: l.time, source: l.source, result: l.result, rows: l.rows, agents: l.agents, lastDataDate: l.lastDataDate, warnings: l.warnings || [], error: l.error || null };

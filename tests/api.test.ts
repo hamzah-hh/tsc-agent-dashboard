@@ -334,6 +334,12 @@ export async function runApiTests() {
     // 3 calls run at once and take 120 ms; the budget (100 ms) is over when the first three finish
     const partial = await processImport('apps-script', many as any, [], { aiBudgetMs: 100 });
     check('with a short budget only some agents get text (the rest are pending, none failed)', partial.result === 'ok' && partial.aiOk === 3 && partial.aiPending === 3 && partial.aiFailed === 0, JSON.stringify(partial));
+    // Vercel stops a sync at 60 s: a sync that is already 40 s old starts no AI call at all
+    const changed5 = realRows().map((x) => ({ ...x, Sales: 333333 }));
+    const late = await processImport('apps-script', changed5 as any, realQuality as any, { startedAt: Date.now() - 40000 });
+    check('a sync already near the time limit: data saved, no AI call, a warning says what is pending',
+      late.result === 'ok' && late.aiOk === 0 && late.aiPending === 2 && late.warnings.some((w) => /left for the next sync \(time limit\)/.test(w)) &&
+      (await readAgents()).get('riya@co.in')!.totals.sales === 333333 * 5, JSON.stringify(late));
 
     setGeminiForTests(null);
     delete process.env.GEMINI_API_KEY;

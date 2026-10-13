@@ -71,6 +71,13 @@ export async function saveCohortRows(rows: CohortRow[]): Promise<void> {
   await batch.commit();
 }
 
+/** How much is saved (a count and a time, never the report's numbers), for the monitor. */
+export async function cohortReportStatus(): Promise<{ count: number; updatedAt: string | null }> {
+  const head = await headRef().get();
+  const d: any = head.exists ? head.data() : {};
+  return { count: d.count || 0, updatedAt: d.updatedAt || null };
+}
+
 export async function loadCohortRows(): Promise<{ rows: CohortRow[]; updatedAt: string | null }> {
   const head = await headRef().get();
   if (!head.exists) return { rows: [], updatedAt: null };

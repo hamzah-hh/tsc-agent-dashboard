@@ -376,6 +376,8 @@ const DEFAULT_SUPER_ADMIN = 'agha.h489@gmail.com';
 
 /** No new AI call is started after this long in a sync, so Gemini can never hold up a sync. */
 const DEFAULT_AI_SYNC_BUDGET_MS = 35000;
+/** Latest moment, from the start of a sync request, to start an AI call (see the AI step in processImport). */
+const AI_START_DEADLINE_MS = 32000;
 
 function envEmails(name: string): string[] {
   loadEnv();
@@ -677,6 +679,8 @@ export interface ProcessImportOptions {
   rawFromPayloadOnly?: boolean;
   /** Warnings found before the import (shown first in the result and the sync log). */
   extraWarnings?: string[];
+  /** When the request started (Date.now()), so the AI step fits in what is left of the time limit. */
+  startedAt?: number;
 }
 
 export async function processImport(
@@ -685,6 +689,7 @@ export async function processImport(
   qualityRows: RawQualityRow[] = [],
   options: ProcessImportOptions = {}
 ): Promise<ProcessImportResult> {
+  const startedAt = options.startedAt ?? Date.now();
   const warnings: string[] = [...(options.extraWarnings || [])];
   const revenueRows = options.revenueRows || [];
   let rawData: ProcessImportResult['rawData'];
@@ -1211,9 +1216,18 @@ export async function processImport(
           );
         } else {
           try {
-            const budget =
+            // Vercel stops the function at 60 s. A Gemini call can take 20 s (10 s timeout + 1 retry), so no
+            // new call starts later than AI_START_DEADLINE_MS after the request began; the rest stays pending.
+            const configured =
               options.aiBudgetMs ?? (Number(process.env.AI_SYNC_BUDGET_MS) || DEFAULT_AI_SYNC_BUDGET_MS);
+            const left = (Number(process.env.AI_START_DEADLINE_MS) || AI_START_DEADLINE_MS) - (Date.now() - startedAt);
+            const budget = Math.max(0, Math.min(configured, left));
             const run = await runBatchAiGeneration(need, cycle, appConfig, { budgetMs: budget });
+            if (run.pendingCount > 0) {
+              warnings.push(
+                `AI text: ${run.pendingCount} agent(s) left for the next sync (time limit). The Admin tab's "Generate AI text" can finish them now.`
+              );
+            }
             ai.ok = run.okCount;
             ai.failed = run.failedCount;
             ai.pending = run.pendingCount;
@@ -1269,11 +1283,33 @@ export async function processCleanSheetImport(
   tabs: CleanSheetTabs,
   options: Pick<ProcessImportOptions, 'aiBudgetMs'> = {}
 ): Promise<ProcessImportResult> {
+  const startedAt = Date.now();
   const { appConfig, cycle } = await ensureSeedData();
   const activeCycleId = appConfig.activeCycleId;
   const built = buildFromCleanSheet(tabs, cycle);
-  const result = await processImport(source, built.mainRows, built.qualityRows, {
+
+  // Breaks, Targets and the private cohort report are saved first: they are independent of the incentive
+  // data, and saving them after the AI step could run past Vercel's time limit and lose them.
+  const early: string[] = [];
+  try {
+    await saveTeamOps(activeCycleId, built.breaks, built.targets);
+  } catch (err: any) {
+    early.push(`Breaks / Targets not saved: ${err?.message || String(err)}`);
+  }
+  if (tabs.cohortRows) {
+    // Warnings about the private cohort report give counts only, never its numbers
+    try {
+      const parsed = parseCohortRows(tabs.cohortRows);
+      await saveCohortRows(parsed.rows);
+      if (parsed.skipped) early.push(`Anirban_Ref: ${parsed.skipped} row(s) could not be read and were left out.`);
+    } catch (err: any) {
+      early.push(`Anirban_Ref not saved: ${err?.message || String(err)}`);
+    }
+  }
+
+  return processImport(source, built.mainRows, built.qualityRows, {
     ...options,
+    startedAt,
     revenueRows: built.revenueRows,
     leaderMappingRows: built.leaderMappingRows,
     excludedAgentsRows: built.excludedAgentsRows,
@@ -1281,27 +1317,8 @@ export async function processCleanSheetImport(
     rawVisitRows: built.rawVisitRows,
     rawRevenueTabRows: built.rawRevenueTabRows,
     rawFromPayloadOnly: true,
-    extraWarnings: built.warnings,
+    extraWarnings: [...built.warnings, ...early],
   });
-  // Breaks and Targets feed only the Overall Team Summary page, so a failure there is a warning
-  if (result.result === 'ok') {
-    try {
-      await saveTeamOps(activeCycleId, built.breaks, built.targets);
-    } catch (err: any) {
-      result.warnings.push(`Breaks / Targets not saved: ${err?.message || String(err)}`);
-    }
-    // The private cohort report: warnings give counts only, never its numbers
-    if (tabs.cohortRows) {
-      try {
-        const parsed = parseCohortRows(tabs.cohortRows);
-        await saveCohortRows(parsed.rows);
-        if (parsed.skipped) result.warnings.push(`Anirban_Ref: ${parsed.skipped} row(s) could not be read and were left out.`);
-      } catch (err: any) {
-        result.warnings.push(`Anirban_Ref not saved: ${err?.message || String(err)}`);
-      }
-    }
-  }
-  return result;
 }
 
 async function logSync(

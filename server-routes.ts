@@ -15,7 +15,7 @@ import {
 } from './server-import';
 import { isCleanSheetPayload } from './server-clean-sheet';
 import { loadTeamOps } from './server-team-ops';
-import { canSeeCohortReport, loadCohortRows } from './server-cohort-report';
+import { canSeeCohortReport, cohortReportStatus, loadCohortRows } from './server-cohort-report';
 import { TeamSummaryResponse } from './src/shared/teamOps';
 import { buildReadiness } from './server-readiness';
 import { generateAiText, isAiConfigured, runBatchAiGeneration } from './server-ai';
@@ -377,10 +377,12 @@ export function createApiApp(options: ApiOptions = {}): express.Express {
       }
       const { appConfig, cycle } = await ensureSeedData();
       const cycleId = appConfig.activeCycleId;
-      const [agents, raw, logsSnap] = await Promise.all([
+      const [agents, raw, logsSnap, ops, cohort] = await Promise.all([
         loadAgents(cycleId),
         getOrLoadRawRecords(cycleId),
         adminDb.collection('syncLogs').orderBy('time', 'desc').limit(10).get(),
+        loadTeamOps(cycleId),
+        cohortReportStatus(),
       ]);
       return res.json({
         generatedAt: new Date().toISOString(),
@@ -404,6 +406,9 @@ export function createApiApp(options: ApiOptions = {}): express.Express {
           updatedAt: raw.updatedAt || null,
           syncStatus: raw.syncStatus || null,
         },
+        // Counts only: the cohort report itself is private
+        teamOps: { breaksCount: ops.breaks.length, targetsCount: ops.targets.length, updatedAt: ops.updatedAt },
+        cohortReport: cohort,
         syncLogs: logsSnap.docs.map((d: any) => {
           const l = d.data();
           return { time: l.time, source: l.source, result: l.result, rows: l.rows, agents: l.agents, lastDataDate: l.lastDataDate, warnings: l.warnings || [], error: l.error || null };
