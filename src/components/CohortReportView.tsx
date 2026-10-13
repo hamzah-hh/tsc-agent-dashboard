@@ -19,8 +19,7 @@ interface CohortReportViewProps {
 }
 
 const card = 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs';
-// Headers wrap and digits are proportional (tabular-nums) so a base table with comparisons fits the page
-const th = 'py-2 px-1.5 text-[10px] uppercase tracking-wide leading-tight text-slate-600 dark:text-slate-300 font-bold text-right align-bottom';
+// Proportional digits (tabular-nums) keep the numbers narrow
 const td = 'py-1.5 px-1.5 text-right tabular-nums whitespace-nowrap text-[11px]';
 const input = 'border border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-lg px-2 py-1.5 text-xs';
 const smallBtn = 'px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-[11px] font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800';
@@ -172,14 +171,26 @@ export function CohortReportView({ getIdToken }: CohortReportViewProps) {
     try {
       const dark = document.documentElement.classList.contains('dark');
       const node = tablesRef.current;
-      // The full table width, also the part that would need side scrolling on a small screen
+      // While the picture is taken, the scroll boxes show their full width (no scrollbars in the image)
+      const boxes = Array.from(node.querySelectorAll<HTMLElement>('[data-scroll-box]'));
       const width = Math.max(node.scrollWidth, ...Array.from(node.querySelectorAll('table')).map((t) => t.scrollWidth + 8));
-      const blob = await toBlob(node, {
-        pixelRatio: 2,
-        width,
-        style: { width: `${width}px` },
-        backgroundColor: dark ? '#020617' : '#f8fafc',
-      });
+      // html-to-image copies each element's on-screen size, so the container itself is widened for the
+      // moment of the capture (a brief flash on a small screen), then put back
+      boxes.forEach((b) => (b.style.overflow = 'visible'));
+      const oldWidth = node.style.width;
+      node.style.width = `${width}px`;
+      let blob: Blob | null = null;
+      try {
+        blob = await toBlob(node, {
+          pixelRatio: 2,
+          width,
+          style: { width: `${width}px` },
+          backgroundColor: dark ? '#020617' : '#f8fafc',
+        });
+      } finally {
+        boxes.forEach((b) => (b.style.overflow = ''));
+        node.style.width = oldWidth;
+      }
       if (!blob) throw new Error('The image could not be made.');
       try {
         await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
@@ -316,17 +327,24 @@ export function CohortReportView({ getIdToken }: CohortReportViewProps) {
       </div>
       )}
 
-      {/* Every table has the same columns at the same widths, so they line up; each comparison table
-          carries the base period's growth against that period, next to that period's numbers. */}
+      {/* Every table has the same columns at the same widths, so they line up. The base table carries the
+          growth against each comparison; the comparison tables keep those column slots empty. */}
       <div ref={tablesRef} className="space-y-4 p-1">
-        <CohortTable title={`Base: ${periodText(base)}`} table={tables[0]} growthLabel={null} picked={picked} onPick={setPicked} />
+        <CohortTable
+          title={`Base: ${periodText(base)}`}
+          table={tables[0]}
+          growth={comparisons.map((c) => ({ label: c.tag ? `${c.tag} · ${periodText(c.period)}` : periodText(c.period), table: c.table }))}
+          slots={comparisons.length}
+          picked={picked}
+          onPick={setPicked}
+        />
         {comparisons.map((c, i) => (
           <CohortTable
             key={i}
             title={`Comparison ${i + 1}: ${periodText(c.period)}${c.tag ? ` · ${c.tag}` : ''}`}
             table={c.table}
-            base={tables[0]}
-            growthLabel={`${periodText(base)} vs ${periodText(c.period)}`}
+            growth={[]}
+            slots={comparisons.length}
             picked={picked}
             onPick={setPicked}
           />
@@ -336,71 +354,82 @@ export function CohortReportView({ getIdToken }: CohortReportViewProps) {
   );
 }
 
+const thGroup = 'pt-2 pb-1 px-2 text-[11px] font-semibold text-slate-700 dark:text-slate-200 text-center whitespace-nowrap border-b border-slate-200 dark:border-slate-700';
+const thSub = 'pb-2 pt-1 px-2 text-[11px] font-medium text-slate-500 dark:text-slate-400 text-right whitespace-nowrap';
+const sep = 'border-l border-slate-200 dark:border-slate-700';
+const growthSep = 'border-l-2 border-slate-300 dark:border-slate-600';
+
 export function CohortTable({
   title,
   table,
-  base,
-  growthLabel,
+  growth: growthAgainst,
+  slots,
   picked,
   onPick,
 }: {
   title: string;
   table: CohortTableRow[];
-  /** The base period's table: growth = base vs this table. Absent for the base table itself. */
-  base?: CohortTableRow[];
-  growthLabel: string | null;
+  /** Growth of this (base) table against each comparison; [] on a comparison table. */
+  growth: Array<{ label: string; table: CohortTableRow[] }>;
+  /** Number of comparison column groups every table reserves, so all tables line up. */
+  slots: number;
   picked: string | null;
   onPick: (cohort: string | null) => void;
 }) {
+  const groups = Array.from({ length: slots }, (_, i) => growthAgainst[i] || null);
   return (
     <section className={`${card} overflow-hidden`}>
       <h3 className="px-4 py-2.5 text-sm font-bold text-slate-950 dark:text-white border-b border-slate-200 dark:border-slate-800">{title}</h3>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" data-scroll-box="true">
         {/* Fixed layout and the same columns in every table: the columns line up from table to table */}
-        <table className="w-full text-xs border-collapse table-fixed min-w-[1100px]">
+        <table className="w-full text-xs border-collapse table-fixed" style={{ minWidth: `${1180 + slots * 260}px` }}>
           <colgroup>
-            <col style={{ width: '10.5rem' }} />
-            {Array.from({ length: COHORT_CATEGORIES.length * 2 + 3 }, (_, i) => (
+            <col style={{ width: '11rem' }} />
+            {Array.from({ length: COHORT_CATEGORIES.length * 2 + 3 + slots * 3 }, (_, i) => (
               <col key={i} />
             ))}
-            <col style={{ width: '4.75rem' }} />
-            <col style={{ width: '4.75rem' }} />
-            <col style={{ width: '4.75rem' }} />
           </colgroup>
-          <thead>
-            <tr className="bg-slate-50 dark:bg-slate-800/60">
-              <th className={`${th} text-left`}>Talk Time Cohort</th>
+          <thead className="bg-slate-50 dark:bg-slate-800/60">
+            <tr>
+              <th rowSpan={2} className="py-2 px-2 text-[11px] font-semibold text-slate-700 dark:text-slate-200 text-left align-bottom">
+                Talk Time Cohort
+              </th>
+              {COHORT_CATEGORIES.map((c) => (
+                <th key={c.key} colSpan={2} className={`${thGroup} ${sep}`}>
+                  {c.label}
+                </th>
+              ))}
+              <th colSpan={3} className={`${thGroup} ${sep}`}>
+                Total
+              </th>
+              {groups.map((g, i) => (
+                <th key={i} colSpan={3} className={`${thGroup} ${growthSep}`}>
+                  {g ? `Growth vs ${g.label}` : ''}
+                </th>
+              ))}
+            </tr>
+            <tr>
               {COHORT_CATEGORIES.map((c) => (
                 <React.Fragment key={c.key}>
-                  <th className={th}>{c.label} Orders</th>
-                  <th className={th}>{c.label} Revenue</th>
+                  <th className={`${thSub} ${sep}`}>Orders</th>
+                  <th className={thSub}>Revenue</th>
                 </React.Fragment>
               ))}
-              <th className={th}>Total Orders</th>
-              <th className={th}>Total Revenue</th>
-              <th className={th}>AOV</th>
-              <th colSpan={3} className={`${th} text-center border-l-2 border-slate-300 dark:border-slate-600`}>
-                {growthLabel ? (
-                  <>
-                    Growth {growthLabel}
-                    <div className="grid grid-cols-3 font-normal normal-case tracking-normal text-slate-500 mt-0.5">
-                      <span>Orders</span>
-                      <span>Revenue</span>
-                      <span>AOV</span>
-                    </div>
-                  </>
-                ) : (
-                  <span className="font-normal normal-case tracking-normal text-slate-400">Base period</span>
-                )}
-              </th>
+              <th className={`${thSub} ${sep}`}>Orders</th>
+              <th className={thSub}>Revenue</th>
+              <th className={thSub}>AOV</th>
+              {groups.map((g, i) => (
+                <React.Fragment key={i}>
+                  <th className={`${thSub} ${growthSep}`}>{g ? 'Orders' : ''}</th>
+                  <th className={thSub}>{g ? 'Revenue' : ''}</th>
+                  <th className={thSub}>{g ? 'AOV' : ''}</th>
+                </React.Fragment>
+              ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
             {table.map((r) => {
               const on = picked === r.cohort;
-              const b = base?.find((x) => x.cohort === r.cohort);
-              // Growth of the base period over this (comparison) period
-              const g = b ? [growth(b.orders, r.orders), growth(b.revenue, r.revenue), growth(b.aov, r.aov)] : null;
               return (
                 <tr
                   key={r.cohort}
@@ -413,22 +442,23 @@ export function CohortTable({
                   </td>
                   {COHORT_CATEGORIES.map((c) => (
                     <React.Fragment key={c.key}>
-                      <td className={td}>{formatNumberINR(r.byCategory[c.key].orders)}</td>
+                      <td className={`${td} ${sep}`}>{formatNumberINR(r.byCategory[c.key].orders)}</td>
                       <td className={td}>{money(r.byCategory[c.key].revenue)}</td>
                     </React.Fragment>
                   ))}
-                  <td className={`${td} font-bold text-slate-900 dark:text-white`}>{formatNumberINR(r.orders)}</td>
+                  <td className={`${td} ${sep} font-bold text-slate-900 dark:text-white`}>{formatNumberINR(r.orders)}</td>
                   <td className={`${td} font-bold text-slate-900 dark:text-white`}>{money(r.revenue)}</td>
                   <td className={td}>{money(r.aov)}</td>
-                  {g ? (
-                    g.map((v, i) => (
-                      <td key={i} className={`${td} ${growthClass(v)} ${i === 0 ? 'border-l-2 border-slate-300 dark:border-slate-600' : ''}`}>
+                  {groups.map((g, gi) => {
+                    if (!g) return <td key={gi} colSpan={3} className={growthSep} />;
+                    const o = g.table.find((x) => x.cohort === r.cohort);
+                    const vals = [growth(r.orders, o?.orders ?? null), growth(r.revenue, o?.revenue ?? null), growth(r.aov, o?.aov ?? null)];
+                    return vals.map((v, i) => (
+                      <td key={`${gi}-${i}`} className={`${td} ${growthClass(v)} ${i === 0 ? growthSep : ''}`}>
                         {pct(v)}
                       </td>
-                    ))
-                  ) : (
-                    <td colSpan={3} className="border-l-2 border-slate-300 dark:border-slate-600" />
-                  )}
+                    ));
+                  })}
                 </tr>
               );
             })}
