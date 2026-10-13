@@ -11,6 +11,7 @@ Verified by: type-check, 30 calculation tests, 260 server checks, production bui
 1. **Talk Time Cohort Report** from the new `Anirban_Ref` tab, laid out like the original Excel report: a month up to a chosen day, ten cumulative talk time cohorts by Shopify / Alt / MP / POS OC orders and revenue, totals and AOV, and orders / revenue / AOV growth against two chosen months (red for a fall), with each comparison month's own table. CSV download.
 2. **Only Anirban (anirban.tsc@gmail.com) and the owner (agha.h489@gmail.com, as a Cohort Report tab in the Super Admin console)** (`COHORT_REPORT_VIEWERS`; the `COHORT_REPORT_VIEWERS` environment variable can replace the list). Not Managers or TLs. Anirban gets only this report: he is not a role in the access check, so every other route refuses him. The data is stored in `privateReports/` (no Firestore rule, so no browser reads it directly), and sync warnings about the tab give counts only.
 3. `Code.gs` and the .xlsx import send the `Anirban_Ref` tab. **Paste the new `apps-script/Code.gs`, then Sync Now.**
+4. **Date ranges and any number of comparisons:** the base period and every comparison have their own From / To dates; add or remove comparisons (each gets its own table and growth columns in the base table). Default: this month to date vs SDLM (the same days last month); a quick pick sets a comparison to the same days 1-12 months back.
 
 ---
 

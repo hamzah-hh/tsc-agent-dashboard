@@ -3071,7 +3071,7 @@ function parseCohortRows(rows) {
       skipped++;
       continue;
     }
-    out.push({ month: `${m[1]}-${m[2].padStart(2, "0")}`, label: pick3(row, "Month") || `${m[1]}-${m[2]}`, day, category, cohort, orders, sales });
+    out.push({ month: `${m[1]}-${m[2].padStart(2, "0")}`, date: sheetDateTime(dateCell).day, label: pick3(row, "Month") || `${m[1]}-${m[2]}`, day, category, cohort, orders, sales });
   }
   return { rows: out, skipped };
 }

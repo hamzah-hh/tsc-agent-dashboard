@@ -54,7 +54,7 @@ export function parseCohortRows(rows: any[]): { rows: CohortRow[]; skipped: numb
       skipped++;
       continue;
     }
-    out.push({ month: `${m[1]}-${m[2].padStart(2, '0')}`, label: pick(row, 'Month') || `${m[1]}-${m[2]}`, day, category, cohort, orders, sales });
+    out.push({ month: `${m[1]}-${m[2].padStart(2, '0')}`, date: sheetDateTime(dateCell)!.day, label: pick(row, 'Month') || `${m[1]}-${m[2]}`, day, category, cohort, orders, sales });
   }
   return { rows: out, skipped };
 }

@@ -1,7 +1,17 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Download, Lock, RefreshCw } from 'lucide-react';
+import { Download, Lock, Plus, RefreshCw, X } from 'lucide-react';
 import { formatNumberINR } from '../shared/incentive';
-import { COHORT_CATEGORIES, CohortRow, CohortTableRow, cohortTable, growth } from '../shared/cohortReport';
+import {
+  COHORT_CATEGORIES,
+  CohortPeriod,
+  CohortRow,
+  CohortTableRow,
+  cohortTableForPeriod,
+  growth,
+  monthToDate,
+  rowDate,
+  sameDaysMonthsBack,
+} from '../shared/cohortReport';
 
 interface CohortReportViewProps {
   getIdToken: () => Promise<string>;
@@ -10,26 +20,40 @@ interface CohortReportViewProps {
 const card = 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs';
 const th = 'py-2 px-2.5 text-[10px] font-mono uppercase tracking-wider text-slate-600 dark:text-slate-300 font-bold text-right whitespace-nowrap';
 const td = 'py-2 px-2.5 text-right font-mono whitespace-nowrap';
-const select = 'border border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-lg px-2 py-1.5 text-xs';
+const input = 'border border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-lg px-2 py-1.5 text-xs';
+const smallBtn = 'px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-[11px] font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800';
 
 const money = (n: number | null) => (n === null ? '-' : formatNumberINR(Math.round(n)));
 const pct = (g: number | null) => (g === null ? '-' : `${(g * 100).toFixed(1)}%`);
 const growthClass = (g: number | null) =>
   g === null ? 'text-slate-400' : g < 0 ? 'text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40' : 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40';
 
-/** 'YYYY-MM' + day -> 'DD-MM-YYYY', as in the original report title. */
-const tillText = (month: string, day: number) => `${String(day).padStart(2, '0')}-${month.slice(5, 7)}-${month.slice(0, 4)}`;
-const monthName = (month: string) =>
-  new Date(`${month}-01T00:00:00Z`).toLocaleString('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+const fmtDay = (d: string, withYear = true) =>
+  new Date(`${d}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', ...(withYear ? { year: 'numeric' } : {}), timeZone: 'UTC' });
+
+/** "1-12 Oct 2026", or "28 Sep - 3 Oct 2026" across months. */
+function periodText(p: CohortPeriod): string {
+  if (p.from === p.to) return fmtDay(p.from);
+  if (p.from.slice(0, 7) === p.to.slice(0, 7)) return `${Number(p.from.slice(8))}-${fmtDay(p.to)}`;
+  return `${fmtDay(p.from, p.from.slice(0, 4) !== p.to.slice(0, 4))} - ${fmtDay(p.to)}`;
+}
+
+/** "SDLM" / "Same days 2 months back" when a comparison is exactly that, else ''. */
+function periodTag(base: CohortPeriod, p: CohortPeriod): string {
+  for (let n = 1; n <= 24; n++) {
+    const s = sameDaysMonthsBack(base, n);
+    if (s.from === p.from && s.to === p.to) return n === 1 ? 'SDLM' : `Same days ${n} months back`;
+  }
+  return '';
+}
 
 export function CohortReportView({ getIdToken }: CohortReportViewProps) {
   const [rows, setRows] = useState<CohortRow[]>([]);
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [month, setMonth] = useState('');
-  const [tillDay, setTillDay] = useState(0);
-  const [compare, setCompare] = useState<[string, string]>(['', '']);
+  // periods[0] is the base period; the rest are comparisons
+  const [periods, setPeriods] = useState<CohortPeriod[]>([]);
 
   const load = async () => {
     setLoading(true);
@@ -52,18 +76,28 @@ export function CohortReportView({ getIdToken }: CohortReportViewProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const months = useMemo(() => [...new Set(rows.map((r) => r.month))].sort().reverse(), [rows]);
-  const maxDay = (m: string) => rows.reduce((max, r) => (r.month === m && r.day > max ? r.day : max), 0);
-
-  // Defaults: the newest month, up to its newest day, against the two months before it
-  useEffect(() => {
-    if (months.length && !month) {
-      setMonth(months[0]);
-      setTillDay(maxDay(months[0]));
-      setCompare([months[1] || '', months[2] || '']);
+  const [firstDate, latestDate] = useMemo(() => {
+    let min = '';
+    let max = '';
+    for (const r of rows) {
+      const d = rowDate(r);
+      if (!min || d < min) min = d;
+      if (d > max) max = d;
     }
+    return [min, max];
+  }, [rows]);
+
+  // Default: this month to date vs SDLM (the same days last month)
+  const defaults = (): CohortPeriod[] => {
+    const base = monthToDate(latestDate);
+    return [base, sameDaysMonthsBack(base, 1)];
+  };
+  useEffect(() => {
+    if (latestDate && periods.length === 0) setPeriods(defaults());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [months]);
+  }, [latestDate]);
+
+  const tables = useMemo(() => periods.map((p) => cohortTableForPeriod(rows, p)), [rows, periods]);
 
   if (loading) return <div className={`${card} p-10 text-center text-xs text-slate-500`}>Loading the report...</div>;
   if (error) {
@@ -76,99 +110,126 @@ export function CohortReportView({ getIdToken }: CohortReportViewProps) {
       </div>
     );
   }
-  if (!rows.length || !month) {
+  if (!rows.length || periods.length === 0) {
     return <div className={`${card} p-10 text-center text-xs text-slate-500`}>No data yet. It arrives with the next sync of the Anirban_Ref tab.</div>;
   }
 
-  const comparisons = compare.filter((m) => m && m !== month);
-  // The same day numbers in every month (a shorter month stops at its last day)
-  const tableFor = (m: string) => cohortTable(rows, m, Math.min(tillDay, maxDay(m) || tillDay));
-  const current = tableFor(month);
-  const others = comparisons.map((m) => ({ month: m, table: tableFor(m) }));
+  const base = periods[0];
+  const setPeriod = (i: number, p: CohortPeriod) => setPeriods((ps) => ps.map((x, j) => (j === i ? p : x)));
+  // A new comparison goes one more month back than the furthest one already there
+  const addComparison = () => {
+    let n = 1;
+    while (periods.some((p) => periodTag(base, p) === (n === 1 ? 'SDLM' : `Same days ${n} months back`))) n++;
+    setPeriods((ps) => [...ps, sameDaysMonthsBack(base, n)]);
+  };
+
+  const comparisons = periods.slice(1).map((p, i) => ({ period: p, table: tables[i + 1], tag: periodTag(base, p) }));
 
   const downloadCsv = () => {
-    const head = ['Month', 'Till Day', 'Talk Time Cohort', ...COHORT_CATEGORIES.flatMap((c) => [`${c.label} Orders`, `${c.label} Revenue`]), 'Total Orders', 'Total Revenue', 'AOV'];
+    const head = ['Period', 'From', 'To', 'Talk Time Cohort', ...COHORT_CATEGORIES.flatMap((c) => [`${c.label} Orders`, `${c.label} Revenue`]), 'Total Orders', 'Total Revenue', 'AOV'];
     const lines = [head.join(',')];
-    for (const { month: m, table } of [{ month, table: current }, ...others]) {
-      for (const r of table) {
+    periods.forEach((p, i) => {
+      for (const r of tables[i]) {
         lines.push(
-          [m, Math.min(tillDay, maxDay(m)), `"${r.cohort}"`, ...COHORT_CATEGORIES.flatMap((c) => [r.byCategory[c.key].orders, Math.round(r.byCategory[c.key].revenue)]), r.orders, Math.round(r.revenue), r.aov === null ? '' : Math.round(r.aov)].join(',')
+          [i === 0 ? 'Base' : periodTag(base, p) || `Comparison ${i}`, p.from, p.to, `"${r.cohort}"`, ...COHORT_CATEGORIES.flatMap((c) => [r.byCategory[c.key].orders, Math.round(r.byCategory[c.key].revenue)]), r.orders, Math.round(r.revenue), r.aov === null ? '' : Math.round(r.aov)].join(',')
         );
       }
-    }
+    });
     const url = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' }));
     const a = document.createElement('a');
     a.href = url;
-    a.download = `talk_time_cohort_${month}_till_${tillDay}.csv`;
+    a.download = `talk_time_cohort_${base.from}_to_${base.to}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
 
   return (
     <div className="space-y-6">
-      <div className={`${card} p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4`}>
-        <div>
-          <h2 className="text-lg font-bold text-slate-950 dark:text-white flex items-center gap-2">
-            Talk Time Cohort Report <Lock className="w-4 h-4 text-slate-400" />
-          </h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Private report. Cohorts are cumulative (each row counts that talk time and longer). Updated {updatedAt ? new Date(updatedAt).toLocaleString('en-IN') : '-'}.
-          </p>
+      <div className={`${card} p-5 space-y-4`}>
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-slate-950 dark:text-white flex items-center gap-2">
+              Talk Time Cohort Report <Lock className="w-4 h-4 text-slate-400" />
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Private report. Cohorts are cumulative (each row counts that talk time and longer). Data {fmtDay(firstDate)} to {fmtDay(latestDate)}, updated{' '}
+              {updatedAt ? new Date(updatedAt).toLocaleString('en-IN') : '-'}.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setPeriods(defaults())} className={smallBtn} title="This month to date vs the same days last month">
+              Reset: MTD vs SDLM
+            </button>
+            <button onClick={downloadCsv} className="p-2 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300" title="Download CSV">
+              <Download className="w-3.5 h-3.5" />
+            </button>
+            <button onClick={load} className="p-2 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300" title="Reload">
+              <RefreshCw className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <label className="text-slate-500">Month</label>
-          <select
-            value={month}
-            onChange={(e) => {
-              setMonth(e.target.value);
-              setTillDay(maxDay(e.target.value));
-            }}
-            className={select}
-          >
-            {months.map((m) => (
-              <option key={m} value={m}>
-                {monthName(m)}
-              </option>
-            ))}
-          </select>
-          <label className="text-slate-500">Till day</label>
-          <select value={tillDay} onChange={(e) => setTillDay(Number(e.target.value))} className={select}>
-            {Array.from({ length: Math.max(31, maxDay(month)) }, (_, i) => i + 1).map((d) => (
-              <option key={d} value={d}>
-                {d}
-              </option>
-            ))}
-          </select>
-          <label className="text-slate-500">Compare with</label>
-          {[0, 1].map((i) => (
-            <select
-              key={i}
-              value={compare[i]}
-              onChange={(e) => setCompare((c) => (i === 0 ? [e.target.value, c[1]] : [c[0], e.target.value]))}
-              className={select}
-            >
-              <option value="">(none)</option>
-              {months
-                .filter((m) => m !== month)
-                .map((m) => (
-                  <option key={m} value={m}>
-                    {monthName(m)}
-                  </option>
-                ))}
-            </select>
+
+        <div className="space-y-2">
+          {periods.map((p, i) => (
+            <div key={i} className="flex flex-wrap items-center gap-2 text-xs">
+              <span className={`w-28 font-semibold ${i === 0 ? 'text-slate-900 dark:text-white' : 'text-slate-600 dark:text-slate-300'}`}>
+                {i === 0 ? 'Base period' : `Comparison ${i}`}
+              </span>
+              <input
+                type="date"
+                value={p.from}
+                min={firstDate}
+                max={p.to}
+                onChange={(e) => e.target.value && setPeriod(i, { ...p, from: e.target.value })}
+                className={input}
+                aria-label={`${i === 0 ? 'Base' : `Comparison ${i}`} from`}
+              />
+              <span className="text-slate-400">to</span>
+              <input
+                type="date"
+                value={p.to}
+                min={p.from}
+                max={latestDate}
+                onChange={(e) => e.target.value && setPeriod(i, { ...p, to: e.target.value })}
+                className={input}
+                aria-label={`${i === 0 ? 'Base' : `Comparison ${i}`} to`}
+              />
+              {i === 0 ? (
+                <button onClick={() => setPeriod(0, monthToDate(latestDate))} className={smallBtn}>
+                  Month to date
+                </button>
+              ) : (
+                <>
+                  <select
+                    value=""
+                    onChange={(e) => e.target.value && setPeriod(i, sameDaysMonthsBack(base, Number(e.target.value)))}
+                    className={input}
+                    aria-label="Same days of an earlier month"
+                  >
+                    <option value="">Same days of...</option>
+                    {Array.from({ length: 12 }, (_, k) => k + 1).map((n) => (
+                      <option key={n} value={n}>
+                        {n === 1 ? 'Last month (SDLM)' : `${n} months back`}
+                      </option>
+                    ))}
+                  </select>
+                  {periodTag(base, p) && <span className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400">{periodTag(base, p)}</span>}
+                  <button onClick={() => setPeriods((ps) => ps.filter((_, j) => j !== i))} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500" aria-label={`Remove comparison ${i}`}>
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </>
+              )}
+            </div>
           ))}
-          <button onClick={downloadCsv} className="p-2 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300" title="Download CSV">
-            <Download className="w-3.5 h-3.5" />
-          </button>
-          <button onClick={load} className="p-2 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300" title="Reload">
-            <RefreshCw className="w-3.5 h-3.5" />
+          <button onClick={addComparison} className={`${smallBtn} inline-flex items-center gap-1`}>
+            <Plus className="w-3.5 h-3.5" /> Add comparison
           </button>
         </div>
       </div>
 
-      <CohortTable title={`${monthName(month)} - till ${tillText(month, tillDay)}`} table={current} comparisons={others} />
-      {others.map((o) => (
-        <CohortTable key={o.month} title={`${monthName(o.month)} - till ${tillText(o.month, Math.min(tillDay, maxDay(o.month)))}`} table={o.table} comparisons={[]} />
+      <CohortTable title={`Base: ${periodText(base)}`} table={tables[0]} comparisons={comparisons.map((c) => ({ label: c.tag ? `${c.tag} (${periodText(c.period)})` : periodText(c.period), table: c.table }))} />
+      {comparisons.map((c, i) => (
+        <CohortTable key={i} title={`Comparison ${i + 1}: ${periodText(c.period)}${c.tag ? ` · ${c.tag}` : ''}`} table={c.table} comparisons={[]} />
       ))}
     </div>
   );
@@ -181,7 +242,7 @@ function CohortTable({
 }: {
   title: string;
   table: CohortTableRow[];
-  comparisons: Array<{ month: string; table: CohortTableRow[] }>;
+  comparisons: Array<{ label: string; table: CohortTableRow[] }>;
 }) {
   return (
     <section className={`${card} overflow-hidden`}>
@@ -200,9 +261,9 @@ function CohortTable({
               <th className={th}>Total Orders</th>
               <th className={th}>Total Revenue</th>
               <th className={th}>AOV</th>
-              {comparisons.map((c) => (
-                <th key={c.month} colSpan={3} className={`${th} text-center border-l-2 border-slate-300 dark:border-slate-600`}>
-                  vs {monthName(c.month)}
+              {comparisons.map((c, i) => (
+                <th key={i} colSpan={3} className={`${th} text-center border-l-2 border-slate-300 dark:border-slate-600`}>
+                  vs {c.label}
                   <div className="flex justify-around font-normal normal-case tracking-normal text-slate-500 mt-0.5">
                     <span>Orders</span>
                     <span>Revenue</span>
@@ -225,11 +286,11 @@ function CohortTable({
                 <td className={`${td} font-bold text-slate-900 dark:text-white`}>{formatNumberINR(r.orders)}</td>
                 <td className={`${td} font-bold text-slate-900 dark:text-white`}>{money(r.revenue)}</td>
                 <td className={td}>{money(r.aov)}</td>
-                {comparisons.map((c) => {
+                {comparisons.map((c, ci) => {
                   const o = c.table.find((x) => x.cohort === r.cohort);
                   const g = [growth(r.orders, o?.orders ?? null), growth(r.revenue, o?.revenue ?? null), growth(r.aov, o?.aov ?? null)];
                   return g.map((v, i) => (
-                    <td key={`${c.month}-${i}`} className={`${td} ${growthClass(v)} ${i === 0 ? 'border-l-2 border-slate-300 dark:border-slate-600' : ''}`}>
+                    <td key={`${ci}-${i}`} className={`${td} ${growthClass(v)} ${i === 0 ? 'border-l-2 border-slate-300 dark:border-slate-600' : ''}`}>
                       {pct(v)}
                     </td>
                   ));

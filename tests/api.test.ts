@@ -993,6 +993,7 @@ export async function runApiTests() {
     r = await call('GET', '/api/auth/session', { token: tok(anirban) });
     check('Anirban signs in to the report only (role reportViewer)', r.status === 200 && r.json.role === 'reportViewer' && r.json.cohortReport === true, r.text);
     r = await call('GET', '/api/cohort-report', { token: tok(anirban) });
+    const r0Saved = r.json?.rows || [];
     check('Anirban reads the rows, with month keys from Date', r.status === 200 && r.json.rows.length === 5 && r.json.rows[0].month === '2026-10' && r.json.rows[0].sales === 1000, r.text.slice(0, 300));
     for (const path of ['/api/team-summary', '/api/raw-data', '/api/leaderboard?location=Dighe', '/api/dod-data']) {
       r = await call('GET', path, { token: tok(anirban) });
@@ -1011,6 +1012,15 @@ export async function runApiTests() {
     check('cohorts are cumulative and stop at the chosen day',
       ct[0].orders === 6 && ct[0].revenue === 10500 && ct[0].byCategory.shopify.orders === 5 && ct[1].orders === 4 && ct[1].byCategory.pos.revenue === 500 && ct[1].aov === 9500 / 4,
       JSON.stringify(ct));
+    const cr = await import('../src/shared/cohortReport');
+    const byDates = cr.cohortTableForPeriod(r0Rows(), { from: '2026-10-02', to: '2026-10-09' });
+    check('a date range: only the rows on those dates', byDates[0].orders === 8 && byDates[0].revenue === 70500, JSON.stringify(byDates[0]));
+    check('saved rows carry their date', r0Saved.every((x: any) => /^2026-\d\d-\d\d$/.test(x.date)), JSON.stringify(r0Saved[0]));
+    const mtd = cr.monthToDate('2026-10-12');
+    check('default: month to date vs SDLM (1-12 Oct vs 1-12 Sep)', mtd.from === '2026-10-01' && mtd.to === '2026-10-12' && JSON.stringify(cr.sameDaysMonthsBack(mtd)) === '{"from":"2026-09-01","to":"2026-09-12"}');
+    check('SDLM keeps month ends and short months right (1-31 Oct -> 1-30 Sep; 31 Mar -> 28 Feb)',
+      JSON.stringify(cr.sameDaysMonthsBack({ from: '2026-10-01', to: '2026-10-31' })) === '{"from":"2026-09-01","to":"2026-09-30"}' &&
+      cr.shiftMonths('2026-03-31', -1) === '2026-02-28' && JSON.stringify(cr.sameDaysMonthsBack({ from: '2026-10-01', to: '2026-10-12' }, 2)) === '{"from":"2026-08-01","to":"2026-08-12"}');
   } finally {
     setGeminiForTests(null);
     await new Promise<void>((resolve) => server.close(() => resolve()));
