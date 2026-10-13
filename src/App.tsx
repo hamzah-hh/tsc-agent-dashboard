@@ -251,7 +251,7 @@ export default function App() {
 
       {/* Top Navigation */}
       <header className="bg-white/95 backdrop-blur-md border-b border-slate-200 sticky top-0 z-30 shadow-xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 min-h-16 py-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <div className="max-w-[1920px] mx-auto px-3 sm:px-5 lg:px-6 min-h-16 py-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-center text-white font-mono font-bold text-xs tracking-wider shadow-xs ring-1 ring-amber-500/30">
               TSC
@@ -368,7 +368,7 @@ export default function App() {
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="flex-1 max-w-[1920px] w-full mx-auto px-3 sm:px-5 lg:px-6 py-6">
         {!user ? (
           // Logged Out Minimal Landing
           <div className="max-w-md mx-auto my-12 bg-white/95 backdrop-blur-md border border-slate-200 rounded-2xl p-8 shadow-xl text-center">

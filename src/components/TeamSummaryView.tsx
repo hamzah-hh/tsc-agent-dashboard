@@ -22,8 +22,9 @@ interface TeamSummaryViewProps {
 
 const RED = 'text-rose-600 dark:text-rose-400 font-bold bg-rose-50 dark:bg-rose-950/40';
 const card = 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs';
-const th = 'py-2.5 px-3 text-[11px] font-mono uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold whitespace-nowrap';
-const td = 'py-2.5 px-3 whitespace-nowrap';
+// Headers wrap ("Avg Unique Connects / Agent / Day" on two lines) so the tables fit without scrolling
+const th = 'py-2 px-2 text-[10px] uppercase tracking-wide leading-tight text-slate-500 dark:text-slate-400 font-bold align-bottom';
+const td = 'py-2 px-2 whitespace-nowrap tabular-nums';
 
 const istToday = () => new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
 const addDays = (day: string, n: number) => new Date(Date.parse(day + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
@@ -99,7 +100,7 @@ function breakAverages(rows: BreakDay[]): BreakAverages {
 
 function breakCell(key: BreakMetric, value: number | null) {
   const text = key === 'idleAcwPct' ? (value === null ? '-' : `${value.toFixed(2)}%`) : hhmm(value);
-  return <td className={`${td} text-right font-mono ${overLimit(key, value) ? RED : 'text-slate-800 dark:text-slate-200'}`}>{text}</td>;
+  return <td className={`${td} text-right ${overLimit(key, value) ? RED : 'text-slate-800 dark:text-slate-200'}`}>{text}</td>;
 }
 
 // ------------------------------------------------------------------ page
@@ -280,12 +281,12 @@ export function ProductivitySection({
                         {t.location} · {t.tl.startsWith('no-tl:') ? 'No TL' : nameFromEmail(t.tl)}
                       </span>
                     </td>
-                    <td className={`${td} text-right font-mono`}>{s.agents}</td>
-                    <td className={`${td} text-right font-mono`}>{fmt1(s.agentDays)}</td>
-                    <td className={`${td} text-right font-mono ${lowConnects(s.avgConnects) ? RED : ''}`}>{fmt1(s.avgConnects)}</td>
-                    <td className={`${td} text-right font-mono ${lowTalk(s.avgTalk) ? RED : ''}`}>{hhmm(s.avgTalk)}</td>
-                    <td className={`${td} text-right font-mono`}>{s.daysLowConnects}</td>
-                    <td className={`${td} text-right font-mono`}>{s.daysLowTalk}</td>
+                    <td className={`${td} text-right`}>{s.agents}</td>
+                    <td className={`${td} text-right`}>{fmt1(s.agentDays)}</td>
+                    <td className={`${td} text-right ${lowConnects(s.avgConnects) ? RED : ''}`}>{fmt1(s.avgConnects)}</td>
+                    <td className={`${td} text-right ${lowTalk(s.avgTalk) ? RED : ''}`}>{hhmm(s.avgTalk)}</td>
+                    <td className={`${td} text-right`}>{s.daysLowConnects}</td>
+                    <td className={`${td} text-right`}>{s.daysLowTalk}</td>
                   </tr>
                   {open && (
                     <tr>
@@ -305,12 +306,12 @@ export function ProductivitySection({
             {shown.length > 1 && (
               <tr className="bg-slate-50 dark:bg-slate-800/60 font-bold">
                 <td className={`${td} text-slate-900 dark:text-white`}>All teams</td>
-                <td className={`${td} text-right font-mono`}>{overall.agents}</td>
-                <td className={`${td} text-right font-mono`}>{fmt1(overall.agentDays)}</td>
-                <td className={`${td} text-right font-mono ${lowConnects(overall.avgConnects) ? RED : ''}`}>{fmt1(overall.avgConnects)}</td>
-                <td className={`${td} text-right font-mono ${lowTalk(overall.avgTalk) ? RED : ''}`}>{hhmm(overall.avgTalk)}</td>
-                <td className={`${td} text-right font-mono`}>{overall.daysLowConnects}</td>
-                <td className={`${td} text-right font-mono`}>{overall.daysLowTalk}</td>
+                <td className={`${td} text-right`}>{overall.agents}</td>
+                <td className={`${td} text-right`}>{fmt1(overall.agentDays)}</td>
+                <td className={`${td} text-right ${lowConnects(overall.avgConnects) ? RED : ''}`}>{fmt1(overall.avgConnects)}</td>
+                <td className={`${td} text-right ${lowTalk(overall.avgTalk) ? RED : ''}`}>{hhmm(overall.avgTalk)}</td>
+                <td className={`${td} text-right`}>{overall.daysLowConnects}</td>
+                <td className={`${td} text-right`}>{overall.daysLowTalk}</td>
               </tr>
             )}
             {shown.length === 0 && <EmptyRow cols={7} text="No Dialer data for this range." />}
@@ -332,10 +333,10 @@ export function ProductivitySection({
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {drillDays.map((d) => (
                 <tr key={d.date}>
-                  <td className={`${td} font-mono`}>{d.date}</td>
+                  <td className={`${td}`}>{d.date}</td>
                   <td className={td}>{dayLabel(d.day)}</td>
-                  <td className={`${td} text-right font-mono ${lowConnects(d.connects, d.day) ? RED : ''}`}>{d.connects}</td>
-                  <td className={`${td} text-right font-mono ${lowTalk(d.talkSeconds, d.day) ? RED : ''}`}>{hhmm(d.talkSeconds)}</td>
+                  <td className={`${td} text-right ${lowConnects(d.connects, d.day) ? RED : ''}`}>{d.connects}</td>
+                  <td className={`${td} text-right ${lowTalk(d.talkSeconds, d.day) ? RED : ''}`}>{hhmm(d.talkSeconds)}</td>
                 </tr>
               ))}
               {drillDays.length === 0 && <EmptyRow cols={4} text="No Dialer days in this range." />}
@@ -377,11 +378,11 @@ function AgentProductivityTable({
         {rows.map(({ email, name, s }) => (
           <tr key={email} className="hover:bg-indigo-50/60 dark:hover:bg-slate-800/60 cursor-pointer" onClick={() => onOpen(email)}>
             <td className={`${td} font-semibold text-indigo-700 dark:text-indigo-300 underline-offset-2 hover:underline`}>{name}</td>
-            <td className={`${td} text-right font-mono`}>{fmt1(s.agentDays)}</td>
-            <td className={`${td} text-right font-mono ${lowConnects(s.avgConnects) ? RED : ''}`}>{fmt1(s.avgConnects)}</td>
-            <td className={`${td} text-right font-mono ${lowTalk(s.avgTalk) ? RED : ''}`}>{hhmm(s.avgTalk)}</td>
-            <td className={`${td} text-right font-mono`}>{s.daysLowConnects}</td>
-            <td className={`${td} text-right font-mono`}>{s.daysLowTalk}</td>
+            <td className={`${td} text-right`}>{fmt1(s.agentDays)}</td>
+            <td className={`${td} text-right ${lowConnects(s.avgConnects) ? RED : ''}`}>{fmt1(s.avgConnects)}</td>
+            <td className={`${td} text-right ${lowTalk(s.avgTalk) ? RED : ''}`}>{hhmm(s.avgTalk)}</td>
+            <td className={`${td} text-right`}>{s.daysLowConnects}</td>
+            <td className={`${td} text-right`}>{s.daysLowTalk}</td>
           </tr>
         ))}
       </tbody>
@@ -455,12 +456,12 @@ export function BreaksSection({
                           {loc}
                         </span>
                       </td>
-                      <td className={`${td} text-right font-mono`}>{a.agents}</td>
-                      <td className={`${td} text-right font-mono`}>{a.days}</td>
+                      <td className={`${td} text-right`}>{a.agents}</td>
+                      <td className={`${td} text-right`}>{a.days}</td>
                       {BREAK_COLUMNS.map((c) => (
                         <React.Fragment key={c.key}>{breakCell(c.key, a[c.key])}</React.Fragment>
                       ))}
-                      <td className={`${td} text-right font-mono`}>{a.daysOver}</td>
+                      <td className={`${td} text-right`}>{a.daysOver}</td>
                     </tr>
                     {open && (
                       <tr>
@@ -485,11 +486,11 @@ export function BreaksSection({
                                 .map(({ email, avg }) => (
                                   <tr key={email} className="hover:bg-amber-50/60 dark:hover:bg-slate-800/60 cursor-pointer" onClick={() => setDrillAgent(email)}>
                                     <td className={`${td} font-semibold text-indigo-700 dark:text-indigo-300 hover:underline`}>{agentsByEmail.get(email)?.name || email}</td>
-                                    <td className={`${td} text-right font-mono`}>{avg.days}</td>
+                                    <td className={`${td} text-right`}>{avg.days}</td>
                                     {BREAK_COLUMNS.map((c) => (
                                       <React.Fragment key={c.key}>{breakCell(c.key, avg[c.key])}</React.Fragment>
                                     ))}
-                                    <td className={`${td} text-right font-mono ${avg.daysOver > 0 ? 'text-rose-600 dark:text-rose-400 font-bold' : ''}`}>{avg.daysOver}</td>
+                                    <td className={`${td} text-right ${avg.daysOver > 0 ? 'text-rose-600 dark:text-rose-400 font-bold' : ''}`}>{avg.daysOver}</td>
                                   </tr>
                                 ))}
                             </tbody>
@@ -506,12 +507,12 @@ export function BreaksSection({
                   return (
                     <tr className="bg-slate-50 dark:bg-slate-800/60 font-bold">
                       <td className={`${td} text-slate-900 dark:text-white`}>All locations</td>
-                      <td className={`${td} text-right font-mono`}>{a.agents}</td>
-                      <td className={`${td} text-right font-mono`}>{a.days}</td>
+                      <td className={`${td} text-right`}>{a.agents}</td>
+                      <td className={`${td} text-right`}>{a.days}</td>
                       {BREAK_COLUMNS.map((c) => (
                         <React.Fragment key={c.key}>{breakCell(c.key, a[c.key])}</React.Fragment>
                       ))}
-                      <td className={`${td} text-right font-mono`}>{a.daysOver}</td>
+                      <td className={`${td} text-right`}>{a.daysOver}</td>
                     </tr>
                   );
                 })()}
@@ -538,7 +539,7 @@ export function BreaksSection({
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {drillRows.map((r) => (
                 <tr key={r.date}>
-                  <td className={`${td} font-mono`}>{r.date}</td>
+                  <td className={`${td}`}>{r.date}</td>
                   <td className={td}>{dayLabel(r.dayType)}</td>
                   {BREAK_COLUMNS.map((c) => (
                     <React.Fragment key={c.key}>

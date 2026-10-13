@@ -18,8 +18,9 @@ interface CohortReportViewProps {
 }
 
 const card = 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs';
-const th = 'py-2 px-2.5 text-[10px] font-mono uppercase tracking-wider text-slate-600 dark:text-slate-300 font-bold text-right whitespace-nowrap';
-const td = 'py-2 px-2.5 text-right font-mono whitespace-nowrap';
+// Headers wrap and digits are proportional (tabular-nums) so a base table with comparisons fits the page
+const th = 'py-2 px-1.5 text-[10px] uppercase tracking-wide leading-tight text-slate-600 dark:text-slate-300 font-bold text-right align-bottom';
+const td = 'py-1.5 px-1.5 text-right tabular-nums whitespace-nowrap text-[11px]';
 const input = 'border border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-lg px-2 py-1.5 text-xs';
 const smallBtn = 'px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-[11px] font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800';
 
@@ -276,7 +277,7 @@ function CohortTable({
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
             {table.map((r) => (
               <tr key={r.cohort} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                <td className="py-2 px-2.5 font-semibold text-slate-900 dark:text-white whitespace-nowrap">{r.cohort}</td>
+                <td className="py-1.5 px-2 text-[11px] font-semibold text-slate-900 dark:text-white whitespace-nowrap">{r.cohort}</td>
                 {COHORT_CATEGORIES.map((c) => (
                   <React.Fragment key={c.key}>
                     <td className={td}>{formatNumberINR(r.byCategory[c.key].orders)}</td>
