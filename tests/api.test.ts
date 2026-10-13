@@ -960,8 +960,8 @@ export async function runApiTests() {
     delete process.env.MONITOR_KEY;
 
     // ------------------------------------------------------------------
-    section('private Talk Time Cohort report (Anirban_Ref): anirban@thesleepcompany.in only');
-    const anirban = 'anirban@thesleepcompany.in';
+    section('private Talk Time Cohort report (Anirban_Ref): Anirban only');
+    const anirban = 'anirban.tsc@gmail.com';
     const cohortRow = (Date: string, Day_Number: number, Sale_Category: string, TT_Cohort: string, Order_Count: any, Sales: any) =>
       ({ Month: 'x', Day_Number, Date, Sale_Category, TT_Cohort, Order_Count, Sales });
     r = await call('POST', '/api/sync', {

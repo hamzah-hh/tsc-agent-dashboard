@@ -2,7 +2,8 @@
  * Talk Time Cohort report (Anirban_Ref tab). Private: only the emails in COHORT_REPORT_VIEWERS may see it,
  * not even the Super Admin or Managers.
  */
-export const COHORT_REPORT_VIEWERS = ['anirban@thesleepcompany.in'];
+// Anirban signs in with his Gmail; the company address is kept in case it becomes a Google account
+export const COHORT_REPORT_VIEWERS = ['anirban.tsc@gmail.com', 'anirban@thesleepcompany.in'];
 
 /** One row of the Anirban_Ref tab: one day, one sale category, one talk time cohort. */
 export interface CohortRow {
