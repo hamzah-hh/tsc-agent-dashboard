@@ -389,9 +389,10 @@ export function CohortTable({
               ))}
             </tr>
             <tr>
-              {COHORT_CATEGORIES.map((c) => (
+              {COHORT_CATEGORIES.map((c, i) => (
                 <React.Fragment key={c.key}>
-                  <th className={`${thSub} ${sep}`}>Orders</th>
+                  {/* first cell of this header row (the cohort column spans both rows): keep it centred */}
+                  <th className={`${thSub} ${sep} ${i === 0 ? 'cell-center' : ''}`}>Orders</th>
                   <th className={thSub}>Revenue</th>
                 </React.Fragment>
               ))}

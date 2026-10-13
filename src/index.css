@@ -171,3 +171,20 @@ input[type="range"]::-webkit-slider-thumb:active {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(245, 158, 11, 0.5);
 }
+
+/* Table values are centred across the dashboard. The first column holds the row's name (agent,
+   cohort, team, date) and stays left-aligned, which is easier to scan. !important wins over the
+   text-right / text-left utilities on individual cells. A cell that is first in its row only because
+   the column to its left spans two header rows is marked cell-center. */
+table th,
+table td {
+  text-align: center !important;
+}
+table th:first-child,
+table td:first-child {
+  text-align: left !important;
+}
+table th.cell-center,
+table td.cell-center {
+  text-align: center !important;
+}
