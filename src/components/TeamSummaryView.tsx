@@ -10,7 +10,7 @@ import {
   TeamSummaryAgent,
   TeamSummaryResponse,
   TargetRow,
-  hhmm,
+  hms,
   idleAcwPct,
   nameFromEmail,
 } from '../shared/teamOps';
@@ -58,14 +58,15 @@ function prodStats(days: ProductivityDay[]): ProdStats {
 
 // A half day needs half the daily minimum
 const lowConnects = (value: number | null, day = 1) => value !== null && value < PRODUCTIVITY_RULES.minUniqueConnectsPerDay * day;
-const lowTalk = (value: number | null, day = 1) => value !== null && value < PRODUCTIVITY_RULES.minTalkSecondsPerDay * day;
+// Times are compared in whole seconds, as shown (hh:mm:ss), so a red value never displays as equal to the limit
+const lowTalk = (value: number | null, day = 1) => value !== null && Math.round(value) < PRODUCTIVITY_RULES.minTalkSecondsPerDay * day;
 
 type BreakAverages = Record<BreakMetric, number | null> & { days: number; agents: number; daysOver: number };
 
 function overLimit(key: BreakMetric, value: number | null): boolean {
   const col = BREAK_COLUMNS.find((c) => c.key === key)!;
   if (value === null) return false;
-  if (col.limitSec !== undefined) return value > col.limitSec;
+  if (col.limitSec !== undefined) return Math.round(value) > col.limitSec;
   if (col.limitPct !== undefined) return value > col.limitPct;
   return false;
 }
@@ -99,7 +100,7 @@ function breakAverages(rows: BreakDay[]): BreakAverages {
 }
 
 function breakCell(key: BreakMetric, value: number | null) {
-  const text = key === 'idleAcwPct' ? (value === null ? '-' : `${value.toFixed(2)}%`) : hhmm(value);
+  const text = key === 'idleAcwPct' ? (value === null ? '-' : `${value.toFixed(2)}%`) : hms(value);
   return <td className={`${td} text-right ${overLimit(key, value) ? RED : 'text-slate-800 dark:text-slate-200'}`}>{text}</td>;
 }
 
@@ -253,7 +254,7 @@ export function ProductivitySection({
       <SectionHeader
         icon={<Gauge className="w-4 h-4 text-indigo-500" />}
         title="Average Productivity"
-        note={`Per agent per worked day, from the Dialer tab. Red: below ${PRODUCTIVITY_RULES.minUniqueConnectsPerDay} unique connects or below ${hhmm(PRODUCTIVITY_RULES.minTalkSecondsPerDay)} talk time (half for a half day).`}
+        note={`Per agent per worked day, from the Dialer tab. Red: below ${PRODUCTIVITY_RULES.minUniqueConnectsPerDay} unique connects or below ${hms(PRODUCTIVITY_RULES.minTalkSecondsPerDay)} talk time (half for a half day).`}
       />
       <div className="overflow-x-auto">
         <table className="w-full text-xs text-left">
@@ -284,7 +285,7 @@ export function ProductivitySection({
                     <td className={`${td} text-right`}>{s.agents}</td>
                     <td className={`${td} text-right`}>{fmt1(s.agentDays)}</td>
                     <td className={`${td} text-right ${lowConnects(s.avgConnects) ? RED : ''}`}>{fmt1(s.avgConnects)}</td>
-                    <td className={`${td} text-right ${lowTalk(s.avgTalk) ? RED : ''}`}>{hhmm(s.avgTalk)}</td>
+                    <td className={`${td} text-right ${lowTalk(s.avgTalk) ? RED : ''}`}>{hms(s.avgTalk)}</td>
                     <td className={`${td} text-right`}>{s.daysLowConnects}</td>
                     <td className={`${td} text-right`}>{s.daysLowTalk}</td>
                   </tr>
@@ -309,7 +310,7 @@ export function ProductivitySection({
                 <td className={`${td} text-right`}>{overall.agents}</td>
                 <td className={`${td} text-right`}>{fmt1(overall.agentDays)}</td>
                 <td className={`${td} text-right ${lowConnects(overall.avgConnects) ? RED : ''}`}>{fmt1(overall.avgConnects)}</td>
-                <td className={`${td} text-right ${lowTalk(overall.avgTalk) ? RED : ''}`}>{hhmm(overall.avgTalk)}</td>
+                <td className={`${td} text-right ${lowTalk(overall.avgTalk) ? RED : ''}`}>{hms(overall.avgTalk)}</td>
                 <td className={`${td} text-right`}>{overall.daysLowConnects}</td>
                 <td className={`${td} text-right`}>{overall.daysLowTalk}</td>
               </tr>
@@ -336,7 +337,7 @@ export function ProductivitySection({
                   <td className={`${td}`}>{d.date}</td>
                   <td className={td}>{dayLabel(d.day)}</td>
                   <td className={`${td} text-right ${lowConnects(d.connects, d.day) ? RED : ''}`}>{d.connects}</td>
-                  <td className={`${td} text-right ${lowTalk(d.talkSeconds, d.day) ? RED : ''}`}>{hhmm(d.talkSeconds)}</td>
+                  <td className={`${td} text-right ${lowTalk(d.talkSeconds, d.day) ? RED : ''}`}>{hms(d.talkSeconds)}</td>
                 </tr>
               ))}
               {drillDays.length === 0 && <EmptyRow cols={4} text="No Dialer days in this range." />}
@@ -380,7 +381,7 @@ function AgentProductivityTable({
             <td className={`${td} font-semibold text-indigo-700 dark:text-indigo-300 underline-offset-2 hover:underline`}>{name}</td>
             <td className={`${td} text-right`}>{fmt1(s.agentDays)}</td>
             <td className={`${td} text-right ${lowConnects(s.avgConnects) ? RED : ''}`}>{fmt1(s.avgConnects)}</td>
-            <td className={`${td} text-right ${lowTalk(s.avgTalk) ? RED : ''}`}>{hhmm(s.avgTalk)}</td>
+            <td className={`${td} text-right ${lowTalk(s.avgTalk) ? RED : ''}`}>{hms(s.avgTalk)}</td>
             <td className={`${td} text-right`}>{s.daysLowConnects}</td>
             <td className={`${td} text-right`}>{s.daysLowTalk}</td>
           </tr>
@@ -410,7 +411,7 @@ export function BreaksSection({
   const locations = useMemo(() => [...new Set(rows.map((r) => locationOf(r.agentEmail)))].sort(), [rows, agentsByEmail]);
   const drillRows = drillAgent ? rows.filter((r) => r.agentEmail.toLowerCase() === drillAgent).sort((a, b) => b.date.localeCompare(a.date)) : [];
   const limitNote = BREAK_COLUMNS.filter((c) => c.limitSec !== undefined || c.limitPct !== undefined)
-    .map((c) => `${c.label} ${c.limitSec !== undefined ? hhmm(c.limitSec) : `${c.limitPct!.toFixed(2)}%`}`)
+    .map((c) => `${c.label} ${c.limitSec !== undefined ? hms(c.limitSec) : `${c.limitPct!.toFixed(2)}%`}`)
     .join(' · ');
 
   const header = (
@@ -432,7 +433,7 @@ export function BreaksSection({
       <SectionHeader
         icon={<Coffee className="w-4 h-4 text-amber-500" />}
         title="Breaks"
-        note={`Per agent per day (hh:mm), from the Breaks tab. Red above the daily limit: ${limitNote}.`}
+        note={`Per agent per day (hh:mm:ss), from the Breaks tab. Red above the daily limit: ${limitNote}.`}
       />
       {!hasData ? (
         <p className="px-5 pb-5 text-xs text-slate-500">

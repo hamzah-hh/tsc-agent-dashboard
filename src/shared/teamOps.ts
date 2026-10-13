@@ -1,6 +1,6 @@
 /**
  * Overall Team Summary and Targets: the rules and shapes shared by the server and the page.
- * All times are in seconds; the page shows them as hh:mm.
+ * All times are in seconds; the page shows them as hh:mm:ss.
  */
 
 /** Average Productivity: a day is red below these (scaled by Day_Type, so a half day needs half). */
@@ -74,11 +74,17 @@ export interface TeamSummaryResponse {
   breaksUpdatedAt: string | null;
 }
 
-/** Seconds as hh:mm (rounded to the minute). */
-export function hhmm(seconds: number | null | undefined): string {
+/**
+ * Seconds as hh:mm:ss. Seconds are always shown: a value rounded to the minute could look equal to a
+ * limit (02:45) while it is a few seconds past it and shown in red.
+ */
+export function hms(seconds: number | null | undefined): string {
   if (seconds === null || seconds === undefined || !Number.isFinite(seconds)) return '-';
-  const m = Math.round(Math.max(0, seconds) / 60);
-  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+  const total = Math.round(Math.max(0, seconds));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
 /** Idle Time + ACW as a share of Staffed Duration, in percent. */

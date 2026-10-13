@@ -21,7 +21,7 @@ Verified by: type-check, 30 calculation tests, 246 server checks, production bui
 
 1. **New staff page "Team Summary & Targets"** (TLs see their own team and their own target; Managers and the Super Admin see all), with a date range (cycle to date, last 7 days, latest day, or any dates):
    - **Average Productivity** per TL team from the Dialer tab: average unique connects and talk time per agent per worked day, red below 135 connects or 2h 45m (half for a half day); expand a team for its agents, click an agent for their daily data.
-   - **Breaks** per location from the new Breaks tab, per agent per day in hh:mm, red above Bio or Misc 20m, First / Last Break 15m, Lunch 30m, Total Daily Break 1h 20m, Idle Time and ACW over 30.56% of Staffed Duration (2h 45m of a 9-hour shift); same drill-down.
+   - **Breaks** per location from the new Breaks tab, per agent per day in hh:mm:ss, red above Bio or Misc 20m, First / Last Break 15m, Lunch 30m, Total Daily Break 1h 20m, Idle Time and ACW over 30.56% of Staffed Duration (2h 45m of a 9-hour shift); same drill-down.
    - **Period Targets and Achievement** from the new Targets tab: sales, target, achievement, remaining, needed per day, and on / behind pace for the day of the cycle.
 2. `Code.gs` and the Admin .xlsx import send the `Breaks` and `Targets` tabs. **Paste the new `apps-script/Code.gs` into the script editor, then Sync Now.**
 
