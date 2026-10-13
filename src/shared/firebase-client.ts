@@ -7,8 +7,11 @@ import { firebaseConfig } from './firebase-config';
 export const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
 export const auth = getAuth(app);
+// Sign-in asks only for name and email. The Google Sheets permission is a "sensitive" scope: asking for it
+// at every sign-in showed Google's unverified-app screen, or blocked accounts outright while the consent
+// screen is in Testing. Only the Super Admin's direct Sheets import needs it, and it asks for it there
+// (authorizeGoogleSheets in sheets-auth.ts).
 export const googleProvider = new GoogleAuthProvider();
-googleProvider.addScope('https://www.googleapis.com/auth/spreadsheets.readonly');
 googleProvider.setCustomParameters({
   prompt: 'select_account',
 });

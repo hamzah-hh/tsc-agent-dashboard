@@ -4,7 +4,6 @@ import {
   signInWithPopup,
   signOut,
   User,
-  GoogleAuthProvider,
 } from 'firebase/auth';
 import { auth, googleProvider } from './shared/firebase-client';
 import { setCachedSheetsToken } from './shared/sheets-auth';
@@ -195,11 +194,8 @@ export default function App() {
     setLoginError(null);
     setIsLoggingIn(true);
     try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const credential = GoogleAuthProvider.credentialFromResult(result);
-      if (credential?.accessToken) {
-        setCachedSheetsToken(credential.accessToken);
-      }
+      // No Sheets token here: sign-in no longer asks for that permission (the Admin console asks when needed)
+      await signInWithPopup(auth, googleProvider);
     } catch (err: any) {
       console.warn('Sign-in note:', err?.code, err?.message);
       if (err?.code === 'auth/popup-closed-by-user') {
