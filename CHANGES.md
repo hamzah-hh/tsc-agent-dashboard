@@ -4,6 +4,16 @@ Newest first. How to demo and go live: [docs/GUIDELINE.md](docs/GUIDELINE.md).
 
 ---
 
+## v8, 13 Oct 2026: private Talk Time Cohort Report
+
+Verified by: type-check, 30 calculation tests, 260 server checks, production build, and the sample report (sample.xlsx) reproduced from the live Anirban_Ref tab with the app's code (August and July exact).
+
+1. **Talk Time Cohort Report** from the new `Anirban_Ref` tab, laid out like the original Excel report: a month up to a chosen day, ten cumulative talk time cohorts by Shopify / Alt / MP / POS OC orders and revenue, totals and AOV, and orders / revenue / AOV growth against two chosen months (red for a fall), with each comparison month's own table. CSV download.
+2. **Only anirban@thesleepcompany.in** (`COHORT_REPORT_VIEWERS`; the `COHORT_REPORT_VIEWERS` environment variable can replace the list). Not Managers, not the Super Admin. Anirban gets only this report: he is not a role in the access check, so every other route refuses him. The data is stored in `privateReports/` (no Firestore rule, so no browser reads it directly), and sync warnings about the tab give counts only.
+3. `Code.gs` and the .xlsx import send the `Anirban_Ref` tab. **Paste the new `apps-script/Code.gs`, then Sync Now.**
+
+---
+
 ## v7, 13 Oct 2026: Team Summary & Targets page
 
 Verified by: type-check, 30 calculation tests, 246 server checks, production build, and the three sections rendered with the live sheet's data.

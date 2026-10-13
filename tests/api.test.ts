@@ -958,6 +958,55 @@ export async function runApiTests() {
     r = await call('POST', '/api/monitor', { headers: { 'X-Monitor-Key': process.env.MONITOR_KEY }, body: {} });
     check('it cannot write (no POST route)', r.status === 404 || r.status === 405, String(r.status));
     delete process.env.MONITOR_KEY;
+
+    // ------------------------------------------------------------------
+    section('private Talk Time Cohort report (Anirban_Ref): anirban@thesleepcompany.in only');
+    const anirban = 'anirban@thesleepcompany.in';
+    const cohortRow = (Date: string, Day_Number: number, Sale_Category: string, TT_Cohort: string, Order_Count: any, Sales: any) =>
+      ({ Month: 'x', Day_Number, Date, Sale_Category, TT_Cohort, Order_Count, Sales });
+    r = await call('POST', '/api/sync', {
+      headers: { 'X-Sync-Key': process.env.SYNC_KEY! },
+      body: {
+        agentsRows: [person('cia@co.in', 'Clean Cia', 'HO Callers', 'Dighe')],
+        cohortRows: [
+          cohortRow('2026-10-01 00:00:00', 1, '1. Shopify', '01.1 Second Plus', 2, '1,000'),
+          cohortRow('2026-10-01 00:00:00', 1, '1. Shopify', '10. More than 5 minutes', 3, 9000),
+          cohortRow('2026-10-02 00:00:00', 2, '4. POS OC', '10. More than 5 minutes', 1, 500),
+          cohortRow('2026-10-09 00:00:00', 9, '1. Shopify', '10. More than 5 minutes', 7, 70000),
+          cohortRow('2026-09-01 00:00:00', 1, '1. Shopify', '01.1 Second Plus', 4, 2000),
+          cohortRow('not a date', 1, '1. Shopify', '01.1 Second Plus', 99, 123456789),
+        ],
+      },
+    });
+    const cohortWarn = (r.json?.warnings || []).find((w: string) => w.startsWith('Anirban_Ref'));
+    check('sync saves it; a bad row is a count-only warning (no numbers from the report)', r.json?.result === 'ok' && cohortWarn === 'Anirban_Ref: 1 row(s) could not be read and were left out.', JSON.stringify(r.json?.warnings));
+    for (const [who, label] of [[L.admin, 'the Super Admin'], [L.manager, 'a Manager'], [L.tlDighe, 'a TL'], [L.ho, 'an agent'], [L.stranger, 'anyone else']] as const) {
+      r = await call('GET', '/api/cohort-report', { token: tok(who) });
+      check(`${label} cannot read it (403)`, r.status === 403, `${r.status} ${r.text.slice(0, 100)}`);
+    }
+    r = await call('GET', '/api/auth/session', { token: tok(L.admin) });
+    check('the Super Admin session does not offer it', r.json?.cohortReport === false, r.text);
+    r = await call('GET', '/api/auth/session', { token: tok(anirban) });
+    check('Anirban signs in to the report only (role reportViewer)', r.status === 200 && r.json.role === 'reportViewer' && r.json.cohortReport === true, r.text);
+    r = await call('GET', '/api/cohort-report', { token: tok(anirban) });
+    check('Anirban reads the rows, with month keys from Date', r.status === 200 && r.json.rows.length === 5 && r.json.rows[0].month === '2026-10' && r.json.rows[0].sales === 1000, r.text.slice(0, 300));
+    for (const path of ['/api/team-summary', '/api/raw-data', '/api/leaderboard?location=Dighe', '/api/dod-data']) {
+      r = await call('GET', path, { token: tok(anirban) });
+      check(`Anirban gets nothing else: ${path} refused`, r.status === 403, `${r.status} ${r.text.slice(0, 100)}`);
+    }
+    const { cohortTable } = await import('../src/shared/cohortReport');
+    const ct = cohortTable(r0Rows(), '2026-10', 5);
+    function r0Rows() {
+      return [
+        { month: '2026-10', label: '', day: 1, category: '1. Shopify', cohort: '01.1 Second Plus', orders: 2, sales: 1000 },
+        { month: '2026-10', label: '', day: 1, category: '1. Shopify', cohort: '10. More than 5 minutes', orders: 3, sales: 9000 },
+        { month: '2026-10', label: '', day: 2, category: '4. POS OC', cohort: '10. More than 5 minutes', orders: 1, sales: 500 },
+        { month: '2026-10', label: '', day: 9, category: '1. Shopify', cohort: '10. More than 5 minutes', orders: 7, sales: 70000 },
+      ];
+    }
+    check('cohorts are cumulative and stop at the chosen day',
+      ct[0].orders === 6 && ct[0].revenue === 10500 && ct[0].byCategory.shopify.orders === 5 && ct[1].orders === 4 && ct[1].byCategory.pos.revenue === 500 && ct[1].aov === 9500 / 4,
+      JSON.stringify(ct));
   } finally {
     setGeminiForTests(null);
     await new Promise<void>((resolve) => server.close(() => resolve()));

@@ -10,6 +10,7 @@ import { auth, googleProvider } from './shared/firebase-client';
 import { setCachedSheetsToken } from './shared/sheets-auth';
 import { AgentView } from './components/AgentView';
 import { StaffPortal } from './components/StaffPortal';
+import { CohortReportView } from './components/CohortReportView';
 import { LogIn, LogOut, ShieldAlert, Layers, AlertCircle, RefreshCw, Volume2, VolumeX, Clock, Timer } from 'lucide-react';
 import { soundFx } from './utils/audio';
 import { FestiveAura } from './components/FestiveAura';
@@ -18,7 +19,9 @@ import { AgentLoginSessionState } from './shared/types';
 
 interface SessionData {
   email: string;
-  role: 'superAdmin' | 'manager' | 'tl' | 'agent' | null;
+  role: 'superAdmin' | 'manager' | 'tl' | 'agent' | 'reportViewer' | null;
+  /** May see the private Talk Time Cohort report (set by the server for its listed viewers only). */
+  cohortReport?: boolean;
   officialEmail?: string;
   name?: string;
   location?: string;
@@ -322,6 +325,8 @@ export default function App() {
                       ? `Team Leader · ${session.location || ''}`
                       : session?.role === 'agent'
                       ? `Caller · ${session.location || ''}`
+                      : session?.role === 'reportViewer'
+                      ? 'Reports'
                       : 'Authorized User'}
                   </span>
                 </div>
@@ -422,6 +427,9 @@ export default function App() {
               )}
             </button>
           </div>
+        ) : session?.role === 'reportViewer' ? (
+          // Only the private cohort report: every other route refuses this user
+          <CohortReportView getIdToken={getIdToken} />
         ) : session?.role === 'agent' ? (
           // Agent View: opens own record directly
           <AgentView
@@ -439,6 +447,7 @@ export default function App() {
             activeCycleId={session.activeCycleId || 'diwali-2026'}
             cycleName={session.activeCycleName}
             testMode={session.testMode}
+            cohortReport={session.cohortReport}
             getIdToken={getIdToken}
           />
         ) : sessionProblem ? (

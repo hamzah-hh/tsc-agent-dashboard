@@ -33,6 +33,7 @@ import { isAiConfigured, runBatchAiGeneration } from './server-ai';
 import { DEFAULT_RAW_SHEET_URL, saveRawPayload, syncRawSheetData } from './server-raw-data';
 import { buildFromCleanSheet, CleanSheetTabs } from './server-clean-sheet';
 import { saveTeamOps } from './server-team-ops';
+import { parseCohortRows, saveCohortRows } from './server-cohort-report';
 
 const REQUIRED_MAIN_HEADERS = [
   'Date',
@@ -1288,6 +1289,16 @@ export async function processCleanSheetImport(
       await saveTeamOps(activeCycleId, built.breaks, built.targets);
     } catch (err: any) {
       result.warnings.push(`Breaks / Targets not saved: ${err?.message || String(err)}`);
+    }
+    // The private cohort report: warnings give counts only, never its numbers
+    if (tabs.cohortRows) {
+      try {
+        const parsed = parseCohortRows(tabs.cohortRows);
+        await saveCohortRows(parsed.rows);
+        if (parsed.skipped) result.warnings.push(`Anirban_Ref: ${parsed.skipped} row(s) could not be read and were left out.`);
+      } catch (err: any) {
+        result.warnings.push(`Anirban_Ref not saved: ${err?.message || String(err)}`);
+      }
     }
   }
   return result;

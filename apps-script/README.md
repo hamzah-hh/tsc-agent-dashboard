@@ -23,7 +23,9 @@ Six input tabs: paste exports as values, no formulas. Headers are matched ignori
 | `Breaks` | agent per day | `Date`, `Agent_ID`, `Day_Type`, `Bio_or_Misc`, `First_Break`, `Lunch_Break`, `Last_Break`, `Total_Break`, `After_Call_Work`, `Idle_Time`, `Staffed_Duration`, `Idle_Time_+_After_Call_Work` (seconds; `Idle_Time+ACW_%` is recalculated) |
 | `Targets` | TL / Manager | `Manager_Email`, `Total Sales in Diwali Period`, `Total Target in Diwali Period` |
 
-`Breaks` and `Targets` feed only the **Team Summary & Targets** page (TLs and Managers). Other tabs (`TL_AM_Ref`, ...) are ignored.
+| `Anirban_Ref` | day x category x cohort | `Month`, `Day_Number`, `Date`, `Sale_Category`, `TT_Cohort`, `Order_Count`, `Sales` |
+
+`Breaks` and `Targets` feed only the **Team Summary & Targets** page (TLs and Managers). `Anirban_Ref` feeds only the private **Talk Time Cohort Report**, which only anirban@thesleepcompany.in can open in the app (not Managers, not the Super Admin). Note that anyone with the sheet's link can still read the tab in Google Sheets. Other tabs (`TL_AM_Ref`, ...) are ignored.
 
 Rules:
 - **Only people in `Agents` count.** Rows for any other email are left out (the sync warning lists them). A `Status` other than `Active` excludes the person (this replaces `Excluded_Agents`). Every active agent can sign in, even before their first data.

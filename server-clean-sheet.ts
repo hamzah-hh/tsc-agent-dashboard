@@ -37,6 +37,8 @@ export interface CleanSheetTabs {
   qualityRows?: any[];
   breaksRows?: any[];
   targetsRows?: any[];
+  /** Anirban_Ref: the private cohort report, saved on its own (server-cohort-report.ts). */
+  cohortRows?: any[];
 }
 
 export interface CleanSheetResult {

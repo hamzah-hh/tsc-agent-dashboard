@@ -583,6 +583,7 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken, t
             qualityRows: tabRows('Quality'),
             breaksRows: tabRows('Breaks'),
             targetsRows: tabRows('Targets'),
+            cohortRows: tabRows('Anirban_Ref'),
           };
           setFileStats({ mainCount: 0, qualityCount: cleanTabs.qualityRows.length, mainRows: [], qualityRows: [], cleanTabs });
           return;

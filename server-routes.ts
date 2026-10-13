@@ -15,6 +15,7 @@ import {
 } from './server-import';
 import { isCleanSheetPayload } from './server-clean-sheet';
 import { loadTeamOps } from './server-team-ops';
+import { canSeeCohortReport, loadCohortRows } from './server-cohort-report';
 import { TeamSummaryResponse } from './src/shared/teamOps';
 import { buildReadiness } from './server-readiness';
 import { generateAiText, isAiConfigured, runBatchAiGeneration } from './server-ai';
@@ -292,6 +293,19 @@ export function createApiApp(options: ApiOptions = {}): express.Express {
         if (err instanceof HttpError) throw err;
         return res.json({ result: 'error', error: err?.message || String(err) });
       }
+    })
+  );
+
+  // ------------------------------------------------------------------ private: Talk Time Cohort report
+
+  /** Only for COHORT_REPORT_VIEWERS (anirban@thesleepcompany.in): not Managers, not the Super Admin. */
+  api.get(
+    '/api/cohort-report',
+    route(async (req, res) => {
+      const user = await authenticate(req);
+      if (!canSeeCohortReport(user.email)) throw new HttpError(403, 'This report is private.');
+      res.set('Cache-Control', 'private, no-store');
+      return res.json(await loadCohortRows());
     })
   );
 
@@ -591,12 +605,19 @@ export function createApiApp(options: ApiOptions = {}): express.Express {
       const user = await authenticate(req);
       const { appConfig, cycle } = await ensureSeedData();
       const identity = await identify(user.email, appConfig);
+      const cohortReport = canSeeCohortReport(user.email);
       if (!identity) {
+        // Someone who may only see the private cohort report gets that and nothing else. This is not a
+        // role in identify(), so every other route still refuses them.
+        if (cohortReport) {
+          return res.json({ email: user.email, role: 'reportViewer', name: user.name, cohortReport: true, activeCycleName: cycle.name });
+        }
         return res.status(403).json({ role: null, error: 'Access denied. Contact your TL.' });
       }
       const common = {
         email: user.email,
         role: identity.role,
+        cohortReport,
         name: identity.access?.name || user.name,
         activeCycleId: appConfig.activeCycleId,
         activeCycleName: cycle.name,

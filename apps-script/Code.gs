@@ -323,6 +323,7 @@ var CLEAN_TABS_ = {
   qualityRows: 'Quality',
   breaksRows: 'Breaks',
   targetsRows: 'Targets',
+  cohortRows: 'Anirban_Ref',
 };
 
 function readTab_(ss, name, timeZone) {

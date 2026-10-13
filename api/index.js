@@ -3032,6 +3032,68 @@ async function loadTeamOps(cycleId) {
   return value;
 }
 
+// src/shared/cohortReport.ts
+var COHORT_REPORT_VIEWERS = ["anirban@thesleepcompany.in"];
+
+// server-cohort-report.ts
+var CHUNK2 = 2e3;
+var headRef2 = () => adminDb.collection("privateReports").doc("cohort");
+var chunksCol2 = () => headRef2().collection("chunks");
+function canSeeCohortReport(email) {
+  const list = process.env.COHORT_REPORT_VIEWERS ? process.env.COHORT_REPORT_VIEWERS.split(",").map((e) => normalizeEmail(e)).filter(Boolean) : COHORT_REPORT_VIEWERS;
+  const me = normalizeEmail(email);
+  return Boolean(me) && list.includes(me);
+}
+function headerKey3(h) {
+  return String(h ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+function pick3(row, ...names) {
+  const values = /* @__PURE__ */ new Map();
+  for (const [k, v] of Object.entries(row || {})) values.set(headerKey3(k), v);
+  for (const n of names) {
+    const v = values.get(headerKey3(n));
+    if (v !== void 0 && v !== null && String(v).trim() !== "") return String(v).trim();
+  }
+  return "";
+}
+function parseCohortRows(rows) {
+  const out = [];
+  let skipped = 0;
+  for (const row of rows || []) {
+    const dateCell = Object.entries(row || {}).find(([k]) => headerKey3(k) === "date")?.[1];
+    const m = /^(\d{4})-(\d{2})/.exec(sheetDateTime(dateCell)?.day || "");
+    const day = Number(pick3(row, "Day_Number", "Day"));
+    const orders = Number(pick3(row, "Order_Count", "Orders").replace(/,/g, ""));
+    const sales = Number(pick3(row, "Sales", "Revenue").replace(/,/g, ""));
+    const category = pick3(row, "Sale_Category", "Category");
+    const cohort = pick3(row, "TT_Cohort", "Talk Time Cohort");
+    if (!m || !Number.isFinite(day) || day < 1 || !Number.isFinite(orders) || !Number.isFinite(sales) || !category || !cohort) {
+      skipped++;
+      continue;
+    }
+    out.push({ month: `${m[1]}-${m[2].padStart(2, "0")}`, label: pick3(row, "Month") || `${m[1]}-${m[2]}`, day, category, cohort, orders, sales });
+  }
+  return { rows: out, skipped };
+}
+async function saveCohortRows(rows) {
+  const prev = await headRef2().get();
+  const prevChunks = prev.exists ? prev.data()?.chunks || 0 : 0;
+  const parts = [];
+  for (let i = 0; i < rows.length; i += CHUNK2) parts.push(rows.slice(i, i + CHUNK2));
+  const batch = adminDb.batch();
+  parts.forEach((p, i) => batch.set(chunksCol2().doc(`rows-${i}`), { rows: p }));
+  for (let i = parts.length; i < prevChunks; i++) batch.delete(chunksCol2().doc(`rows-${i}`));
+  batch.set(headRef2(), { chunks: parts.length, count: rows.length, updatedAt: (/* @__PURE__ */ new Date()).toISOString() });
+  await batch.commit();
+}
+async function loadCohortRows() {
+  const head = await headRef2().get();
+  if (!head.exists) return { rows: [], updatedAt: null };
+  const d = head.data();
+  const parts = await Promise.all(Array.from({ length: d.chunks || 0 }, (_, i) => chunksCol2().doc(`rows-${i}`).get()));
+  return { rows: parts.flatMap((p) => p.exists ? p.data()?.rows || [] : []), updatedAt: d.updatedAt || null };
+}
+
 // server-import.ts
 var REQUIRED_MAIN_HEADERS = [
   "Date",
@@ -3111,14 +3173,14 @@ function canonicalizeMainHeader(rawHeader) {
   }
   return clean;
 }
-function headerKey3(h) {
+function headerKey4(h) {
   return String(h ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 function pickColumn(row, ...names) {
   const values = /* @__PURE__ */ new Map();
-  for (const [k, v] of Object.entries(row || {})) values.set(headerKey3(k), v);
+  for (const [k, v] of Object.entries(row || {})) values.set(headerKey4(k), v);
   for (const name of names) {
-    const v = values.get(headerKey3(name));
+    const v = values.get(headerKey4(name));
     if (v !== void 0 && v !== null && String(v).trim() !== "") return String(v).trim();
   }
   return "";
@@ -3843,6 +3905,15 @@ async function processCleanSheetImport(source, tabs, options = {}) {
     } catch (err) {
       result.warnings.push(`Breaks / Targets not saved: ${err?.message || String(err)}`);
     }
+    if (tabs.cohortRows) {
+      try {
+        const parsed = parseCohortRows(tabs.cohortRows);
+        await saveCohortRows(parsed.rows);
+        if (parsed.skipped) result.warnings.push(`Anirban_Ref: ${parsed.skipped} row(s) could not be read and were left out.`);
+      } catch (err) {
+        result.warnings.push(`Anirban_Ref not saved: ${err?.message || String(err)}`);
+      }
+    }
   }
   return result;
 }
@@ -4373,6 +4444,15 @@ function createApiApp(options = {}) {
     })
   );
   api.get(
+    "/api/cohort-report",
+    route(async (req, res) => {
+      const user = await authenticate(req);
+      if (!canSeeCohortReport(user.email)) throw new HttpError(403, "This report is private.");
+      res.set("Cache-Control", "private, no-store");
+      return res.json(await loadCohortRows());
+    })
+  );
+  api.get(
     "/api/team-summary",
     route(async (req, res) => {
       const user = await authenticate(req);
@@ -4613,12 +4693,17 @@ function createApiApp(options = {}) {
       const user = await authenticate(req);
       const { appConfig, cycle } = await ensureSeedData();
       const identity = await identify(user.email, appConfig);
+      const cohortReport = canSeeCohortReport(user.email);
       if (!identity) {
+        if (cohortReport) {
+          return res.json({ email: user.email, role: "reportViewer", name: user.name, cohortReport: true, activeCycleName: cycle.name });
+        }
         return res.status(403).json({ role: null, error: "Access denied. Contact your TL." });
       }
       const common = {
         email: user.email,
         role: identity.role,
+        cohortReport,
         name: identity.access?.name || user.name,
         activeCycleId: appConfig.activeCycleId,
         activeCycleName: cycle.name,

@@ -6,6 +6,7 @@ import { AgentView } from './AgentView';
 import { RawDataView } from './RawDataView';
 import { DayOnDayView } from './DayOnDayView';
 import { TeamSummaryView } from './TeamSummaryView';
+import { CohortReportView } from './CohortReportView';
 
 // The Admin console (with the Excel reader) is only for the Super Admin, so it is loaded on demand and
 // never slows down the phones of agents, TLs and managers.
@@ -21,6 +22,7 @@ import {
   FileSpreadsheet,
   CalendarDays,
   Gauge,
+  Lock,
 } from 'lucide-react';
 
 interface StaffPortalProps {
@@ -30,10 +32,12 @@ interface StaffPortalProps {
   activeCycleId: string;
   cycleName?: string;
   testMode?: boolean;
+  /** The private cohort report tab, only for its listed viewers (the server decides). */
+  cohortReport?: boolean;
   getIdToken: () => Promise<string>;
 }
 
-type StaffTab = 'team' | 'summary' | 'leaderboards' | 'dod' | 'rawData' | 'syncStatus' | 'admin';
+type StaffTab = 'team' | 'summary' | 'cohort' | 'leaderboards' | 'dod' | 'rawData' | 'syncStatus' | 'admin';
 
 export function StaffPortal({
   userRole,
@@ -42,6 +46,7 @@ export function StaffPortal({
   activeCycleId,
   cycleName,
   testMode = false,
+  cohortReport = false,
   getIdToken,
 }: StaffPortalProps) {
   const [activeTab, setActiveTab] = useState<StaffTab>('team');
@@ -160,6 +165,20 @@ export function StaffPortal({
             Raw Data
           </button>
 
+          {cohortReport && (
+            <button
+              onClick={() => setActiveTab('cohort')}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                activeTab === 'cohort'
+                  ? 'bg-white dark:bg-slate-800 text-slate-950 dark:text-white shadow-xs font-bold'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Lock className="w-3.5 h-3.5" />
+              Cohort Report
+            </button>
+          )}
+
           {userRole === 'superAdmin' && (
             <button
               onClick={() => setActiveTab('syncStatus')}
@@ -204,6 +223,8 @@ export function StaffPortal({
       )}
 
       {activeTab === 'summary' && <TeamSummaryView userRole={userRole} getIdToken={getIdToken} />}
+
+      {activeTab === 'cohort' && cohortReport && <CohortReportView getIdToken={getIdToken} />}
 
       {activeTab === 'leaderboards' && (
         <Leaderboards
