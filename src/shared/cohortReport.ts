@@ -1,9 +1,10 @@
 /**
- * Talk Time Cohort report (Anirban_Ref tab). Private: only the emails in COHORT_REPORT_VIEWERS may see it,
- * not even the Super Admin or Managers.
+ * Talk Time Cohort report (Anirban_Ref tab). Private: only the emails in COHORT_REPORT_VIEWERS may see it.
+ * Being a Manager, TL or Super Admin does not give access by itself.
  */
-// Anirban signs in with his Gmail; the company address is kept in case it becomes a Google account
-export const COHORT_REPORT_VIEWERS = ['anirban.tsc@gmail.com', 'anirban@thesleepcompany.in'];
+// Anirban signs in with his Gmail (the company address is kept in case it becomes a Google account);
+// agha.h489@gmail.com (Super Admin) was added at the owner's request. Managers and TLs never see it.
+export const COHORT_REPORT_VIEWERS = ['anirban.tsc@gmail.com', 'anirban@thesleepcompany.in', 'agha.h489@gmail.com'];
 
 /** One row of the Anirban_Ref tab: one day, one sale category, one talk time cohort. */
 export interface CohortRow {

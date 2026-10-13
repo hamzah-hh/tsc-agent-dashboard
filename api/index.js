@@ -3033,7 +3033,7 @@ async function loadTeamOps(cycleId) {
 }
 
 // src/shared/cohortReport.ts
-var COHORT_REPORT_VIEWERS = ["anirban.tsc@gmail.com", "anirban@thesleepcompany.in"];
+var COHORT_REPORT_VIEWERS = ["anirban.tsc@gmail.com", "anirban@thesleepcompany.in", "agha.h489@gmail.com"];
 
 // server-cohort-report.ts
 var CHUNK2 = 2e3;

@@ -980,12 +980,16 @@ export async function runApiTests() {
     });
     const cohortWarn = (r.json?.warnings || []).find((w: string) => w.startsWith('Anirban_Ref'));
     check('sync saves it; a bad row is a count-only warning (no numbers from the report)', r.json?.result === 'ok' && cohortWarn === 'Anirban_Ref: 1 row(s) could not be read and were left out.', JSON.stringify(r.json?.warnings));
-    for (const [who, label] of [[L.admin, 'the Super Admin'], [L.manager, 'a Manager'], [L.tlDighe, 'a TL'], [L.ho, 'an agent'], [L.stranger, 'anyone else']] as const) {
+    for (const [who, label] of [[L.manager, 'a Manager'], [L.tlDighe, 'a TL'], [L.ho, 'an agent'], [L.stranger, 'anyone else']] as const) {
       r = await call('GET', '/api/cohort-report', { token: tok(who) });
       check(`${label} cannot read it (403)`, r.status === 403, `${r.status} ${r.text.slice(0, 100)}`);
     }
     r = await call('GET', '/api/auth/session', { token: tok(L.admin) });
-    check('the Super Admin session does not offer it', r.json?.cohortReport === false, r.text);
+    check('the owner (Super Admin, on the list) keeps the Super Admin role and gets the report tab', r.json?.role === 'superAdmin' && r.json?.cohortReport === true, r.text);
+    r = await call('GET', '/api/cohort-report', { token: tok(L.admin) });
+    check('and can read it', r.status === 200 && r.json.rows.length === 5, `${r.status}`);
+    r = await call('GET', '/api/auth/session', { token: tok(L.manager) });
+    check('a Manager session does not offer it', r.json?.role === 'manager' && r.json?.cohortReport === false, r.text);
     r = await call('GET', '/api/auth/session', { token: tok(anirban) });
     check('Anirban signs in to the report only (role reportViewer)', r.status === 200 && r.json.role === 'reportViewer' && r.json.cohortReport === true, r.text);
     r = await call('GET', '/api/cohort-report', { token: tok(anirban) });
