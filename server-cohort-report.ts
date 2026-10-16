@@ -59,20 +59,29 @@ export function parseCohortRows(rows: any[]): { rows: CohortRow[]; skipped: numb
   return { rows: out, skipped };
 }
 
-/** Reads the Company_DOD tab (date, SUM of order_id, SUM of sales). A repeated date keeps its last row. */
+/**
+ * Reads the Company_DOD tab: one row per day and channel (date, channel, sales, order_id, Main_Channel).
+ * Rows are added up per day: total, and the Retail and Marketplace Main_Channel groups.
+ */
 export function parseCompanyDodRows(rows: any[]): { rows: CompanyDay[]; skipped: number } {
   const byDate = new Map<string, CompanyDay>();
   let skipped = 0;
   for (const row of rows || []) {
     const dateCell = Object.entries(row || {}).find(([k]) => headerKey(k) === 'date')?.[1];
     const date = sheetDateTime(dateCell)?.day;
-    const orders = Number(pick(row, 'SUM of order_id', 'Orders', 'Order_Count').replace(/,/g, ''));
-    const sales = Number(pick(row, 'SUM of sales', 'Sales', 'Revenue').replace(/,/g, ''));
+    const sales = Number(pick(row, 'sales', 'Revenue').replace(/,/g, ''));
+    const orders = Number(pick(row, 'order_id', 'Orders', 'Order_Count').replace(/,/g, '') || '0');
+    const main = pick(row, 'Main_Channel', 'Main Channel').toLowerCase();
     if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(orders) || !Number.isFinite(sales)) {
       skipped++;
       continue;
     }
-    byDate.set(date, { date, orders, sales });
+    const day = byDate.get(date) || { date, orders: 0, sales: 0, retail: 0, marketplace: 0 };
+    day.orders += orders;
+    day.sales += sales;
+    if (main === 'retail') day.retail = (day.retail || 0) + sales;
+    else if (main === 'marketplace') day.marketplace = (day.marketplace || 0) + sales;
+    byDate.set(date, day);
   }
   return { rows: [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date)), skipped };
 }

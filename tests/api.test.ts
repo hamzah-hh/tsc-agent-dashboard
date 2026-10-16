@@ -1028,24 +1028,46 @@ export async function runApiTests() {
       JSON.stringify(cr.sameDaysMonthsBack({ from: '2026-10-01', to: '2026-10-31' })) === '{"from":"2026-09-01","to":"2026-09-30"}' &&
       cr.shiftMonths('2026-03-31', -1) === '2026-02-28' && JSON.stringify(cr.sameDaysMonthsBack({ from: '2026-10-01', to: '2026-10-12' }, 2)) === '{"from":"2026-08-01","to":"2026-08-12"}');
 
-    // Company_DOD: company revenue per day, served with the private cohort report
-    const dod = (date: string, orders: any, sales: any) => ({ date, 'SUM of order_id': orders, 'SUM of sales': sales });
+    // Company_DOD: company revenue per day and channel, served with the private cohort report
+    const dod = (date: string, channel: string, sales: any, order_id: any, Main_Channel: string) => ({ date, channel, sales, order_id, Main_Channel });
     r = await call('POST', '/api/sync', {
       headers: { 'X-Sync-Key': process.env.SYNC_KEY! },
       body: {
         agentsRows: [person('cia@co.in', 'Clean Cia', 'HO Callers', 'Dighe')],
-        companyDodRows: [dod('2026-10-01 00:00:00', '51', '1,753,841'), dod('2026-10-02 00:00:00', 62, 2806267), dod('2026-09-01 00:00:00', 10, 100000), dod('oops', 1, 1)],
+        companyDodRows: [
+          dod('2026-10-01 00:00:00', 'Retail', '1,000,000', '25', 'Retail'),
+          dod('2026-10-01 00:00:00', 'Website', '500,000', '10', 'Website'),
+          dod('2026-10-01 00:00:00', 'Amazon', 253841, 16, 'Marketplace'),
+          dod('2026-10-02 00:00:00', 'Retail', 2000000, 40, 'Retail'),
+          dod('2026-10-02 00:00:00', 'Unmapped Channel', 100000, 2, 'Retail'),
+          dod('2026-10-02 00:00:00', 'Flipkart', 706267, 20, 'Marketplace'),
+          dod('2026-09-01 00:00:00', 'Retail', 100000, 10, 'Retail'),
+          dod('oops', 'Retail', 1, 1, 'Retail'),
+        ],
       },
     });
     const dodWarn = (r.json?.warnings || []).find((w: string) => w.startsWith('Company_DOD'));
     check('Company_DOD syncs; a bad row is a count-only warning', r.json?.result === 'ok' && dodWarn === 'Company_DOD: 1 row(s) could not be read and were left out.', JSON.stringify(r.json?.warnings));
     r = await call('GET', '/api/cohort-report', { token: tok(anirban) });
     const company = r.json?.company || [];
-    check('the report hands out the company days (sorted, commas read)', company.length === 3 && company[0].date === '2026-09-01' && company[1].sales === 1753841 && company[1].orders === 51, JSON.stringify(company));
+    check('the report hands out one row per day (sorted, commas read, channels added up by Main_Channel)',
+      company.length === 3 && company[0].date === '2026-09-01' && company[1].sales === 1753841 && company[1].orders === 51 && company[1].retail === 1000000 && company[1].marketplace === 253841 && company[2].retail === 2100000,
+      JSON.stringify(company));
     r = await call('GET', '/api/cohort-report', { token: tok(L.manager) });
     check('a Manager still cannot read the company days (403)', r.status === 403, `${r.status}`);
     const ctot = cr.companyForPeriod(company, { from: '2026-10-01', to: '2026-10-02' });
-    check('company totals for a period: orders, revenue, AOV, days', ctot.orders === 113 && ctot.revenue === 4560108 && ctot.days === 2 && Math.round(ctot.aov!) === Math.round(4560108 / 113), JSON.stringify(ctot));
+    check('company totals for a period: orders, revenue, retail, marketplace, AOV, days',
+      ctot.orders === 113 && ctot.revenue === 4560108 && ctot.retail === 3100000 && ctot.marketplace === 960108 && ctot.days === 2 && Math.round(ctot.aov!) === Math.round(4560108 / 113),
+      JSON.stringify(ctot));
+    const attr = cr.attributedRevenue(cr.cohortTableForPeriod(r0Rows(), { from: '2026-10-01', to: '2026-10-09' }));
+    check('attributed revenue is the cumulative "10 Seconds Plus" cohort (nothing counted below it)',
+      cr.attributedRevenue([
+        { cohort: '01.1 Second Plus', orders: 9, revenue: 900, aov: 100, byCategory: {} as any },
+        { cohort: '02. 5 Seconds Plus', orders: 8, revenue: 800, aov: 100, byCategory: {} as any },
+        { cohort: '03.10 Seconds Plus', orders: 7, revenue: 700, aov: 100, byCategory: {} as any },
+        { cohort: '05. 30 seconds Plus', orders: 5, revenue: 500, aov: 100, byCategory: {} as any },
+      ]) === 700 && attr === 0,
+      String(attr));
   } finally {
     setGeminiForTests(null);
     await new Promise<void>((resolve) => server.close(() => resolve()));

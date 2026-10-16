@@ -8,6 +8,7 @@ import {
   CohortRow,
   CohortTableRow,
   CompanyDay,
+  attributedRevenue,
   companyForPeriod,
   cohortTableForPeriod,
   growth,
@@ -338,8 +339,6 @@ export function CohortReportView({ getIdToken }: CohortReportViewProps) {
           tables={tables}
           company={company}
           tags={periods.map((p, i) => (i === 0 ? 'Base' : periodTag(base, p) || `Comparison ${i}`))}
-          picked={picked}
-          onPick={setPicked}
         />
       </div>
     </div>
@@ -463,7 +462,6 @@ export function CohortTable({
 }
 
 const pp = (v: number | null) => (v === null ? '-' : `${v >= 0 ? '+' : ''}${v.toFixed(2)} pp`);
-const share = (part: number, whole: number) => (whole > 0 ? (part / whole) * 100 : null);
 
 /**
  * Company revenue (Company_DOD tab) for each period, and each cumulative talk time cohort's revenue as a
@@ -474,15 +472,11 @@ function CompanySection({
   tables,
   company,
   tags,
-  picked,
-  onPick,
 }: {
   periods: CohortPeriod[];
   tables: CohortTableRow[][];
   company: CompanyDay[];
   tags: string[];
-  picked: string | null;
-  onPick: (cohort: string | null) => void;
 }) {
   if (company.length === 0) {
     return (
@@ -496,6 +490,20 @@ function CompanySection({
   const last = company[company.length - 1].date;
   const outside = periods.some((p) => p.from < first || p.to > last);
   const comps = periods.slice(1);
+
+  // Rows: company, retail and marketplace revenue (Company_DOD), attributed revenue (cumulative 10 seconds
+  // cohort of the cohort tables), then attributed revenue as a % of each of the three.
+  const attributed = tables.map((t) => attributedRevenue(t));
+  const ratio = (part: number, whole: number) => (whole > 0 ? (part / whole) * 100 : null);
+  const metrics: Array<{ label: string; percent: boolean; values: Array<number | null> }> = [
+    { label: 'Company Revenue', percent: false, values: totals.map((t) => t.revenue) },
+    { label: 'Retail Revenue', percent: false, values: totals.map((t) => t.retail) },
+    { label: 'Marketplace Revenue', percent: false, values: totals.map((t) => t.marketplace) },
+    { label: 'Attributed Revenue', percent: false, values: attributed },
+    { label: 'Attributed Revenue % (of Company Revenue)', percent: true, values: totals.map((t, i) => ratio(attributed[i], t.revenue)) },
+    { label: 'Retail Revenue % (Attributed / Retail)', percent: true, values: totals.map((t, i) => ratio(attributed[i], t.retail)) },
+    { label: 'Marketplace Revenue % (Attributed / Marketplace)', percent: true, values: totals.map((t, i) => ratio(attributed[i], t.marketplace)) },
+  ];
 
   return (
     <>
@@ -549,69 +557,54 @@ function CompanySection({
 
       <section className={`${card} overflow-hidden`}>
         <h3 className="px-4 py-2.5 text-sm font-bold text-slate-950 dark:text-white border-b border-slate-200 dark:border-slate-800">
-          Cumulative Talk Time Cohort Revenue as % of Company Revenue
+          Attributed Revenue
+          <span className="ml-2 text-[11px] font-normal text-slate-500">
+            cumulative revenue of orders with 10 seconds or more of talk time, against the Company_DOD revenue
+          </span>
         </h3>
         <div className="overflow-x-auto" data-scroll-box="true">
-          <table className="w-full text-xs border-collapse table-fixed" style={{ minWidth: `${180 + periods.length * 200 + comps.length * 110}px` }}>
+          <table className="w-full text-xs border-collapse table-fixed" style={{ minWidth: `${220 + periods.length * 150 + comps.length * 130}px` }}>
             <colgroup>
-              <col style={{ width: '11rem' }} />
-              {Array.from({ length: periods.length * 2 + comps.length }, (_, i) => (
+              <col style={{ width: '15rem' }} />
+              {Array.from({ length: periods.length + comps.length }, (_, i) => (
                 <col key={i} />
               ))}
             </colgroup>
             <thead className="bg-slate-50 dark:bg-slate-800/60">
               <tr>
-                <th rowSpan={2} className="py-2 px-2 text-[11px] font-semibold text-slate-700 dark:text-slate-200 text-left align-bottom">
-                  Talk Time Cohort
-                </th>
+                <th className="py-2 px-2 text-[11px] font-semibold text-slate-700 dark:text-slate-200 text-left align-bottom">Metric</th>
                 {periods.map((p, i) => (
-                  <th key={i} colSpan={2} className={`${thGroup} ${sep}`}>
-                    {tags[i]} · {periodText(p)}
+                  <th key={i} className={`${thSub} ${i === 0 ? sep : ''} text-center leading-tight`}>
+                    <span className="block font-semibold text-slate-700 dark:text-slate-200">{tags[i]}</span>
+                    {periodText(p)}
                   </th>
                 ))}
                 {comps.map((_, i) => (
-                  <th key={i} className={`${thGroup} ${i === 0 ? growthSep : sep}`}>
-                    Base vs {tags[i + 1]}
-                  </th>
-                ))}
-              </tr>
-              <tr>
-                {periods.map((_, i) => (
-                  <React.Fragment key={i}>
-                    <th className={`${thSub} ${sep}`}>Revenue</th>
-                    <th className={thSub}>% of Company</th>
-                  </React.Fragment>
-                ))}
-                {comps.map((_, i) => (
-                  <th key={i} className={`${thSub} ${i === 0 ? growthSep : sep}`}>
-                    Change
+                  <th key={i} className={`${thSub} ${i === 0 ? growthSep : sep} text-center leading-tight`}>
+                    <span className="block font-semibold text-slate-700 dark:text-slate-200">Base vs {tags[i + 1]}</span>
+                    change
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {(tables[0] || []).map((r, ri) => {
-                const on = picked === r.cohort;
-                const shares = periods.map((_, i) => share(tables[i][ri]?.revenue ?? 0, totals[i].revenue));
+              {metrics.map((m) => {
+                const vals = m.values;
                 return (
-                  <tr
-                    key={r.cohort}
-                    onClick={() => onPick(on ? null : r.cohort)}
-                    title="Click to highlight this cohort in every table"
-                    className={`cursor-pointer ${on ? 'bg-amber-100 dark:bg-amber-900/40 outline outline-2 outline-amber-400 -outline-offset-2' : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'}`}
-                  >
-                    <td className={`py-1.5 px-2 text-[11px] font-semibold whitespace-nowrap truncate ${on ? 'text-amber-900 dark:text-amber-200' : 'text-slate-900 dark:text-white'}`}>{r.cohort}</td>
-                    {periods.map((_, i) => (
-                      <React.Fragment key={i}>
-                        <td className={`${td} ${sep}`}>{money(tables[i][ri]?.revenue ?? 0)}</td>
-                        <td className={`${td} font-bold text-slate-900 dark:text-white`}>{shares[i] === null ? '-' : `${shares[i]!.toFixed(2)}%`}</td>
-                      </React.Fragment>
+                  <tr key={m.label} className={m.percent ? 'bg-slate-50/60 dark:bg-slate-800/30' : ''}>
+                    <td className={`py-1.5 px-2 text-[11px] font-semibold whitespace-nowrap ${m.percent ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-900 dark:text-white'}`}>{m.label}</td>
+                    {vals.map((v, i) => (
+                      <td key={i} className={`${td} ${i === 0 ? sep : ''} font-bold text-slate-900 dark:text-white`}>
+                        {m.percent ? (v === null ? '-' : `${v.toFixed(2)}%`) : money(v)}
+                      </td>
                     ))}
                     {comps.map((_, i) => {
-                      const d = shares[0] !== null && shares[i + 1] !== null ? shares[0]! - shares[i + 1]! : null;
+                      const base = vals[0];
+                      const other = vals[i + 1];
+                      const change = m.percent ? (base !== null && other !== null ? base - other : null) : growth(base, other);
                       return (
-                        <td key={i} className={`${td} ${growthClass(d)} ${i === 0 ? growthSep : sep}`}>
-                          {pp(d)}
+                        <td key={i} className={`${td} ${growthClass(change)} ${i === 0 ? growthSep : sep}`}>
+                          {m.percent ? pp(change) : pct(change)}
                         </td>
                       );
                     })}

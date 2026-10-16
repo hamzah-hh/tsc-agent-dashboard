@@ -45,16 +45,23 @@ export function rowDate(r: CohortRow): string {
   return r.date || `${r.month}-${String(r.day).padStart(2, '0')}`;
 }
 
-/** One day of the Company_DOD tab: all company orders and revenue that day. */
+/**
+ * One day of the Company_DOD tab (one row per day and channel there), added up: all company orders and
+ * revenue, and the revenue of the Retail and Marketplace Main_Channel groups (the rest, Website, is the remainder).
+ */
 export interface CompanyDay {
   date: string; // 'YYYY-MM-DD'
   orders: number;
-  sales: number;
+  sales: number; // all channels
+  retail?: number; // Main_Channel Retail (older saves have none)
+  marketplace?: number; // Main_Channel Marketplace
 }
 
 export interface CompanyTotals {
   orders: number;
   revenue: number;
+  retail: number;
+  marketplace: number;
   aov: number | null;
   days: number;
 }
@@ -63,14 +70,28 @@ export interface CompanyTotals {
 export function companyForPeriod(days: CompanyDay[], period: { from: string; to: string }): CompanyTotals {
   let orders = 0;
   let revenue = 0;
+  let retail = 0;
+  let marketplace = 0;
   let n = 0;
   for (const d of days) {
     if (d.date < period.from || d.date > period.to) continue;
     orders += d.orders;
     revenue += d.sales;
+    retail += d.retail || 0;
+    marketplace += d.marketplace || 0;
     n++;
   }
-  return { orders, revenue, aov: orders > 0 ? revenue / orders : null, days: n };
+  return { orders, revenue, retail, marketplace, aov: orders > 0 ? revenue / orders : null, days: n };
+}
+
+/**
+ * Attributed revenue: the cumulative revenue of the "10 Seconds Plus" cohort, i.e. every order with 10 seconds
+ * or more of talk time (the cohort and all longer ones). To count from another cohort, change this match.
+ */
+export const ATTRIBUTED_COHORT = /10\s*seconds/i;
+
+export function attributedRevenue(table: CohortTableRow[]): number {
+  return table.find((r) => ATTRIBUTED_COHORT.test(r.cohort))?.revenue ?? 0;
 }
 
 /** A period of dates, both ends included ('YYYY-MM-DD'). */
