@@ -347,6 +347,8 @@ export function CohortReportView({ getIdToken }: CohortReportViewProps) {
 
 const thGroup = 'pt-2 pb-1 px-2 text-[11px] font-semibold text-slate-700 dark:text-slate-200 text-center whitespace-nowrap border-b border-slate-200 dark:border-slate-700';
 const thSub = 'pb-2 pt-1 px-2 text-[11px] font-medium text-slate-500 dark:text-slate-400 text-right whitespace-nowrap';
+// Headers of the company tables wrap onto two lines instead of forcing the table wide
+const thWrap = 'pb-2 pt-2 px-2 text-[11px] font-medium text-slate-500 dark:text-slate-400 text-right leading-tight align-bottom';
 const sep = 'border-l border-slate-200 dark:border-slate-700';
 const growthSep = 'border-l-2 border-slate-300 dark:border-slate-600';
 
@@ -520,13 +522,13 @@ function CompanySection({
             <thead className="bg-slate-50 dark:bg-slate-800/60">
               <tr>
                 <th className="py-2 px-2 text-[11px] font-semibold text-slate-700 dark:text-slate-200 text-left w-64">Period</th>
-                <th className={thSub}>Days</th>
-                <th className={thSub}>Orders</th>
-                <th className={thSub}>Revenue</th>
-                <th className={thSub}>AOV</th>
-                <th className={`${thSub} ${growthSep}`}>Base orders vs this</th>
-                <th className={thSub}>Base revenue vs this</th>
-                <th className={thSub}>Base AOV vs this</th>
+                <th className={thWrap}>Days</th>
+                <th className={thWrap}>Orders</th>
+                <th className={thWrap}>Revenue</th>
+                <th className={thWrap}>AOV</th>
+                <th className={`${thWrap} ${growthSep}`}>Base orders vs this</th>
+                <th className={thWrap}>Base revenue vs this</th>
+                <th className={thWrap}>Base AOV vs this</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -574,13 +576,13 @@ function CompanySection({
               <tr>
                 <th className="py-2 px-2 text-[11px] font-semibold text-slate-700 dark:text-slate-200 text-left align-bottom">Metric</th>
                 {periods.map((p, i) => (
-                  <th key={i} className={`${thSub} ${i === 0 ? sep : ''} text-center leading-tight`}>
+                  <th key={i} className={`${thWrap} ${i === 0 ? sep : ''} text-center leading-tight`}>
                     <span className="block font-semibold text-slate-700 dark:text-slate-200">{tags[i]}</span>
                     {periodText(p)}
                   </th>
                 ))}
                 {comps.map((_, i) => (
-                  <th key={i} className={`${thSub} ${i === 0 ? growthSep : sep} text-center leading-tight`}>
+                  <th key={i} className={`${thWrap} ${i === 0 ? growthSep : sep} text-center leading-tight`}>
                     <span className="block font-semibold text-slate-700 dark:text-slate-200">Base vs {tags[i + 1]}</span>
                     change
                   </th>
