@@ -537,7 +537,7 @@ function CompanySection({
                 const g = i === 0 ? [null, null, null] : [growth(totals[0].orders, t.orders), growth(totals[0].revenue, t.revenue), growth(totals[0].aov, t.aov)];
                 return (
                   <tr key={i}>
-                    <td className="py-1.5 px-2 text-[11px] font-semibold text-slate-900 dark:text-white whitespace-nowrap truncate">
+                    <td className="py-1.5 px-2 text-[11px] font-semibold text-slate-900 dark:text-white leading-tight break-words">
                       {tags[i]}: {periodText(p)}
                     </td>
                     <td className={td}>{t.days}</td>
@@ -594,7 +594,7 @@ function CompanySection({
                 const vals = m.values;
                 return (
                   <tr key={m.label} className={m.percent ? 'bg-slate-50/60 dark:bg-slate-800/30' : ''}>
-                    <td className={`py-1.5 px-2 text-[11px] font-semibold whitespace-nowrap ${m.percent ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-900 dark:text-white'}`}>{m.label}</td>
+                    <td className={`py-1.5 px-2 text-[11px] font-semibold leading-tight break-words ${m.percent ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-900 dark:text-white'}`}>{m.label}</td>
                     {vals.map((v, i) => (
                       <td key={i} className={`${td} ${i === 0 ? sep : ''} font-bold text-slate-900 dark:text-white`}>
                         {m.percent ? (v === null ? '-' : `${v.toFixed(2)}%`) : money(v)}
