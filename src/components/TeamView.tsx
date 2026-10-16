@@ -229,6 +229,8 @@ export function TeamView({
     ? revenueAgents.reduce((acc, a) => acc + (a.result?.achievementPct || 0), 0) / revenueAgents.length
     : 0;
 
+  const totalVisits = revenueAgents.reduce((acc, a) => acc + (a.totals?.visitsAttributed || 0), 0);
+
   const totalIncentive = statAgents.reduce(
     (acc, a) => acc + (a.result?.total || 0),
     0
@@ -257,7 +259,7 @@ export function TeamView({
       {!loading && !error && <StaleBanner date={latestDataDate} />}
 
       {/* 1. Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         {/* Card 1: Agents */}
         <div className="bg-white/95 dark:bg-slate-900/90 backdrop-blur-sm border border-slate-200/90 dark:border-slate-800 rounded-2xl p-5 shadow-xs">
           <span className="text-xs uppercase tracking-wider font-bold text-slate-400 dark:text-slate-500 font-mono block mb-1">
@@ -280,6 +282,17 @@ export function TeamView({
             {formatCurrencyINR(totalRevenue)}
           </div>
           <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">Sum of team sales</p>
+        </div>
+
+        {/* Total Visits */}
+        <div className="bg-white/95 dark:bg-slate-900/90 backdrop-blur-sm border border-slate-200/90 dark:border-slate-800 rounded-2xl p-5 shadow-xs">
+          <span className="text-xs uppercase tracking-wider font-bold text-slate-400 dark:text-slate-500 font-mono block mb-1">
+            Total Visits
+          </span>
+          <div className="text-2xl font-extrabold text-slate-900 dark:text-white font-mono">
+            {formatNumberINR(totalVisits)}
+          </div>
+          <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">Attributed to the team's agents</p>
         </div>
 
         {/* Card 3: Average Achievement % */}

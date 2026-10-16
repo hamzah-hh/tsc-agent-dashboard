@@ -99,6 +99,49 @@ function breakAverages(rows: BreakDay[]): BreakAverages {
   };
 }
 
+const breakText = (key: BreakMetric, value: number | null) => (key === 'idleAcwPct' ? (value === null ? '-' : `${value.toFixed(2)}%`) : hms(value));
+
+function useExclusions() {
+  const [excluded, setExcluded] = useState<Set<string>>(new Set());
+  const toggle = (email: string) =>
+    setExcluded((prev) => {
+      const next = new Set(prev);
+      next.has(email) ? next.delete(email) : next.add(email);
+      return next;
+    });
+  return { excluded, toggle, reset: () => setExcluded(new Set()) };
+}
+
+function ExcludedNote({ count, onReset }: { count: number; onReset: () => void }) {
+  return (
+    <p className="px-5 pb-3 text-[11px] text-slate-500 dark:text-slate-400">
+      {count > 0 ? (
+        <>
+          {count} agent{count > 1 ? 's' : ''} left out of the averages.{' '}
+          <button onClick={onReset} className="font-bold text-indigo-600 dark:text-indigo-300 hover:underline">
+            Include everyone again
+          </button>
+        </>
+      ) : (
+        'Open a team and untick an agent to see the averages without them.'
+      )}
+    </p>
+  );
+}
+
+function DrillSummary({ items }: { items: Array<{ label: string; value: string; red?: boolean }> }) {
+  return (
+    <div className="flex flex-wrap gap-2 px-5 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40">
+      {items.map((i) => (
+        <div key={i.label} className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-1.5">
+          <p className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400 font-bold leading-tight">{i.label}</p>
+          <p className={`text-sm font-bold tabular-nums ${i.red ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'}`}>{i.value}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function breakCell(key: BreakMetric, value: number | null) {
   const text = key === 'idleAcwPct' ? (value === null ? '-' : `${value.toFixed(2)}%`) : hms(value);
   return <td className={`${td} text-right ${overLimit(key, value) ? RED : 'text-slate-800 dark:text-slate-200'}`}>{text}</td>;
@@ -229,6 +272,7 @@ export function ProductivitySection({
 }) {
   const [openTeam, setOpenTeam] = useState<string | null>(null);
   const [drillAgent, setDrillAgent] = useState<string | null>(null);
+  const { excluded, toggle, reset } = useExclusions();
 
   // A team is a TL's agents (Pre Sales has no Dialer data)
   const teams = useMemo(() => {
@@ -242,12 +286,14 @@ export function ProductivitySection({
     return [...m.values()].sort((x, y) => x.location.localeCompare(y.location));
   }, [agents]);
   // Teams with Dialer days in the chosen range, with their numbers
+  const activeDays = days.filter((d) => !excluded.has(d.agentEmail.toLowerCase()));
   const shown = teams
-    .map((t) => ({ ...t, s: prodStats(days.filter((d) => t.emails.has(d.agentEmail.toLowerCase()))) }))
-    .filter((t) => t.s.agentDays > 0);
+    .filter((t) => days.some((d) => t.emails.has(d.agentEmail.toLowerCase())))
+    .map((t) => ({ ...t, s: prodStats(activeDays.filter((d) => t.emails.has(d.agentEmail.toLowerCase()))) }));
 
-  const overall = prodStats(days);
+  const overall = prodStats(activeDays);
   const drillDays = drillAgent ? days.filter((d) => d.agentEmail.toLowerCase() === drillAgent).sort((a, b) => b.date.localeCompare(a.date)) : [];
+  const drillStats = prodStats(drillDays);
 
   return (
     <section className={card}>
@@ -256,6 +302,7 @@ export function ProductivitySection({
         title="Average Productivity"
         note={`Per agent per worked day, from the Dialer tab. Red: below ${PRODUCTIVITY_RULES.minUniqueConnectsPerDay} unique connects or below ${hms(PRODUCTIVITY_RULES.minTalkSecondsPerDay)} talk time (half for a half day).`}
       />
+      <ExcludedNote count={excluded.size} onReset={reset} />
       <div className="overflow-x-auto">
         <table className="w-full text-xs text-left">
           <thead className="bg-slate-50 dark:bg-slate-800/60">
@@ -296,6 +343,8 @@ export function ProductivitySection({
                           emails={[...t.emails]}
                           days={days}
                           agentsByEmail={agentsByEmail}
+                          excluded={excluded}
+                          onToggle={toggle}
                           onOpen={(email) => setDrillAgent(email)}
                         />
                       </td>
@@ -322,6 +371,15 @@ export function ProductivitySection({
 
       {drillAgent && (
         <DrillDown title={agentsByEmail.get(drillAgent)?.name || drillAgent} subtitle="Daily Dialer data" onClose={() => setDrillAgent(null)}>
+          <DrillSummary
+            items={[
+              { label: 'Days worked', value: fmt1(drillStats.agentDays) },
+              { label: 'Avg Unique Connects / Day', value: fmt1(drillStats.avgConnects), red: lowConnects(drillStats.avgConnects) },
+              { label: 'Avg Talk Time / Day', value: hms(drillStats.avgTalk), red: lowTalk(drillStats.avgTalk) },
+              { label: 'Days Below Connects', value: String(drillStats.daysLowConnects) },
+              { label: 'Days Below Talk Time', value: String(drillStats.daysLowTalk) },
+            ]}
+          />
           <table className="w-full text-xs text-left">
             <thead className="bg-slate-50 dark:bg-slate-800/60">
               <tr>
@@ -353,11 +411,15 @@ function AgentProductivityTable({
   emails,
   days,
   agentsByEmail,
+  excluded,
+  onToggle,
   onOpen,
 }: {
   emails: string[];
   days: ProductivityDay[];
   agentsByEmail: Map<string, TeamSummaryAgent>;
+  excluded: Set<string>;
+  onToggle: (email: string) => void;
   onOpen: (email: string) => void;
 }) {
   const rows = emails
@@ -367,6 +429,7 @@ function AgentProductivityTable({
     <table className="w-full text-xs text-left bg-white dark:bg-slate-900 rounded-xl overflow-hidden">
       <thead>
         <tr className="border-b border-slate-200 dark:border-slate-800">
+          <th className={th} title="Untick to leave an agent out of the averages">Include</th>
           <th className={th}>Agent (click for daily data)</th>
           <th className={`${th} text-right`}>Days</th>
           <th className={`${th} text-right`}>Avg Unique Connects / Day</th>
@@ -377,7 +440,10 @@ function AgentProductivityTable({
       </thead>
       <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
         {rows.map(({ email, name, s }) => (
-          <tr key={email} className="hover:bg-indigo-50/60 dark:hover:bg-slate-800/60 cursor-pointer" onClick={() => onOpen(email)}>
+          <tr key={email} className={`hover:bg-indigo-50/60 dark:hover:bg-slate-800/60 cursor-pointer ${excluded.has(email) ? 'opacity-50' : ''}`} onClick={() => onOpen(email)}>
+            <td className={td} onClick={(e) => e.stopPropagation()}>
+              <input type="checkbox" checked={!excluded.has(email)} onChange={() => onToggle(email)} aria-label={`Include ${name} in the averages`} className="w-3.5 h-3.5 accent-indigo-600" />
+            </td>
             <td className={`${td} font-semibold text-indigo-700 dark:text-indigo-300 underline-offset-2 hover:underline`}>{name}</td>
             <td className={`${td} text-right`}>{fmt1(s.agentDays)}</td>
             <td className={`${td} text-right ${lowConnects(s.avgConnects) ? RED : ''}`}>{fmt1(s.avgConnects)}</td>
@@ -406,9 +472,11 @@ export function BreaksSection({
 }) {
   const [openLoc, setOpenLoc] = useState<string | null>(null);
   const [drillAgent, setDrillAgent] = useState<string | null>(null);
+  const { excluded, toggle, reset } = useExclusions();
 
   const locationOf = (email: string) => agentsByEmail.get(email.toLowerCase())?.location || 'Unknown';
   const locations = useMemo(() => [...new Set(rows.map((r) => locationOf(r.agentEmail)))].sort(), [rows, agentsByEmail]);
+  const activeRows = rows.filter((r) => !excluded.has(r.agentEmail.toLowerCase()));
   const drillRows = drillAgent ? rows.filter((r) => r.agentEmail.toLowerCase() === drillAgent).sort((a, b) => b.date.localeCompare(a.date)) : [];
   const limitNote = BREAK_COLUMNS.filter((c) => c.limitSec !== undefined || c.limitPct !== undefined)
     .map((c) => `${c.label} ${c.limitSec !== undefined ? hms(c.limitSec) : `${c.limitPct!.toFixed(2)}%`}`)
@@ -440,13 +508,15 @@ export function BreaksSection({
           No Breaks data yet. It arrives with the next sync after the updated Apps Script is pasted into the sheet.
         </p>
       ) : (
+        <>
+        <ExcludedNote count={excluded.size} onReset={reset} />
         <div className="overflow-x-auto">
           <table className="w-full text-xs text-left">
             <thead className="bg-slate-50 dark:bg-slate-800/60">{header}</thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {locations.map((loc) => {
                 const locRows = rows.filter((r) => locationOf(r.agentEmail) === loc);
-                const a = breakAverages(locRows);
+                const a = breakAverages(locRows.filter((r) => !excluded.has(r.agentEmail.toLowerCase())));
                 const open = openLoc === loc;
                 return (
                   <React.Fragment key={loc}>
@@ -466,10 +536,11 @@ export function BreaksSection({
                     </tr>
                     {open && (
                       <tr>
-                        <td colSpan={BREAK_COLUMNS.length + 4} className="bg-slate-50/70 dark:bg-slate-950/40 px-3 py-3">
+                        <td colSpan={BREAK_COLUMNS.length + 5} className="bg-slate-50/70 dark:bg-slate-950/40 px-3 py-3">
                           <table className="w-full text-xs text-left bg-white dark:bg-slate-900 rounded-xl overflow-hidden">
                             <thead>
                               <tr className="border-b border-slate-200 dark:border-slate-800">
+                                <th className={th} title="Untick to leave an agent out of the averages">Include</th>
                                 <th className={th}>Agent (click for daily data)</th>
                                 <th className={`${th} text-right`}>Days</th>
                                 {BREAK_COLUMNS.map((c) => (
@@ -485,7 +556,10 @@ export function BreaksSection({
                                 .map((email) => ({ email, avg: breakAverages(locRows.filter((r) => r.agentEmail.toLowerCase() === email)) }))
                                 .sort((x, y) => y.avg.daysOver - x.avg.daysOver)
                                 .map(({ email, avg }) => (
-                                  <tr key={email} className="hover:bg-amber-50/60 dark:hover:bg-slate-800/60 cursor-pointer" onClick={() => setDrillAgent(email)}>
+                                  <tr key={email} className={`hover:bg-amber-50/60 dark:hover:bg-slate-800/60 cursor-pointer ${excluded.has(email) ? 'opacity-50' : ''}`} onClick={() => setDrillAgent(email)}>
+                                    <td className={td} onClick={(e) => e.stopPropagation()}>
+                                      <input type="checkbox" checked={!excluded.has(email)} onChange={() => toggle(email)} aria-label={`Include ${agentsByEmail.get(email)?.name || email} in the averages`} className="w-3.5 h-3.5 accent-indigo-600" />
+                                    </td>
                                     <td className={`${td} font-semibold text-indigo-700 dark:text-indigo-300 hover:underline`}>{agentsByEmail.get(email)?.name || email}</td>
                                     <td className={`${td} text-right`}>{avg.days}</td>
                                     {BREAK_COLUMNS.map((c) => (
@@ -504,7 +578,7 @@ export function BreaksSection({
               })}
               {locations.length > 1 &&
                 (() => {
-                  const a = breakAverages(rows);
+                  const a = breakAverages(activeRows);
                   return (
                     <tr className="bg-slate-50 dark:bg-slate-800/60 font-bold">
                       <td className={`${td} text-slate-900 dark:text-white`}>All locations</td>
@@ -521,10 +595,21 @@ export function BreaksSection({
             </tbody>
           </table>
         </div>
+        </>
       )}
 
       {drillAgent && (
         <DrillDown title={agentsByEmail.get(drillAgent)?.name || drillAgent} subtitle="Daily Breaks data" onClose={() => setDrillAgent(null)}>
+          <DrillSummary
+            items={(() => {
+              const a = breakAverages(drillRows);
+              return [
+                { label: 'Days', value: String(a.days) },
+                ...BREAK_COLUMNS.map((c) => ({ label: `Avg ${c.label}`, value: breakText(c.key, a[c.key]), red: overLimit(c.key, a[c.key]) })),
+                { label: 'Days Over a Limit', value: String(a.daysOver) },
+              ];
+            })()}
+          />
           <table className="w-full text-xs text-left">
             <thead className="bg-slate-50 dark:bg-slate-800/60">
               <tr>
