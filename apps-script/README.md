@@ -24,8 +24,9 @@ Six input tabs: paste exports as values, no formulas. Headers are matched ignori
 | `Targets` | TL / Manager | `Manager_Email`, `Total Sales in Diwali Period`, `Total Target in Diwali Period` |
 
 | `Anirban_Ref` | day x category x cohort | `Month`, `Day_Number`, `Date`, `Sale_Category`, `TT_Cohort`, `Order_Count`, `Sales` |
+| `Company_DOD` | company revenue per day | `date`, `SUM of order_id` (orders), `SUM of sales` |
 
-`Breaks` and `Targets` feed only the **Team Summary & Targets** page (TLs and Managers). `Anirban_Ref` feeds only the private **Talk Time Cohort Report**, which only Anirban (anirban.tsc@gmail.com) and the owner (agha.h489@gmail.com) can open in the app (not Managers or TLs). Note that anyone with the sheet's link can still read the tab in Google Sheets. Other tabs (`TL_AM_Ref`, ...) are ignored.
+`Breaks` and `Targets` feed only the **Team Summary & Targets** page (TLs and Managers). `Anirban_Ref` and `Company_DOD` feed only the private **Talk Time Cohort Report**, which only Anirban (anirban.tsc@gmail.com) and the owner (agha.h489@gmail.com) can open in the app (not Managers or TLs). Note that anyone with the sheet's link can still read the tab in Google Sheets. Other tabs (`TL_AM_Ref`, ...) are ignored.
 
 Rules:
 - **Only people in `Agents` count.** Rows for any other email are left out (the sync warning lists them). A `Status` other than `Active` excludes the person (this replaces `Excluded_Agents`). Every active agent can sign in, even before their first data.

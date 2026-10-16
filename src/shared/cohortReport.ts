@@ -45,6 +45,34 @@ export function rowDate(r: CohortRow): string {
   return r.date || `${r.month}-${String(r.day).padStart(2, '0')}`;
 }
 
+/** One day of the Company_DOD tab: all company orders and revenue that day. */
+export interface CompanyDay {
+  date: string; // 'YYYY-MM-DD'
+  orders: number;
+  sales: number;
+}
+
+export interface CompanyTotals {
+  orders: number;
+  revenue: number;
+  aov: number | null;
+  days: number;
+}
+
+/** Company orders and revenue over a period of dates. */
+export function companyForPeriod(days: CompanyDay[], period: { from: string; to: string }): CompanyTotals {
+  let orders = 0;
+  let revenue = 0;
+  let n = 0;
+  for (const d of days) {
+    if (d.date < period.from || d.date > period.to) continue;
+    orders += d.orders;
+    revenue += d.sales;
+    n++;
+  }
+  return { orders, revenue, aov: orders > 0 ? revenue / orders : null, days: n };
+}
+
 /** A period of dates, both ends included ('YYYY-MM-DD'). */
 export interface CohortPeriod {
   from: string;

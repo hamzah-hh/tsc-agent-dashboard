@@ -7,7 +7,7 @@
  */
 import { adminDb } from './server-firebase-admin';
 import { normalizeEmail } from './src/shared/incentive';
-import { COHORT_REPORT_VIEWERS, CohortRow } from './src/shared/cohortReport';
+import { COHORT_REPORT_VIEWERS, CohortRow, CompanyDay } from './src/shared/cohortReport';
 import { sheetDateTime } from './server-clean-sheet';
 
 const CHUNK = 2000;
@@ -57,6 +57,35 @@ export function parseCohortRows(rows: any[]): { rows: CohortRow[]; skipped: numb
     out.push({ month: `${m[1]}-${m[2].padStart(2, '0')}`, date: sheetDateTime(dateCell)!.day, label: pick(row, 'Month') || `${m[1]}-${m[2]}`, day, category, cohort, orders, sales });
   }
   return { rows: out, skipped };
+}
+
+/** Reads the Company_DOD tab (date, SUM of order_id, SUM of sales). A repeated date keeps its last row. */
+export function parseCompanyDodRows(rows: any[]): { rows: CompanyDay[]; skipped: number } {
+  const byDate = new Map<string, CompanyDay>();
+  let skipped = 0;
+  for (const row of rows || []) {
+    const dateCell = Object.entries(row || {}).find(([k]) => headerKey(k) === 'date')?.[1];
+    const date = sheetDateTime(dateCell)?.day;
+    const orders = Number(pick(row, 'SUM of order_id', 'Orders', 'Order_Count').replace(/,/g, ''));
+    const sales = Number(pick(row, 'SUM of sales', 'Sales', 'Revenue').replace(/,/g, ''));
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(orders) || !Number.isFinite(sales)) {
+      skipped++;
+      continue;
+    }
+    byDate.set(date, { date, orders, sales });
+  }
+  return { rows: [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date)), skipped };
+}
+
+const companyRef = () => adminDb.collection('privateReports').doc('companyDod');
+
+export async function saveCompanyDod(rows: CompanyDay[]): Promise<void> {
+  await companyRef().set({ rows, count: rows.length, updatedAt: new Date().toISOString() });
+}
+
+export async function loadCompanyDod(): Promise<CompanyDay[]> {
+  const snap = await companyRef().get();
+  return snap.exists ? ((snap.data() as any)?.rows as CompanyDay[]) || [] : [];
 }
 
 export async function saveCohortRows(rows: CohortRow[]): Promise<void> {

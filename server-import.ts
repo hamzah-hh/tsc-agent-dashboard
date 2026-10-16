@@ -33,7 +33,7 @@ import { isAiConfigured, runBatchAiGeneration } from './server-ai';
 import { DEFAULT_RAW_SHEET_URL, saveRawPayload, syncRawSheetData } from './server-raw-data';
 import { buildFromCleanSheet, CleanSheetTabs } from './server-clean-sheet';
 import { saveTeamOps } from './server-team-ops';
-import { parseCohortRows, saveCohortRows } from './server-cohort-report';
+import { parseCohortRows, parseCompanyDodRows, saveCohortRows, saveCompanyDod } from './server-cohort-report';
 
 const REQUIRED_MAIN_HEADERS = [
   'Date',
@@ -1304,6 +1304,16 @@ export async function processCleanSheetImport(
       if (parsed.skipped) early.push(`Anirban_Ref: ${parsed.skipped} row(s) could not be read and were left out.`);
     } catch (err: any) {
       early.push(`Anirban_Ref not saved: ${err?.message || String(err)}`);
+    }
+  }
+
+  if (tabs.companyDodRows) {
+    try {
+      const parsed = parseCompanyDodRows(tabs.companyDodRows);
+      await saveCompanyDod(parsed.rows);
+      if (parsed.skipped) early.push(`Company_DOD: ${parsed.skipped} row(s) could not be read and were left out.`);
+    } catch (err: any) {
+      early.push(`Company_DOD not saved: ${err?.message || String(err)}`);
     }
   }
 

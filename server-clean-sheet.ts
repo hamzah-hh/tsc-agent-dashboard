@@ -39,6 +39,8 @@ export interface CleanSheetTabs {
   targetsRows?: any[];
   /** Anirban_Ref: the private cohort report, saved on its own (server-cohort-report.ts). */
   cohortRows?: any[];
+  /** Company_DOD: company orders and revenue per day, for the private cohort report. */
+  companyDodRows?: any[];
 }
 
 export interface CleanSheetResult {

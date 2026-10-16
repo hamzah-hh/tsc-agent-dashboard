@@ -7,6 +7,8 @@ import {
   CohortPeriod,
   CohortRow,
   CohortTableRow,
+  CompanyDay,
+  companyForPeriod,
   cohortTableForPeriod,
   growth,
   monthToDate,
@@ -50,6 +52,7 @@ function periodTag(base: CohortPeriod, p: CohortPeriod): string {
 
 export function CohortReportView({ getIdToken }: CohortReportViewProps) {
   const [rows, setRows] = useState<CohortRow[]>([]);
+  const [company, setCompany] = useState<CompanyDay[]>([]);
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -84,6 +87,7 @@ export function CohortReportView({ getIdToken }: CohortReportViewProps) {
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
       setRows(json.rows || []);
+      setCompany(json.company || []);
       setUpdatedAt(json.updatedAt || null);
     } catch (err: any) {
       setError(err?.message || 'Could not load the report.');
@@ -329,6 +333,14 @@ export function CohortReportView({ getIdToken }: CohortReportViewProps) {
             onPick={setPicked}
           />
         ))}
+        <CompanySection
+          periods={periods}
+          tables={tables}
+          company={company}
+          tags={periods.map((p, i) => (i === 0 ? 'Base' : periodTag(base, p) || `Comparison ${i}`))}
+          picked={picked}
+          onPick={setPicked}
+        />
       </div>
     </div>
   );
@@ -447,5 +459,169 @@ export function CohortTable({
         </table>
       </div>
     </section>
+  );
+}
+
+const pp = (v: number | null) => (v === null ? '-' : `${v >= 0 ? '+' : ''}${v.toFixed(2)} pp`);
+const share = (part: number, whole: number) => (whole > 0 ? (part / whole) * 100 : null);
+
+/**
+ * Company revenue (Company_DOD tab) for each period, and each cumulative talk time cohort's revenue as a
+ * share of it. The change columns are the base share minus each comparison's share, in percentage points.
+ */
+function CompanySection({
+  periods,
+  tables,
+  company,
+  tags,
+  picked,
+  onPick,
+}: {
+  periods: CohortPeriod[];
+  tables: CohortTableRow[][];
+  company: CompanyDay[];
+  tags: string[];
+  picked: string | null;
+  onPick: (cohort: string | null) => void;
+}) {
+  if (company.length === 0) {
+    return (
+      <section className={`${card} p-5 text-xs text-slate-500`}>
+        No company revenue yet. It arrives with the next sync of the Company_DOD tab (paste the updated Code.gs first).
+      </section>
+    );
+  }
+  const totals = periods.map((p) => companyForPeriod(company, p));
+  const first = company[0].date;
+  const last = company[company.length - 1].date;
+  const outside = periods.some((p) => p.from < first || p.to > last);
+  const comps = periods.slice(1);
+
+  return (
+    <>
+      <section className={`${card} overflow-hidden`}>
+        <h3 className="px-4 py-2.5 text-sm font-bold text-slate-950 dark:text-white border-b border-slate-200 dark:border-slate-800">
+          Company Revenue
+          <span className="ml-2 text-[11px] font-normal text-slate-500">
+            Company_DOD tab, {fmtDay(first)} to {fmtDay(last)}
+            {outside ? '; a period reaching outside these dates is partly empty' : ''}
+          </span>
+        </h3>
+        <div className="overflow-x-auto" data-scroll-box="true">
+          <table className="w-full text-xs border-collapse table-fixed" style={{ minWidth: '760px' }}>
+            <thead className="bg-slate-50 dark:bg-slate-800/60">
+              <tr>
+                <th className="py-2 px-2 text-[11px] font-semibold text-slate-700 dark:text-slate-200 text-left w-64">Period</th>
+                <th className={thSub}>Days</th>
+                <th className={thSub}>Orders</th>
+                <th className={thSub}>Revenue</th>
+                <th className={thSub}>AOV</th>
+                <th className={`${thSub} ${growthSep}`}>Base orders vs this</th>
+                <th className={thSub}>Base revenue vs this</th>
+                <th className={thSub}>Base AOV vs this</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {periods.map((p, i) => {
+                const t = totals[i];
+                const g = i === 0 ? [null, null, null] : [growth(totals[0].orders, t.orders), growth(totals[0].revenue, t.revenue), growth(totals[0].aov, t.aov)];
+                return (
+                  <tr key={i}>
+                    <td className="py-1.5 px-2 text-[11px] font-semibold text-slate-900 dark:text-white whitespace-nowrap truncate">
+                      {tags[i]}: {periodText(p)}
+                    </td>
+                    <td className={td}>{t.days}</td>
+                    <td className={td}>{formatNumberINR(t.orders)}</td>
+                    <td className={`${td} font-bold text-slate-900 dark:text-white`}>{money(t.revenue)}</td>
+                    <td className={td}>{money(t.aov)}</td>
+                    {g.map((v, k) => (
+                      <td key={k} className={`${td} ${growthClass(v)} ${k === 0 ? growthSep : ''}`}>
+                        {pct(v)}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className={`${card} overflow-hidden`}>
+        <h3 className="px-4 py-2.5 text-sm font-bold text-slate-950 dark:text-white border-b border-slate-200 dark:border-slate-800">
+          Cumulative Talk Time Cohort Revenue as % of Company Revenue
+        </h3>
+        <div className="overflow-x-auto" data-scroll-box="true">
+          <table className="w-full text-xs border-collapse table-fixed" style={{ minWidth: `${180 + periods.length * 200 + comps.length * 110}px` }}>
+            <colgroup>
+              <col style={{ width: '11rem' }} />
+              {Array.from({ length: periods.length * 2 + comps.length }, (_, i) => (
+                <col key={i} />
+              ))}
+            </colgroup>
+            <thead className="bg-slate-50 dark:bg-slate-800/60">
+              <tr>
+                <th rowSpan={2} className="py-2 px-2 text-[11px] font-semibold text-slate-700 dark:text-slate-200 text-left align-bottom">
+                  Talk Time Cohort
+                </th>
+                {periods.map((p, i) => (
+                  <th key={i} colSpan={2} className={`${thGroup} ${sep}`}>
+                    {tags[i]} · {periodText(p)}
+                  </th>
+                ))}
+                {comps.map((_, i) => (
+                  <th key={i} className={`${thGroup} ${i === 0 ? growthSep : sep}`}>
+                    Base vs {tags[i + 1]}
+                  </th>
+                ))}
+              </tr>
+              <tr>
+                {periods.map((_, i) => (
+                  <React.Fragment key={i}>
+                    <th className={`${thSub} ${sep}`}>Revenue</th>
+                    <th className={thSub}>% of Company</th>
+                  </React.Fragment>
+                ))}
+                {comps.map((_, i) => (
+                  <th key={i} className={`${thSub} ${i === 0 ? growthSep : sep}`}>
+                    Change
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {(tables[0] || []).map((r, ri) => {
+                const on = picked === r.cohort;
+                const shares = periods.map((_, i) => share(tables[i][ri]?.revenue ?? 0, totals[i].revenue));
+                return (
+                  <tr
+                    key={r.cohort}
+                    onClick={() => onPick(on ? null : r.cohort)}
+                    title="Click to highlight this cohort in every table"
+                    className={`cursor-pointer ${on ? 'bg-amber-100 dark:bg-amber-900/40 outline outline-2 outline-amber-400 -outline-offset-2' : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'}`}
+                  >
+                    <td className={`py-1.5 px-2 text-[11px] font-semibold whitespace-nowrap truncate ${on ? 'text-amber-900 dark:text-amber-200' : 'text-slate-900 dark:text-white'}`}>{r.cohort}</td>
+                    {periods.map((_, i) => (
+                      <React.Fragment key={i}>
+                        <td className={`${td} ${sep}`}>{money(tables[i][ri]?.revenue ?? 0)}</td>
+                        <td className={`${td} font-bold text-slate-900 dark:text-white`}>{shares[i] === null ? '-' : `${shares[i]!.toFixed(2)}%`}</td>
+                      </React.Fragment>
+                    ))}
+                    {comps.map((_, i) => {
+                      const d = shares[0] !== null && shares[i + 1] !== null ? shares[0]! - shares[i + 1]! : null;
+                      return (
+                        <td key={i} className={`${td} ${growthClass(d)} ${i === 0 ? growthSep : sep}`}>
+                          {pp(d)}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </>
   );
 }

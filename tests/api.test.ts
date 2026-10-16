@@ -1027,6 +1027,25 @@ export async function runApiTests() {
     check('SDLM keeps month ends and short months right (1-31 Oct -> 1-30 Sep; 31 Mar -> 28 Feb)',
       JSON.stringify(cr.sameDaysMonthsBack({ from: '2026-10-01', to: '2026-10-31' })) === '{"from":"2026-09-01","to":"2026-09-30"}' &&
       cr.shiftMonths('2026-03-31', -1) === '2026-02-28' && JSON.stringify(cr.sameDaysMonthsBack({ from: '2026-10-01', to: '2026-10-12' }, 2)) === '{"from":"2026-08-01","to":"2026-08-12"}');
+
+    // Company_DOD: company revenue per day, served with the private cohort report
+    const dod = (date: string, orders: any, sales: any) => ({ date, 'SUM of order_id': orders, 'SUM of sales': sales });
+    r = await call('POST', '/api/sync', {
+      headers: { 'X-Sync-Key': process.env.SYNC_KEY! },
+      body: {
+        agentsRows: [person('cia@co.in', 'Clean Cia', 'HO Callers', 'Dighe')],
+        companyDodRows: [dod('2026-10-01 00:00:00', '51', '1,753,841'), dod('2026-10-02 00:00:00', 62, 2806267), dod('2026-09-01 00:00:00', 10, 100000), dod('oops', 1, 1)],
+      },
+    });
+    const dodWarn = (r.json?.warnings || []).find((w: string) => w.startsWith('Company_DOD'));
+    check('Company_DOD syncs; a bad row is a count-only warning', r.json?.result === 'ok' && dodWarn === 'Company_DOD: 1 row(s) could not be read and were left out.', JSON.stringify(r.json?.warnings));
+    r = await call('GET', '/api/cohort-report', { token: tok(anirban) });
+    const company = r.json?.company || [];
+    check('the report hands out the company days (sorted, commas read)', company.length === 3 && company[0].date === '2026-09-01' && company[1].sales === 1753841 && company[1].orders === 51, JSON.stringify(company));
+    r = await call('GET', '/api/cohort-report', { token: tok(L.manager) });
+    check('a Manager still cannot read the company days (403)', r.status === 403, `${r.status}`);
+    const ctot = cr.companyForPeriod(company, { from: '2026-10-01', to: '2026-10-02' });
+    check('company totals for a period: orders, revenue, AOV, days', ctot.orders === 113 && ctot.revenue === 4560108 && ctot.days === 2 && Math.round(ctot.aov!) === Math.round(4560108 / 113), JSON.stringify(ctot));
   } finally {
     setGeminiForTests(null);
     await new Promise<void>((resolve) => server.close(() => resolve()));

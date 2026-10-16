@@ -4,6 +4,15 @@ Newest first. How to demo and go live: [docs/GUIDELINE.md](docs/GUIDELINE.md).
 
 ---
 
+## v8.1, 16 Oct 2026: company revenue in the Cohort Report
+
+1. **New `Company_DOD` tab** (`date`, `SUM of order_id`, `SUM of sales`): company orders and revenue per day, kept with the private cohort report (same viewers).
+2. **Company Revenue table** under the cohort tables: orders, revenue and AOV for the base period and every comparison (SDLM or any dates), with the base's growth against each.
+3. **Cumulative Talk Time Cohort Revenue as % of Company Revenue:** each cohort's revenue and its share of company revenue for every period, plus the change in percentage points between the base and each comparison. Works for month to date or any selected dates, and is part of Copy as PNG.
+4. `Code.gs` and the .xlsx import send `Company_DOD`. **Paste the new `apps-script/Code.gs`, then Sync Now.**
+
+---
+
 ## v8, 13 Oct 2026: private Talk Time Cohort Report
 
 Verified by: type-check, 30 calculation tests, 260 server checks, production build, and the sample report (sample.xlsx) reproduced from the live Anirban_Ref tab with the app's code (August and July exact).
