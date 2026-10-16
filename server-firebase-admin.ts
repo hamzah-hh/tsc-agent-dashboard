@@ -54,12 +54,10 @@ function getServiceAccountCredential(): any {
 const explicitCredential = getServiceAccountCredential();
 
 function projectId(): string {
-  if (fallbackServiceAccount && fallbackServiceAccount.project_id) {
-    return fallbackServiceAccount.project_id;
-  }
   return (
     process.env.FIRESTORE_PROJECT_ID ||
     firebaseConfig.projectId ||
+    fallbackServiceAccount?.project_id ||
     process.env.GCP_PROJECT ||
     process.env.GCLOUD_PROJECT ||
     process.env.GOOGLE_CLOUD_PROJECT ||
@@ -96,8 +94,6 @@ const allowedProjectIds = Array.from(
     [
       targetProjectId,
       firebaseConfig.projectId,
-      fallbackServiceAccount?.project_id,
-      'ai-studio-tscagentdashboar-4a25c7aa-a6fe-4950-9680-a3794ae11803',
       process.env.FIRESTORE_PROJECT_ID,
       process.env.GCP_PROJECT,
     ].filter((p): p is string => Boolean(p))

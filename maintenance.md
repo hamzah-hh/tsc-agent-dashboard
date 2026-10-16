@@ -10,7 +10,7 @@ This document is the operational runbook for administrators and developers manag
 | :--- | :--- | :--- |
 | **Frontend** | React 19, Vite, Tailwind CSS, Lucide Icons, Recharts | Caller performance UI, target simulator, team view, and leaderboards |
 | **Backend API** | Node.js (v22), Express, TypeScript (TSX) | REST endpoints for data sync, authentication verification, and calculation engine |
-| **Database** | Google Cloud Firestore (`(default)` in project `tsc-data-506812`) | Real-time persistent storage for cycles, agents, leaderboards, access control, and logs |
+| **Database** | Google Cloud Firestore (`(default)` in project `tsc-agent-db`) | Real-time persistent storage for cycles, agents, leaderboards, access control, and logs |
 | **Authentication** | Firebase Authentication (Google Sign-In) | Identity verification with role-based routing (Super Admin, Manager, TL, Caller) |
 | **AI Engine** | Google Gemini 2.5 Flash via `@google/genai` | Personalized caller suggestions & Hinglish/English coaching tips |
 
@@ -21,7 +21,7 @@ This document is the operational runbook for administrators and developers manag
 Follow these steps once to initialize or verify a fresh deployment.
 
 ### Step 1: Firebase Project & Firestore Configuration
-1. Open the [Firebase Console](https://console.firebase.google.com/) and navigate to project **`tsc-data-506812`**.
+1. Open the [Firebase Console](https://console.firebase.google.com/) and navigate to project **`tsc-agent-db`**.
 2. Go to **Build &rarr; Firestore Database**:
    - Ensure the database is created with ID `(default)`.
 3. Go to **Build &rarr; Firestore Database &rarr; Rules** and verify the security rules match `firestore.rules`:
@@ -32,7 +32,7 @@ Follow these steps once to initialize or verify a fresh deployment.
 
 ### Step 2: Service Account Credentials
 The backend uses a Google Cloud Service Account to read and write to Firestore.
-- **Service Account**: `firebase-adminsdk-fbsvc@tsc-data-506812.iam.gserviceaccount.com`
+- **Service Account**: the `firebase-adminsdk-...` service account of project `tsc-agent-db`
 - **Required IAM Role**: **Cloud Datastore User** (or Firebase Admin SDK Administrator).
 - **Files in repo**:
   - `server-service-account.ts`: Directly embedded credentials for Cloud Run production execution.
@@ -308,8 +308,8 @@ When starting a new incentive cycle (e.g. from `diwali-2026` to `november-2026`)
 ### Issue: `Firestore read/write failed: HTTP 403 PERMISSION_DENIED`
 - **Cause**: Service account lacks access to the Firestore database.
 - **Resolution**:
-  1. Open [Google Cloud IAM Console](https://console.cloud.google.com/iam-admin/iam?project=tsc-data-506812).
-  2. Verify `firebase-adminsdk-fbsvc@tsc-data-506812.iam.gserviceaccount.com` has the **Cloud Datastore User** role.
+  1. Open [Google Cloud IAM Console](https://console.cloud.google.com/iam-admin/iam?project=tsc-agent-db).
+  2. Verify the `firebase-adminsdk-...` service account of project `tsc-agent-db` has the **Cloud Datastore User** role.
   3. Verify `service-account.json` or `server-service-account.ts` contains the valid private key.
 
 ### Issue: `auth/unauthorized-domain` on Google Sign-In
