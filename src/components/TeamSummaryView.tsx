@@ -747,9 +747,9 @@ function DrillDown({ title, subtitle, onClose, children }: { title: string; subt
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/50 flex items-end sm:items-center justify-center p-0 sm:p-6" onClick={onClose}>
+    <div className="fixed inset-0 z-50 bg-slate-950/50 flex items-center justify-center p-3 sm:p-6" onClick={onClose}>
       <div
-        className="bg-white dark:bg-slate-900 w-full sm:max-w-5xl max-h-[85vh] rounded-t-2xl sm:rounded-2xl shadow-xl flex flex-col"
+        className="bg-white dark:bg-slate-900 w-full sm:max-w-5xl max-h-[85vh] rounded-2xl overflow-hidden shadow-xl flex flex-col"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-label={`${title}: ${subtitle}`}
