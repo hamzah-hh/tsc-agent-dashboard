@@ -493,18 +493,20 @@ function CompanySection({
   const outside = periods.some((p) => p.from < first || p.to > last);
   const comps = periods.slice(1);
 
-  // Rows: company, retail and marketplace revenue (Company_DOD), attributed revenue (cumulative 10 seconds
-  // cohort of the cohort tables), then attributed revenue as a % of each of the three.
+  // Rows: company, retail, marketplace and website revenue (Company_DOD), attributed revenue (cumulative 10 seconds
+  // cohort of the cohort tables), then attributed revenue as a % of each of the four.
   const attributed = tables.map((t) => attributedRevenue(t));
   const ratio = (part: number, whole: number) => (whole > 0 ? (part / whole) * 100 : null);
   const metrics: Array<{ label: string; percent: boolean; values: Array<number | null> }> = [
     { label: 'Company Revenue', percent: false, values: totals.map((t) => t.revenue) },
     { label: 'Retail Revenue', percent: false, values: totals.map((t) => t.retail) },
     { label: 'Marketplace Revenue', percent: false, values: totals.map((t) => t.marketplace) },
+    { label: 'Website Revenue', percent: false, values: totals.map((t) => t.website) },
     { label: 'Attributed Revenue', percent: false, values: attributed },
     { label: 'Attributed Revenue % (of Company Revenue)', percent: true, values: totals.map((t, i) => ratio(attributed[i], t.revenue)) },
     { label: 'Retail Revenue % (Attributed / Retail)', percent: true, values: totals.map((t, i) => ratio(attributed[i], t.retail)) },
     { label: 'Marketplace Revenue % (Attributed / Marketplace)', percent: true, values: totals.map((t, i) => ratio(attributed[i], t.marketplace)) },
+    { label: 'Website Revenue % (Attributed / Website)', percent: true, values: totals.map((t, i) => ratio(attributed[i], t.website)) },
   ];
 
   return (

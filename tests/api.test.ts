@@ -1051,13 +1051,13 @@ export async function runApiTests() {
     r = await call('GET', '/api/cohort-report', { token: tok(anirban) });
     const company = r.json?.company || [];
     check('the report hands out one row per day (sorted, commas read, channels added up by Main_Channel)',
-      company.length === 3 && company[0].date === '2026-09-01' && company[1].sales === 1753841 && company[1].orders === 51 && company[1].retail === 1000000 && company[1].marketplace === 253841 && company[2].retail === 2100000,
+      company.length === 3 && company[0].date === '2026-09-01' && company[1].sales === 1753841 && company[1].orders === 51 && company[1].retail === 1000000 && company[1].marketplace === 253841 && company[1].website === 500000 && company[2].retail === 2100000,
       JSON.stringify(company));
     r = await call('GET', '/api/cohort-report', { token: tok(L.manager) });
     check('a Manager still cannot read the company days (403)', r.status === 403, `${r.status}`);
     const ctot = cr.companyForPeriod(company, { from: '2026-10-01', to: '2026-10-02' });
     check('company totals for a period: orders, revenue, retail, marketplace, AOV, days',
-      ctot.orders === 113 && ctot.revenue === 4560108 && ctot.retail === 3100000 && ctot.marketplace === 960108 && ctot.days === 2 && Math.round(ctot.aov!) === Math.round(4560108 / 113),
+      ctot.orders === 113 && ctot.revenue === 4560108 && ctot.retail === 3100000 && ctot.marketplace === 960108 && ctot.website === 500000 && ctot.days === 2 && Math.round(ctot.aov!) === Math.round(4560108 / 113),
       JSON.stringify(ctot));
     const attr = cr.attributedRevenue(cr.cohortTableForPeriod(r0Rows(), { from: '2026-10-01', to: '2026-10-09' }));
     check('attributed revenue is the cumulative "10 Seconds Plus" cohort (nothing counted below it)',

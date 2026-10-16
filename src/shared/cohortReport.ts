@@ -47,7 +47,7 @@ export function rowDate(r: CohortRow): string {
 
 /**
  * One day of the Company_DOD tab (one row per day and channel there), added up: all company orders and
- * revenue, and the revenue of the Retail and Marketplace Main_Channel groups (the rest, Website, is the remainder).
+ * revenue, and the revenue of the Retail and Marketplace Main_Channel groups (Website is its own group too).
  */
 export interface CompanyDay {
   date: string; // 'YYYY-MM-DD'
@@ -55,6 +55,7 @@ export interface CompanyDay {
   sales: number; // all channels
   retail?: number; // Main_Channel Retail (older saves have none)
   marketplace?: number; // Main_Channel Marketplace
+  website?: number; // Main_Channel Website (older saves have none: the remainder is used)
 }
 
 export interface CompanyTotals {
@@ -62,6 +63,7 @@ export interface CompanyTotals {
   revenue: number;
   retail: number;
   marketplace: number;
+  website: number;
   aov: number | null;
   days: number;
 }
@@ -72,6 +74,7 @@ export function companyForPeriod(days: CompanyDay[], period: { from: string; to:
   let revenue = 0;
   let retail = 0;
   let marketplace = 0;
+  let website = 0;
   let n = 0;
   for (const d of days) {
     if (d.date < period.from || d.date > period.to) continue;
@@ -79,9 +82,10 @@ export function companyForPeriod(days: CompanyDay[], period: { from: string; to:
     revenue += d.sales;
     retail += d.retail || 0;
     marketplace += d.marketplace || 0;
+    website += d.website ?? Math.max(0, d.sales - (d.retail || 0) - (d.marketplace || 0));
     n++;
   }
-  return { orders, revenue, retail, marketplace, aov: orders > 0 ? revenue / orders : null, days: n };
+  return { orders, revenue, retail, marketplace, website, aov: orders > 0 ? revenue / orders : null, days: n };
 }
 
 /**

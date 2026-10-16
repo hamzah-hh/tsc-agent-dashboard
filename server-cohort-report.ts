@@ -61,7 +61,7 @@ export function parseCohortRows(rows: any[]): { rows: CohortRow[]; skipped: numb
 
 /**
  * Reads the Company_DOD tab: one row per day and channel (date, channel, sales, order_id, Main_Channel).
- * Rows are added up per day: total, and the Retail and Marketplace Main_Channel groups.
+ * Rows are added up per day: total, and the Retail, Marketplace and Website Main_Channel groups.
  */
 export function parseCompanyDodRows(rows: any[]): { rows: CompanyDay[]; skipped: number } {
   const byDate = new Map<string, CompanyDay>();
@@ -76,11 +76,12 @@ export function parseCompanyDodRows(rows: any[]): { rows: CompanyDay[]; skipped:
       skipped++;
       continue;
     }
-    const day = byDate.get(date) || { date, orders: 0, sales: 0, retail: 0, marketplace: 0 };
+    const day = byDate.get(date) || { date, orders: 0, sales: 0, retail: 0, marketplace: 0, website: 0 };
     day.orders += orders;
     day.sales += sales;
     if (main === 'retail') day.retail = (day.retail || 0) + sales;
     else if (main === 'marketplace') day.marketplace = (day.marketplace || 0) + sales;
+    else if (main === 'website') day.website = (day.website || 0) + sales;
     byDate.set(date, day);
   }
   return { rows: [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date)), skipped };
