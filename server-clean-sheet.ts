@@ -151,7 +151,7 @@ const CREDIT_DATE_KEYS = new Set(CREDIT_DATE_HEADERS.map(headerKey));
 
 // People who never show up, whatever their Status in Agents: test accounts (a "test" word in the name) and
 // the named inactive agents. Add a name here to hide someone for good.
-const HIDDEN_NAMES = /\btest\b|\bazmaan\b|\bsayed\s+saif\b/i;
+const HIDDEN_NAMES = /\btest\b|\bazma+n\b|\bsayed\s+saif\b/i;
 
 const NO_EMAIL = new Set(['', 'none', 'null', 'na', 'n/a', '-', '#n/a']);
 
