@@ -149,6 +149,10 @@ function dayValue(text: string): number {
 const CREDIT_DATE_HEADERS = ['Credit_Date', 'Credited_Date', 'Credit Date', 'Credited Date'];
 const CREDIT_DATE_KEYS = new Set(CREDIT_DATE_HEADERS.map(headerKey));
 
+// People who never show up, whatever their Status in Agents: test accounts (a "test" word in the name) and
+// the named inactive agents. Add a name here to hide someone for good.
+const HIDDEN_NAMES = /\btest\b|\bazmaan\b|\bsayed\s+saif\b/i;
+
 const NO_EMAIL = new Set(['', 'none', 'null', 'na', 'n/a', '-', '#n/a']);
 
 /** "a, b, c and 4 more" */
@@ -209,7 +213,7 @@ export function buildFromCleanSheet(tabs: CleanSheetTabs, cycle: { startDate: st
       tier: pick(row, 'Agent_Tier', 'Tier'),
       tlOfficial: normalizeEmail(pick(row, 'TL_Official_Email', 'TL_Email_Official', 'Leader_Official_Email')),
       tlPersonal: normalizeEmail(pick(row, 'TL_Personal_Email', 'TL_Email_Personal', 'Leader_Personal_Email', 'TL_Gmail')),
-      active: status === '' || status.toLowerCase() === 'active',
+      active: (status === '' || status.toLowerCase() === 'active') && !HIDDEN_NAMES.test(pick(row, 'Agent_Name', 'Name')),
     });
   }
   if (duplicates.length) warnings.push(`Agents: ${duplicates.length} email(s) appear twice; the first row is used: ${listOf(duplicates)}`);
