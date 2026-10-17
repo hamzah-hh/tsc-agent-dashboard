@@ -96,6 +96,22 @@ function numberOf(text: string): number | null {
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
+const MONTH_NAMES = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+
+/** 'YYYY-MM' of a Month cell: "Oct-2026", "Oct-26", "October 2026", "2026-10", or a date. */
+export function monthOf(value: any): string | null {
+  const text = String(value ?? '').trim();
+  if (!text) return null;
+  let m = /^([a-z]{3})[a-z]*[-\s/]+(\d{2}|\d{4})$/i.exec(text);
+  if (m) {
+    const i = MONTH_NAMES.indexOf(m[1].toLowerCase());
+    if (i >= 0) return `${m[2].length === 2 ? '20' + m[2] : m[2]}-${pad(i + 1)}`;
+  }
+  m = /^(\d{4})-(\d{1,2})$/.exec(text);
+  if (m) return `${m[1]}-${pad(+m[2])}`;
+  return sheetDateTime(value)?.day.slice(0, 7) ?? null;
+}
+
 /**
  * The calendar day and time a cell shows, as 'YYYY-MM-DD' and 'YYYY-MM-DD HH:mm:ss'. Times are never
  * shifted between time zones: what the sheet shows is what counts.
@@ -493,13 +509,35 @@ export function buildFromCleanSheet(tabs: CleanSheetTabs, cycle: { startDate: st
     }
   }
 
-  const qualityRows = (tabs.qualityRows || [])
+  // Quality has a Month column ("Oct-2026"): the incentive uses the months of the cycle (an agent with two months
+  // in the cycle gets the audit-weighted average), the Business Overview every month. No Month = the cycle's first month.
+  const cycleMonths = new Set<string>();
+  for (let d = cycle.startDate.slice(0, 7); d <= cycle.endDate.slice(0, 7); ) {
+    cycleMonths.add(d);
+    const [y, m] = d.split('-').map(Number);
+    d = m === 12 ? `${y + 1}-01` : `${y}-${pad(m + 1)}`;
+  }
+  const allQuality = (tabs.qualityRows || [])
     .map((row) => ({
-      Agent_Email_Official: normalizeEmail(pick(row, 'Agent_Email', 'Agent_Email_Official', 'Email')),
-      Total_Audits: pick(row, 'Total_Audits', 'Audits'),
-      Average_Audit_Score: pick(row, 'Average_Score', 'Average_Audit_Score', 'Score'),
+      month: monthOf(cell(row, 'Month')) || cycle.startDate.slice(0, 7),
+      email: normalizeEmail(pick(row, 'Agent_Email', 'Agent_Email_Official', 'Email')),
+      audits: numberOf(pick(row, 'Total_Audits', 'Audits')) ?? 0,
+      score: numberOf(pick(row, 'Average_Score', 'Average_Audit_Score', 'Score')) ?? 0,
     }))
-    .filter((q) => q.Agent_Email_Official);
+    .filter((q) => q.email);
+  const cycleQuality = new Map<string, { audits: number; weighted: number }>();
+  for (const q of allQuality) {
+    if (!cycleMonths.has(q.month)) continue;
+    const cur = cycleQuality.get(q.email) || { audits: 0, weighted: 0 };
+    cur.audits += q.audits;
+    cur.weighted += q.audits * q.score;
+    cycleQuality.set(q.email, cur);
+  }
+  const qualityRows = [...cycleQuality.entries()].map(([email, c]) => ({
+    Agent_Email_Official: email,
+    Total_Audits: c.audits,
+    Average_Audit_Score: c.audits > 0 ? c.weighted / c.audits : 0,
+  }));
 
   const leaderMappingRows = [...people.values()]
     .filter((p) => p.active)
@@ -524,9 +562,9 @@ export function buildFromCleanSheet(tabs: CleanSheetTabs, cycle: { startDate: st
       overviewDays.push({ agent: p.official, tier, date: day, day: t.day ?? 0, outbound: t.outbound, connected: t.connectedAll, talkSec: t.talkSec, sales: t.sales, orders: t.orders });
     }
   }
-  const overviewQuality: OverviewQuality[] = qualityRows.map((q) => {
-    const p = people.get(q.Agent_Email_Official);
-    return { tier: p ? overviewTier(p.tier, p.location) : null, audits: numberOf(String(q.Total_Audits ?? '')) ?? 0, score: numberOf(String(q.Average_Audit_Score ?? '')) ?? 0 };
+  const overviewQuality: OverviewQuality[] = allQuality.flatMap((q) => {
+    const p = people.get(q.email);
+    return p?.active ? [{ month: q.month, tier: overviewTier(p.tier, p.location), audits: q.audits, score: q.score }] : [];
   });
   const overviewLive = computeOverview(overviewDays, overviewQuality);
 

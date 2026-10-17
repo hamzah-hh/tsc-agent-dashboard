@@ -19,7 +19,7 @@ Six input tabs: paste exports as values, no formulas. Headers are matched ignori
 | `Visits` | visit | `Visit Date Time`, `Phone`, `Agent_Email`, `Location`, `Talk_Time_(s)`, `source` |
 | `Dialer` | agent per day | `Date`, `Agent_ID`, `Day_Type`, `Total_Unique_Connected_Calls`, `Total_Talk_Time_sec` (other columns are ignored) |
 | `PreSales` | agent per day | `Date`, `Agent_ID`, `Calls`, `TT_Per_Call_(sec)` |
-| `Quality` | agent | `Agent_Email`, `Total_Audits`, `Average_Score` |
+| `Quality` | agent and month | `Month` ("Oct-2026"), `Agent_Email`, `Total_Audits`, `Average_Score` |
 | `Breaks` | agent per day | `Date`, `Agent_ID`, `Day_Type`, `Bio_or_Misc`, `First_Break`, `Lunch_Break`, `Last_Break`, `Total_Break`, `After_Call_Work`, `Idle_Time`, `Staffed_Duration`, `Idle_Time_+_After_Call_Work` (seconds; `Idle_Time+ACW_%` is recalculated) |
 | `Targets` | TL / Manager | `Manager_Email`, `Total Sales in Diwali Period`, `Total Target in Diwali Period` |
 

@@ -1084,6 +1084,12 @@ export async function runApiTests() {
           { Date: '2026-10-03', Agent_ID: 'cia@co.in', Day_Type: 0.5, Total_Outbound_Calls: 100, Total_Connected_Calls: 40, Total_Unique_Connected_Calls: 35, Total_Talk_Time_sec: 1200 },
           { Date: '2026-10-02', Agent_ID: 'cal@co.in', Day_Type: 1, Total_Outbound_Calls: 200, Total_Connected_Calls: 90, Total_Unique_Connected_Calls: 80, Total_Talk_Time_sec: 3000 },
         ],
+        // Quality has a Month column: the overview shows every month, the incentive only the cycle's
+        qualityRows: [
+          { Month: 'Oct-2026', Agent_Email: 'cia@co.in', Total_Audits: 2, Average_Score: '100.00' },
+          { Month: 'Oct-2026', Agent_Email: 'cal@co.in', Total_Audits: 4, Average_Score: '90.00' },
+          { Month: 'Sep-2026', Agent_Email: 'cia@co.in', Total_Audits: 10, Average_Score: '50.00' },
+        ],
         businessOverviewRows: [
           { Month: '2026-09-01', Tier: 'HO Caller', Outbound_Calls: 175709, Connected_Calls: 77348, Revenue: 36662255, Active_Team_Size: 22, Quality_Score: 0.85 },
           { Month: '2026-09-01', Tier: 'Store Callers - Andheri', Outbound_Calls: 99273, Revenue: 23700556 },
@@ -1102,6 +1108,10 @@ export async function runApiTests() {
     check('October is worked out per tier: calls, per agent-day averages, revenue, AOV, team size',
       octHo?.outbound === 400 && octHo.connected === 160 && octHo.avgOutbound === 400 / 1.5 && octHo.revenue === 4000 && octHo.aov === 2000 && octHo.teamSize === 1 && octHo.live === true,
       JSON.stringify(octHo));
+    check('quality per month and tier, audit-weighted: October HO 100%, all tiers (2 x 100 + 4 x 90) / 6',
+      octHo?.quality === 1 && Math.abs(octAll.quality - (2 * 1 + 4 * 0.9) / 6) < 1e-9, JSON.stringify([octHo?.quality, octAll?.quality]));
+    const ciaRec = (await adminDb.collection('cycles').doc(CYCLE).collection('agents').doc('cia@co.in').get()).data();
+    check('the incentive quality uses only the cycle month (the September 50% is left out)', ciaRec?.quality?.audits === 2 && ciaRec.quality.score === 100, JSON.stringify(ciaRec?.quality));
     check('the all-tier row adds the tiers up', octAll?.outbound === 600 && octAll.connected === 250 && octAll.teamSize === 2 && octAll.revenue === 4500, JSON.stringify(octAll));
     check('past months come from the tab (a Quality_Score typed as 83.78 reads as 0.8378)', sepAll?.outbound === 407262 && Math.abs(sepAll.quality - 0.8378) < 1e-9 && sepAll.qualityPreSales === 0.9065 && !sepAll.live, JSON.stringify(sepAll));
     r = await call('GET', '/api/team-summary', { token: tok(L.tlDighe) });

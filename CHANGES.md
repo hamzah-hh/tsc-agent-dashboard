@@ -9,7 +9,8 @@ Newest first. How to demo and go live: [docs/GUIDELINE.md](docs/GUIDELINE.md).
 1. **Business Overview** at the top of Team Summary and Targets: month by month and per tier (HO Caller, Store Callers - Andheri, Store Callers - Bangalore, and the total / team average): outbound and connected calls, averages per agent per day, talk time, revenue, average revenue per agent, active team size, AOV and Quality Score (Pre Sales quality as well for the total).
 2. **Who sees what:** the Super Admin and Managers see every tier and the total; a TL sees only the tiers of their own agents.
 3. **Past months (Apr to Sep 2026)** are typed once in the new `Business_Overview` tab (one row per Month and Tier; revenue in rupees, talk time in seconds). **The running month is worked out at every sync** from the Dialer tab's new `Total_Outbound_Calls` and `Total_Connected_Calls` columns, Orders and Quality, and is marked MTD. A month in the tab is replaced by the computed figures when the cycle has days in it.
-4. `Code.gs` sends `Business_Overview`. **Paste the new `apps-script/Code.gs`, then Sync Now.**
+4. **Quality has a `Month` column** ("Oct-2026"): the Business Overview shows each month's audit-weighted score per tier, while the incentive uses only the months of the cycle (an agent with two months in the cycle gets the weighted average). Average Revenue per Agent is always Total Revenue / Active Team Size.
+5. `Code.gs` sends `Business_Overview`. **Paste the new `apps-script/Code.gs`, then Sync Now.**
 
 ---
 

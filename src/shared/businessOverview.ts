@@ -38,6 +38,7 @@ export interface OverviewDay {
 }
 
 export interface OverviewQuality {
+  month: string; // 'YYYY-MM'
   tier: string | null;
   audits: number;
   score: number; // 0..1 or 0..100 as in the Quality tab; normalised below
@@ -77,26 +78,26 @@ export function computeOverview(days: OverviewDay[], quality: OverviewQuality[] 
     add(`${month}|${ALL_TIERS}`, d);
   }
 
-  // Quality is one figure per cycle (the Quality tab has no dates): audit-weighted average per tier
+  // Quality: audit-weighted average per month and tier
   const q = new Map<string, { audits: number; weighted: number }>();
-  const addQ = (tier: string, audits: number, score: number) => {
-    const cur = q.get(tier) || { audits: 0, weighted: 0 };
+  const addQ = (key: string, audits: number, score: number) => {
+    const cur = q.get(key) || { audits: 0, weighted: 0 };
     cur.audits += audits;
     cur.weighted += audits * score;
-    q.set(tier, cur);
+    q.set(key, cur);
   };
   for (const item of quality) {
     if (!(item.audits > 0)) continue;
     const score = item.score > 1 ? item.score / 100 : item.score;
     if (item.tier) {
-      addQ(item.tier, item.audits, score);
-      addQ(ALL_TIERS, item.audits, score);
+      addQ(`${item.month}|${item.tier}`, item.audits, score);
+      addQ(`${item.month}|${ALL_TIERS}`, item.audits, score);
     } else {
-      addQ('pre-sales', item.audits, score);
+      addQ(`${item.month}|pre-sales`, item.audits, score);
     }
   }
-  const qualityOf = (tier: string) => {
-    const c = q.get(tier);
+  const qualityOf = (month: string, tier: string) => {
+    const c = q.get(`${month}|${tier}`);
     return c && c.audits > 0 ? c.weighted / c.audits : null;
   };
 
@@ -116,8 +117,8 @@ export function computeOverview(days: OverviewDay[], quality: OverviewQuality[] 
       avgRevenue: div(a.sales, a.agents.size),
       teamSize: a.agents.size,
       aov: div(a.sales, a.orders),
-      quality: qualityOf(tier),
-      ...(tier === ALL_TIERS ? { qualityPreSales: qualityOf('pre-sales') } : {}),
+      quality: qualityOf(month, tier),
+      ...(tier === ALL_TIERS ? { qualityPreSales: qualityOf(month, 'pre-sales') } : {}),
       live: true,
     });
   }

@@ -3,7 +3,7 @@
  * sync worked out itself. Kept under privateReports (server only, like the cohort report).
  */
 import { adminDb } from './server-firebase-admin';
-import { sheetDateTime } from './server-clean-sheet';
+import { monthOf } from './server-clean-sheet';
 import { BusinessOverviewRow, mergeOverview } from './src/shared/businessOverview';
 
 function headerKey(h: string): string {
@@ -41,13 +41,14 @@ export function parseBusinessOverviewRows(rows: any[]): { rows: BusinessOverview
   let skipped = 0;
   for (const row of rows || []) {
     const monthCell = Object.entries(row || {}).find(([k]) => headerKey(k) === 'month')?.[1];
-    const monthText = String(monthCell ?? '').trim();
-    const month = /^\d{4}-\d{2}$/.test(monthText) ? monthText : sheetDateTime(monthCell)?.day.slice(0, 7);
+    const month = monthOf(monthCell);
     const tier = text(row, 'Tier');
     if (!month || !tier) {
       skipped++;
       continue;
     }
+    const revenue = num(row, 'Revenue') ?? 0;
+    const teamSize = num(row, 'Active_Team_Size') ?? 0;
     const quality = num(row, 'Quality_Score');
     const pre = num(row, 'Quality_Score_Pre_Sales');
     out.push({
@@ -59,9 +60,10 @@ export function parseBusinessOverviewRows(rows: any[]): { rows: BusinessOverview
       avgConnected: num(row, 'Avg_Connected_Calls_Per_Agent_Day'),
       talkSec: num(row, 'Talk_Time_Sec') ?? 0,
       avgTalkSec: num(row, 'Avg_Talk_Time_Sec'),
-      revenue: num(row, 'Revenue') ?? 0,
-      avgRevenue: num(row, 'Avg_Revenue_Per_Agent'),
-      teamSize: num(row, 'Active_Team_Size') ?? 0,
+      revenue,
+      // Average revenue per agent is always Total Revenue / Active Team Size (the typed column is only a fallback)
+      avgRevenue: teamSize > 0 ? revenue / teamSize : num(row, 'Avg_Revenue_Per_Agent'),
+      teamSize,
       aov: num(row, 'AOV'),
       quality: quality === null ? null : quality > 1 ? quality / 100 : quality,
       ...(pre !== null ? { qualityPreSales: pre > 1 ? pre / 100 : pre } : {}),
