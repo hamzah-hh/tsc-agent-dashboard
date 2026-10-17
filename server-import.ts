@@ -932,6 +932,11 @@ export async function processImport(
 
     const emailsToDelete = new Set<string>();
 
+    // A stored record of someone who is excluded now goes too, even when this sync has no rows for them
+    for (const email of existingAgentData.keys()) {
+      if (excludedEmails.has(normalizeEmail(email))) emailsToDelete.add(email);
+    }
+
     // 3, 4, 5. Process each agent
     for (const [officialEmail, agentRows] of groupedByAgent.entries()) {
       if (excludedEmails.has(officialEmail)) {
