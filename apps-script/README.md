@@ -24,6 +24,7 @@ Six input tabs: paste exports as values, no formulas. Headers are matched ignori
 | `Targets` | TL / Manager | `Manager_Email`, `Total Sales in Diwali Period`, `Total Target in Diwali Period` |
 
 | `Anirban_Ref` | day x category x cohort | `Month`, `Day_Number`, `Date`, `Sale_Category`, `TT_Cohort`, `Order_Count`, `Sales` |
+| `Business_Overview` | past months by tier (one row per Month and Tier) | `Month`, `Tier` (HO Caller / Store Callers - Andheri / Store Callers - Bangalore / All), `Outbound_Calls`, `Avg_Outbound_Calls_Per_Agent_Day`, `Connected_Calls`, `Avg_Connected_Calls_Per_Agent_Day`, `Talk_Time_Sec`, `Avg_Talk_Time_Sec`, `Revenue` (rupees), `Avg_Revenue_Per_Agent`, `Active_Team_Size`, `AOV`, `Quality_Score`, `Quality_Score_Pre_Sales` |
 | `Company_DOD` | company revenue per day and channel | `date`, `channel`, `sales`, `order_id` (orders), `Main_Channel` (Retail / Website / Marketplace) |
 
 `Breaks` and `Targets` feed only the **Team Summary & Targets** page (TLs and Managers). `Anirban_Ref` and `Company_DOD` feed only the private **Talk Time Cohort Report**, which only Anirban (anirban.tsc@gmail.com) and the owner (agha.h489@gmail.com) can open in the app (not Managers or TLs). Note that anyone with the sheet's link can still read the tab in Google Sheets. Other tabs (`TL_AM_Ref`, ...) are ignored.

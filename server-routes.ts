@@ -21,6 +21,8 @@ import { buildReadiness } from './server-readiness';
 import { generateAiText, isAiConfigured, runBatchAiGeneration } from './server-ai';
 import { normalizeEmail } from './src/shared/incentive';
 import { buildTeamRevenue } from './src/shared/revenue';
+import { overviewTier } from './src/shared/businessOverview';
+import { loadBusinessOverview } from './server-business-overview';
 import { compareByRevenue, isTestAgentIdentifier, rankRevenueRows } from './src/shared/leaderboard';
 import { AgentLeaderboardRow, AgentRecord, AppConfig, Cycle, LeaderboardRecord } from './src/shared/types';
 import {
@@ -334,6 +336,7 @@ export function createApiApp(options: ApiOptions = {}): express.Express {
       const inScope = new Set(agents.map((a) => normalizeEmail(a.officialEmail)));
 
       const ops = await loadTeamOps(cycleId);
+      const myTiers = new Set(agents.map((a) => overviewTier(a.agentType === 'HO' ? 'HO Callers' : a.agentType === 'STORE' ? 'Store Callers' : 'PreSales', a.location)).filter((t): t is string => Boolean(t)));
       const myEmails = new Set([normalizeEmail(user.email), normalizeEmail(identity.access?.officialEmail)].filter(Boolean));
 
       const body: TeamSummaryResponse = {
@@ -356,6 +359,10 @@ export function createApiApp(options: ApiOptions = {}): express.Express {
         breaks: ops.breaks.filter((b) => inScope.has(normalizeEmail(b.agentEmail))),
         targets: identity.role === 'tl' ? ops.targets.filter((t) => myEmails.has(normalizeEmail(t.managerEmail))) : ops.targets,
         breaksUpdatedAt: ops.updatedAt,
+        // A TL sees the tiers of their own agents only; Managers and the Super Admin see every tier and the total
+        businessOverview: (await loadBusinessOverview()).filter(
+          (r) => identity.role !== 'tl' || myTiers.has(r.tier)
+        ),
       };
       return res.json(body);
     })

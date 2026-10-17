@@ -33,6 +33,7 @@ import { isAiConfigured, runBatchAiGeneration } from './server-ai';
 import { DEFAULT_RAW_SHEET_URL, saveRawPayload, syncRawSheetData } from './server-raw-data';
 import { buildFromCleanSheet, CleanSheetTabs } from './server-clean-sheet';
 import { saveTeamOps } from './server-team-ops';
+import { parseBusinessOverviewRows, saveBusinessOverview } from './server-business-overview';
 import { parseCohortRows, parseCompanyDodRows, saveCohortRows, saveCompanyDod } from './server-cohort-report';
 
 const REQUIRED_MAIN_HEADERS = [
@@ -1320,6 +1321,16 @@ export async function processCleanSheetImport(
     } catch (err: any) {
       early.push(`Company_DOD not saved: ${err?.message || String(err)}`);
     }
+  }
+
+  // Business Overview: past months from the tab (kept as saved when an older Apps Script does not send it),
+  // the months of the cycle worked out above
+  try {
+    const parsed = tabs.businessOverviewRows ? parseBusinessOverviewRows(tabs.businessOverviewRows) : null;
+    await saveBusinessOverview(parsed ? parsed.rows : null, built.overviewLive);
+    if (parsed?.skipped) early.push(`Business_Overview: ${parsed.skipped} row(s) had no Month or Tier and were left out.`);
+  } catch (err: any) {
+    early.push(`Business Overview not saved: ${err?.message || String(err)}`);
   }
 
   return processImport(source, built.mainRows, built.qualityRows, {

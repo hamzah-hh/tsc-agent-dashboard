@@ -1,3 +1,4 @@
+import type { BusinessOverviewRow } from './businessOverview';
 /**
  * Overall Team Summary and Targets: the rules and shapes shared by the server and the page.
  * All times are in seconds; the page shows them as hh:mm:ss.
@@ -72,6 +73,8 @@ export interface TeamSummaryResponse {
   breaks: BreakDay[];
   targets: TargetRow[];
   breaksUpdatedAt: string | null;
+  /** Month by month and tier; a TL gets only their own tiers, and no all-tier rows. */
+  businessOverview: BusinessOverviewRow[];
 }
 
 /**

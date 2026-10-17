@@ -26,6 +26,7 @@
  * - Every active agent gets a login, even with no data yet (a roster row, Day 0).
  */
 import { normalizeEmail } from './src/shared/incentive';
+import { BusinessOverviewRow, OverviewDay, OverviewQuality, computeOverview, overviewTier } from './src/shared/businessOverview';
 import { BreakDay, TargetRow } from './src/shared/teamOps';
 
 export interface CleanSheetTabs {
@@ -41,6 +42,8 @@ export interface CleanSheetTabs {
   cohortRows?: any[];
   /** Company_DOD: company orders and revenue per day, for the private cohort report. */
   companyDodRows?: any[];
+  /** Business_Overview: past months by tier, typed in once. */
+  businessOverviewRows?: any[];
 }
 
 export interface CleanSheetResult {
@@ -55,6 +58,8 @@ export interface CleanSheetResult {
   breaks: BreakDay[] | null;
   targets: TargetRow[] | null;
   warnings: string[];
+  /** Business Overview months of the cycle, worked out from the days above. */
+  overviewLive: BusinessOverviewRow[];
 }
 
 /** True when a sync / import body uses the clean layout (it has an Agents tab). */
@@ -176,6 +181,8 @@ interface DayTotals {
   sales: number;
   visits: number;
   connects: number;
+  outbound: number; // Dialer Total_Outbound_Calls
+  connectedAll: number; // Dialer Total_Connected_Calls (not unique)
   talkSec: number;
   day: number | null; // null: no Dialer row that day
   calls: number | null; // null: no PreSales row that day
@@ -236,7 +243,7 @@ export function buildFromCleanSheet(tabs: CleanSheetTabs, cycle: { startDate: st
     if (!totals.has(agent)) totals.set(agent, new Map());
     const byDay = totals.get(agent)!;
     if (!byDay.has(day)) {
-      byDay.set(day, { orders: 0, sales: 0, visits: 0, connects: 0, talkSec: 0, day: null, calls: null, ttNum: 0, ttCalls: 0 });
+      byDay.set(day, { orders: 0, sales: 0, visits: 0, connects: 0, outbound: 0, connectedAll: 0, talkSec: 0, day: null, calls: null, ttNum: 0, ttCalls: 0 });
     }
     return byDay.get(day)!;
   };
@@ -353,6 +360,8 @@ export function buildFromCleanSheet(tabs: CleanSheetTabs, cycle: { startDate: st
     const t = dayOf(p.official, when.day);
     if (t.day !== null) twiceDialer.push(`${p.official} ${when.day}`);
     t.connects += numberOf(pick(row, 'Total_Unique_Connected_Calls', 'Unique_Connects')) ?? 0;
+    t.outbound += numberOf(pick(row, 'Total_Outbound_Calls', 'Outbound_Calls')) ?? 0;
+    t.connectedAll += numberOf(pick(row, 'Total_Connected_Calls', 'Connected_Calls')) ?? 0;
     t.talkSec += numberOf(pick(row, 'Total_Talk_Time_sec', 'Talk_Time_sec')) ?? 0;
     t.day = Math.max(t.day ?? 0, dayValue(pick(row, 'Day_Type', 'Day', 'Active_Day_Count')));
   });
@@ -506,5 +515,20 @@ export function buildFromCleanSheet(tabs: CleanSheetTabs, cycle: { startDate: st
     .filter((p) => !p.active)
     .map((p) => ({ Agent_Email_Official: p.official, Reason: 'Status in Agents is not Active', Excluded_Since: '', Active_Exclusion: 'TRUE' }));
 
-  return { mainRows, qualityRows, revenueRows, leaderMappingRows, excludedAgentsRows, rawRevenueTabRows, rawVisitRows, breaks, targets, warnings };
+  // ---- Business Overview, live months: every active agent-day of the cycle, by tier
+  const overviewDays: OverviewDay[] = [];
+  for (const p of people.values()) {
+    if (!p.active) continue;
+    const tier = overviewTier(p.tier, p.location);
+    for (const [day, t] of totals.get(p.official) || []) {
+      overviewDays.push({ agent: p.official, tier, date: day, day: t.day ?? 0, outbound: t.outbound, connected: t.connectedAll, talkSec: t.talkSec, sales: t.sales, orders: t.orders });
+    }
+  }
+  const overviewQuality: OverviewQuality[] = qualityRows.map((q) => {
+    const p = people.get(q.Agent_Email_Official);
+    return { tier: p ? overviewTier(p.tier, p.location) : null, audits: numberOf(String(q.Total_Audits ?? '')) ?? 0, score: numberOf(String(q.Average_Audit_Score ?? '')) ?? 0 };
+  });
+  const overviewLive = computeOverview(overviewDays, overviewQuality);
+
+  return { mainRows, qualityRows, revenueRows, leaderMappingRows, excludedAgentsRows, rawRevenueTabRows, rawVisitRows, breaks, targets, warnings, overviewLive };
 }

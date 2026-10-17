@@ -1068,6 +1068,46 @@ export async function runApiTests() {
         { cohort: '05. 30 seconds Plus', orders: 5, revenue: 500, aov: 100, byCategory: {} as any },
       ]) === 700 && attr === 0,
       String(attr));
+
+    // Business Overview: past months from the tab, October worked out from Dialer (outbound and connected calls) and Orders
+    r = await call('POST', '/api/sync', {
+      headers: { 'X-Sync-Key': process.env.SYNC_KEY! },
+      body: {
+        agentsRows: [person('cia@co.in', 'Clean Cia', 'HO Callers', 'Dighe'), person('cal@co.in', 'Clean Cal', 'Store Callers', 'Andheri')],
+        ordersRows: [
+          { 'Order ID': 'B1', ' Order Value ': 1000, Date: '2026-10-02', Agent: 'cia@co.in', Category: '1. Shopify' },
+          { 'Order ID': 'B2', ' Order Value ': 3000, Date: '2026-10-03', Agent: 'cia@co.in', Category: '1. Shopify' },
+          { 'Order ID': 'B3', ' Order Value ': 500, Date: '2026-10-02', Agent: 'cal@co.in', Category: '1. Shopify' },
+        ],
+        dialerRows: [
+          { Date: '2026-10-02', Agent_ID: 'cia@co.in', Day_Type: 1, Total_Outbound_Calls: 300, Total_Connected_Calls: 120, Total_Unique_Connected_Calls: 100, Total_Talk_Time_sec: 6000 },
+          { Date: '2026-10-03', Agent_ID: 'cia@co.in', Day_Type: 0.5, Total_Outbound_Calls: 100, Total_Connected_Calls: 40, Total_Unique_Connected_Calls: 35, Total_Talk_Time_sec: 1200 },
+          { Date: '2026-10-02', Agent_ID: 'cal@co.in', Day_Type: 1, Total_Outbound_Calls: 200, Total_Connected_Calls: 90, Total_Unique_Connected_Calls: 80, Total_Talk_Time_sec: 3000 },
+        ],
+        businessOverviewRows: [
+          { Month: '2026-09-01', Tier: 'HO Caller', Outbound_Calls: 175709, Connected_Calls: 77348, Revenue: 36662255, Active_Team_Size: 22, Quality_Score: 0.85 },
+          { Month: '2026-09-01', Tier: 'Store Callers - Andheri', Outbound_Calls: 99273, Revenue: 23700556 },
+          { Month: '2026-09-01', Tier: 'All', Outbound_Calls: 407262, Quality_Score: 83.78, Quality_Score_Pre_Sales: 0.9065 },
+          { Month: '', Tier: 'HO Caller' },
+        ],
+      },
+    });
+    check('Business_Overview syncs; a row without a month is a count-only warning',
+      r.json?.result === 'ok' && (r.json?.warnings || []).includes('Business_Overview: 1 row(s) had no Month or Tier and were left out.'), JSON.stringify(r.json?.warnings));
+    r = await call('GET', '/api/team-summary', { token: tok(L.admin) });
+    const bo: any[] = r.json?.businessOverview || [];
+    const octHo = bo.find((x) => x.month === '2026-10' && x.tier === 'HO Caller');
+    const octAll = bo.find((x) => x.month === '2026-10' && x.tier === 'All');
+    const sepAll = bo.find((x) => x.month === '2026-09' && x.tier === 'All');
+    check('October is worked out per tier: calls, per agent-day averages, revenue, AOV, team size',
+      octHo?.outbound === 400 && octHo.connected === 160 && octHo.avgOutbound === 400 / 1.5 && octHo.revenue === 4000 && octHo.aov === 2000 && octHo.teamSize === 1 && octHo.live === true,
+      JSON.stringify(octHo));
+    check('the all-tier row adds the tiers up', octAll?.outbound === 600 && octAll.connected === 250 && octAll.teamSize === 2 && octAll.revenue === 4500, JSON.stringify(octAll));
+    check('past months come from the tab (a Quality_Score typed as 83.78 reads as 0.8378)', sepAll?.outbound === 407262 && Math.abs(sepAll.quality - 0.8378) < 1e-9 && sepAll.qualityPreSales === 0.9065 && !sepAll.live, JSON.stringify(sepAll));
+    r = await call('GET', '/api/team-summary', { token: tok(L.tlDighe) });
+    const tlBo: any[] = r.json?.businessOverview || [];
+    check('a TL sees the tiers of their own agents (here an HO and a Store agent) and no all-tier row; the Pre Sales and unknown tiers stay out',
+      tlBo.length > 0 && tlBo.every((x) => x.tier === 'HO Caller' || x.tier === 'Store Callers - Andheri') && !tlBo.some((x) => x.tier === 'All'), JSON.stringify(tlBo.map((x) => x.tier)));
   } finally {
     setGeminiForTests(null);
     await new Promise<void>((resolve) => server.close(() => resolve()));

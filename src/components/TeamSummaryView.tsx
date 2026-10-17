@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, Coffee, Gauge, RefreshCw, Target, X } from 'lucide-react';
 import { formatCurrencyINR, formatNumberINR } from '../shared/incentive';
+import { BusinessOverviewSection } from './BusinessOverviewSection';
 import {
   BREAK_COLUMNS,
   BreakDay,
@@ -252,6 +253,7 @@ export function TeamSummaryView({ userRole, getIdToken }: TeamSummaryViewProps) 
         </div>
       </div>
 
+      <BusinessOverviewSection rows={data.businessOverview || []} />
       <ProductivitySection agents={data.agents} days={productivity} agentsByEmail={agentsByEmail} />
       <BreaksSection agents={data.agents} rows={breaks} agentsByEmail={agentsByEmail} hasData={data.breaks.length > 0} />
       <TargetsSection targets={data.targets} agents={data.agents} cycle={data.cycle} />

@@ -325,6 +325,7 @@ var CLEAN_TABS_ = {
   targetsRows: 'Targets',
   cohortRows: 'Anirban_Ref',
   companyDodRows: 'Company_DOD',
+  businessOverviewRows: 'Business_Overview',
 };
 
 function readTab_(ss, name, timeZone) {
