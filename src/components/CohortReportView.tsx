@@ -633,6 +633,22 @@ const pctText = (v: number | null) => (v === null ? '-' : `${v.toFixed(1)}%`);
 const achClass = (v: number | null) =>
   v === null ? 'text-slate-400' : v >= 100 ? 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40' : v >= 85 ? 'text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40' : 'text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40';
 
+type Rag = 'g' | 'a' | 'r';
+const ragClass: Record<Rag, string> = {
+  g: 'text-emerald-800 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950/50',
+  a: 'text-amber-800 dark:text-amber-300 bg-amber-100 dark:bg-amber-950/50',
+  r: 'text-rose-800 dark:text-rose-300 bg-rose-100 dark:bg-rose-950/50',
+};
+/** Ranks the values best first and splits them in thirds: top third green, middle amber, bottom third red. */
+function ragByRank(values: Array<number | null>): Array<Rag | null> {
+  const order = values.map((v, i) => ({ v, i })).filter((x): x is { v: number; i: number } => x.v !== null).sort((a, b) => b.v - a.v);
+  const out: Array<Rag | null> = values.map(() => null);
+  order.forEach((x, rank) => {
+    out[x.i] = rank < order.length / 3 ? 'g' : rank < (order.length * 2) / 3 ? 'a' : 'r';
+  });
+  return out;
+}
+
 /**
  * Diwali projection (Diwali_Projection tab): the company's daily projection against the actual, with attributed
  * and 3 minute revenue as a share of the actual. Days with an actual of 0 are still ahead.
@@ -651,6 +667,11 @@ function DiwaliSection({ days }: { days: DiwaliDay[] }) {
   // What the remaining days must average to still reach the full projection
   const needPerDay = t.remainingDays > 0 ? Math.max(0, t.projectionAll - t.actual) / t.remainingDays : null;
   const projPerDay = t.remainingDays > 0 ? t.remainingProjection / t.remainingDays : null;
+  // RAG of the played days by rank of Attributed % and of 3 min % (top third green, middle amber, bottom third red)
+  const attrShare = days.map((d) => (d.actual > 0 ? ach(d.attributed, d.actual) : null));
+  const threeShare = days.map((d) => (d.actual > 0 ? ach(d.threeMin, d.actual) : null));
+  const attrRag = ragByRank(attrShare);
+  const threeRag = ragByRank(threeShare);
   const tiles: Array<{ label: string; value: string; sub?: string; cls?: string }> = [
     { label: 'Projection (full period)', value: money(t.projectionAll), sub: `${fmtDay(days[0].date)} to ${fmtDay(days[days.length - 1].date)}` },
     { label: 'Projection to date', value: money(t.projectionToDate), sub: `${t.days} day(s) played` },
@@ -693,23 +714,32 @@ function DiwaliSection({ days }: { days: DiwaliDay[] }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-            {days.map((d) => {
+            {days.map((d, i) => {
+              const big = d.salePct !== null && Math.round(d.salePct * 100) === 45;
               const played = d.actual > 0;
               const a = played ? ach(d.actual, d.projection) : null;
               return (
-                <tr key={d.date} className={played ? '' : 'text-slate-400'}>
+                <tr key={d.date} className={`${played ? '' : 'text-slate-400'} ${big ? 'bg-indigo-50 dark:bg-indigo-950/30 shadow-[inset_3px_0_0_0_#4f46e5]' : ''}`}>
                   <td className="py-1.5 px-2 text-[11px] font-semibold whitespace-nowrap text-slate-900 dark:text-white">
                     {fmtDay(d.date, false)} <span className="font-normal text-slate-500">{d.dow}</span>
                   </td>
                   <td className={td}>{d.weekFlag}</td>
-                  <td className={td}>{d.salePct === null ? '-' : `${Math.round(d.salePct * 100)}%`}</td>
+                  <td className={td}>
+                    {d.salePct === null ? (
+                      '-'
+                    ) : big ? (
+                      <span className="inline-block px-1.5 py-0.5 rounded-md bg-indigo-600 text-white font-bold">{Math.round(d.salePct * 100)}%</span>
+                    ) : (
+                      `${Math.round(d.salePct * 100)}%`
+                    )}
+                  </td>
                   <td className={td}>{money(d.projection)}</td>
                   <td className={`${td} font-bold`}>{played ? money(d.actual) : '-'}</td>
                   <td className={`${td} ${achClass(a)}`}>{pctText(a)}</td>
                   <td className={td}>{played ? money(d.attributed) : '-'}</td>
-                  <td className={td}>{played ? pctText(ach(d.attributed, d.actual)) : '-'}</td>
+                  <td className={`${td} font-semibold ${attrRag[i] ? ragClass[attrRag[i]!] : ''}`}>{played ? pctText(attrShare[i]) : '-'}</td>
                   <td className={td}>{played ? money(d.threeMin) : '-'}</td>
-                  <td className={td}>{played ? pctText(ach(d.threeMin, d.actual)) : '-'}</td>
+                  <td className={`${td} font-semibold ${threeRag[i] ? ragClass[threeRag[i]!] : ''}`}>{played ? pctText(threeShare[i]) : '-'}</td>
                 </tr>
               );
             })}
