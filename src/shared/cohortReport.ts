@@ -180,3 +180,45 @@ export function growth(current: number | null, earlier: number | null): number |
   if (current === null || earlier === null || earlier === 0) return null;
   return current / earlier - 1;
 }
+
+/** One day of the Diwali_Projection tab: the company's projection against what was achieved. */
+export interface DiwaliDay {
+  date: string; // 'YYYY-MM-DD'
+  dow: string;
+  weekFlag: string; // Weekday / Weekend
+  salePct: number | null; // 0..1
+  projection: number;
+  actual: number;
+  attributed: number;
+  threeMin: number;
+}
+
+export interface DiwaliTotals {
+  days: number; // days with an actual
+  projectionAll: number;
+  projectionToDate: number;
+  actual: number;
+  attributed: number;
+  threeMin: number;
+  remainingProjection: number;
+  remainingDays: number;
+}
+
+/** Days with an actual above 0 count as played; the rest are still ahead. */
+export function diwaliTotals(days: DiwaliDay[]): DiwaliTotals {
+  const t: DiwaliTotals = { days: 0, projectionAll: 0, projectionToDate: 0, actual: 0, attributed: 0, threeMin: 0, remainingProjection: 0, remainingDays: 0 };
+  for (const d of days) {
+    t.projectionAll += d.projection;
+    if (d.actual > 0) {
+      t.days++;
+      t.projectionToDate += d.projection;
+      t.actual += d.actual;
+      t.attributed += d.attributed;
+      t.threeMin += d.threeMin;
+    } else {
+      t.remainingDays++;
+      t.remainingProjection += d.projection;
+    }
+  }
+  return t;
+}

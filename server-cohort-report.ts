@@ -7,7 +7,7 @@
  */
 import { adminDb } from './server-firebase-admin';
 import { normalizeEmail } from './src/shared/incentive';
-import { COHORT_REPORT_VIEWERS, CohortRow, CompanyDay } from './src/shared/cohortReport';
+import { COHORT_REPORT_VIEWERS, CohortRow, CompanyDay, DiwaliDay } from './src/shared/cohortReport';
 import { sheetDateTime } from './server-clean-sheet';
 
 const CHUNK = 2000;
@@ -123,4 +123,47 @@ export async function loadCohortRows(): Promise<{ rows: CohortRow[]; updatedAt: 
   const d: any = head.data();
   const parts = await Promise.all(Array.from({ length: d.chunks || 0 }, (_, i) => chunksCol().doc(`rows-${i}`).get()));
   return { rows: parts.flatMap((p: any) => (p.exists ? p.data()?.rows || [] : [])), updatedAt: d.updatedAt || null };
+}
+
+/** Reads the Diwali_Projection tab (one row per day). A row without a date is counted in `skipped`. */
+export function parseDiwaliRows(rows: any[]): { rows: DiwaliDay[]; skipped: number } {
+  const out: DiwaliDay[] = [];
+  let skipped = 0;
+  const n = (row: Record<string, any>, ...names: string[]) => {
+    const s = pick(row, ...names).replace(/[,%\s]/g, '');
+    const x = Number(s);
+    return s !== '' && Number.isFinite(x) ? x : 0;
+  };
+  for (const row of rows || []) {
+    const dateCell = Object.entries(row || {}).find(([k]) => headerKey(k) === 'date')?.[1];
+    const date = sheetDateTime(dateCell)?.day;
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      skipped++;
+      continue;
+    }
+    const sp = pick(row, 'Sale_Percentage', 'Sale Percentage');
+    const spn = Number(sp.replace(/[,%\s]/g, ''));
+    out.push({
+      date,
+      dow: pick(row, 'DoW'),
+      weekFlag: pick(row, 'Week_Flag'),
+      salePct: sp !== '' && Number.isFinite(spn) ? (spn > 1 ? spn / 100 : spn) : null,
+      projection: n(row, 'Company_Projection'),
+      actual: n(row, 'Company_Actual'),
+      attributed: n(row, 'Attributed_Revenue'),
+      threeMin: n(row, '3_min_Revenue', '3_Minute_Revenue'),
+    });
+  }
+  return { rows: out.sort((a, b) => a.date.localeCompare(b.date)), skipped };
+}
+
+const diwaliRef = () => adminDb.collection('privateReports').doc('diwali');
+
+export async function saveDiwali(rows: DiwaliDay[]): Promise<void> {
+  await diwaliRef().set({ rows, count: rows.length, updatedAt: new Date().toISOString() });
+}
+
+export async function loadDiwali(): Promise<DiwaliDay[]> {
+  const snap = await diwaliRef().get();
+  return snap.exists ? ((snap.data() as any)?.rows as DiwaliDay[]) || [] : [];
 }

@@ -15,7 +15,7 @@ import {
 } from './server-import';
 import { isCleanSheetPayload } from './server-clean-sheet';
 import { loadTeamOps } from './server-team-ops';
-import { canSeeCohortReport, cohortReportStatus, loadCohortRows, loadCompanyDod } from './server-cohort-report';
+import { canSeeCohortReport, cohortReportStatus, loadCohortRows, loadCompanyDod, loadDiwali } from './server-cohort-report';
 import { TeamSummaryResponse } from './src/shared/teamOps';
 import { buildReadiness } from './server-readiness';
 import { generateAiText, isAiConfigured, runBatchAiGeneration } from './server-ai';
@@ -307,8 +307,8 @@ export function createApiApp(options: ApiOptions = {}): express.Express {
       const user = await authenticate(req);
       if (!canSeeCohortReport(user.email)) throw new HttpError(403, 'This report is private.');
       res.set('Cache-Control', 'private, no-store');
-      const [cohort, company] = await Promise.all([loadCohortRows(), loadCompanyDod()]);
-      return res.json({ ...cohort, company });
+      const [cohort, company, diwali] = await Promise.all([loadCohortRows(), loadCompanyDod(), loadDiwali()]);
+      return res.json({ ...cohort, company, diwali });
     })
   );
 

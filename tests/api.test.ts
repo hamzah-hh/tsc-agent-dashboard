@@ -1053,6 +1053,22 @@ export async function runApiTests() {
     check('the report hands out one row per day (sorted, commas read, channels added up by Main_Channel)',
       company.length === 3 && company[0].date === '2026-09-01' && company[1].sales === 1753841 && company[1].orders === 51 && company[1].retail === 1000000 && company[1].marketplace === 253841 && company[1].website === 500000 && company[2].retail === 2100000,
       JSON.stringify(company));
+    // Diwali_Projection: projection against actual per day, served with the private cohort report
+    const dw = (Date: string, proj: string, act: string, attr: string, t3: string) => ({ Date, DoW: 'Thu', Week_Flag: 'Weekday', Sale_Percentage: '40%', Company_Projection: proj, Company_Actual: act, Attributed_Revenue: attr, '3_min_Revenue': t3 });
+    r = await call('POST', '/api/sync', {
+      headers: { 'X-Sync-Key': process.env.SYNC_KEY! },
+      body: {
+        agentsRows: [person('cia@co.in', 'Clean Cia', 'HO Callers', 'Dighe')],
+        diwaliRows: [dw('2026-10-01', '23,000,000.00', '26,142,804.00', '6,151,607.00', '1,601,109.00'), dw('2026-10-02', '31,200,000.00', '0.00', '0.00', '0.00'), dw('oops', '1', '1', '1', '1')],
+      },
+    });
+    const dwWarn = (r.json?.warnings || []).find((w: string) => w.startsWith('Diwali_Projection'));
+    check('Diwali_Projection syncs; a bad row is a count-only warning', dwWarn === 'Diwali_Projection: 1 row(s) could not be read and were left out.', JSON.stringify(r.json?.warnings));
+    r = await call('GET', '/api/cohort-report', { token: tok(anirban) });
+    const diwali = r.json?.diwali || [];
+    check('the report hands out the Diwali days (commas read, percent as a fraction)', diwali.length === 2 && diwali[0].projection === 23000000 && diwali[0].actual === 26142804 && diwali[0].salePct === 0.4 && diwali[0].threeMin === 1601109, JSON.stringify(diwali));
+    const dt = cr.diwaliTotals(diwali);
+    check('Diwali totals: played days only count to date, the rest is remaining', dt.days === 1 && dt.projectionToDate === 23000000 && dt.projectionAll === 54200000 && dt.remainingDays === 1 && dt.remainingProjection === 31200000, JSON.stringify(dt));
     r = await call('GET', '/api/cohort-report', { token: tok(L.manager) });
     check('a Manager still cannot read the company days (403)', r.status === 403, `${r.status}`);
     const ctot = cr.companyForPeriod(company, { from: '2026-10-01', to: '2026-10-02' });

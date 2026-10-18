@@ -25,9 +25,10 @@ Six input tabs: paste exports as values, no formulas. Headers are matched ignori
 
 | `Anirban_Ref` | day x category x cohort | `Month`, `Day_Number`, `Date`, `Sale_Category`, `TT_Cohort`, `Order_Count`, `Sales` |
 | `Business_Overview` | past months by tier (one row per Month and Tier) | `Month`, `Tier` (HO Caller / Store Callers - Andheri / Store Callers - Bangalore / All), `Outbound_Calls`, `Avg_Outbound_Calls_Per_Agent_Day`, `Connected_Calls`, `Avg_Connected_Calls_Per_Agent_Day`, `Talk_Time_Sec`, `Avg_Talk_Time_Sec`, `Revenue` (rupees), `Avg_Revenue_Per_Agent`, `Active_Team_Size`, `AOV`, `Quality_Score`, `Quality_Score_Pre_Sales` |
+| `Diwali_Projection` | day | `Date`, `DoW`, `Week_Flag`, `Sale_Percentage`, `Company_Projection`, `Company_Actual`, `Attributed_Revenue`, `3_min_Revenue` (the % columns are recalculated) |
 | `Company_DOD` | company revenue per day and channel | `date`, `channel`, `sales`, `order_id` (orders), `Main_Channel` (Retail / Website / Marketplace) |
 
-`Breaks` and `Targets` feed only the **Team Summary & Targets** page (TLs and Managers). `Anirban_Ref` and `Company_DOD` feed only the private **Talk Time Cohort Report**, which only Anirban (anirban.tsc@gmail.com) and the owner (agha.h489@gmail.com) can open in the app (not Managers or TLs). Note that anyone with the sheet's link can still read the tab in Google Sheets. Other tabs (`TL_AM_Ref`, ...) are ignored.
+`Breaks` and `Targets` feed only the **Team Summary & Targets** page (TLs and Managers). `Anirban_Ref`, `Company_DOD` and `Diwali_Projection` feed only the private **Talk Time Cohort Report**, which only Anirban (anirban.tsc@gmail.com) and the owner (agha.h489@gmail.com) can open in the app (not Managers or TLs). Note that anyone with the sheet's link can still read the tab in Google Sheets. Other tabs (`TL_AM_Ref`, ...) are ignored.
 
 Rules:
 - **Only people in `Agents` count.** Rows for any other email are left out (the sync warning lists them). A `Status` other than `Active` excludes the person (this replaces `Excluded_Agents`). Every active agent can sign in, even before their first data.

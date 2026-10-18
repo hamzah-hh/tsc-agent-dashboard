@@ -42,6 +42,8 @@ export interface CleanSheetTabs {
   cohortRows?: any[];
   /** Company_DOD: company orders and revenue per day, for the private cohort report. */
   companyDodRows?: any[];
+  /** Diwali_Projection: daily company projection against actual, for the private cohort report. */
+  diwaliRows?: any[];
   /** Business_Overview: past months by tier, typed in once. */
   businessOverviewRows?: any[];
 }

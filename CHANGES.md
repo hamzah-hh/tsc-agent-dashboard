@@ -4,6 +4,14 @@ Newest first. How to demo and go live: [docs/GUIDELINE.md](docs/GUIDELINE.md).
 
 ---
 
+## v8.3, 18 Oct 2026: Diwali Projection in the Cohort Report
+
+1. **Diwali Projection** section at the bottom of the Talk Time Cohort Report (Anirban and the owner only). It reads the new `Diwali_Projection` tab: company projection against actual per day, achievement %, attributed revenue and 3 min revenue as a share of the actual. Days with an actual of 0 are shown greyed as still ahead.
+2. **Summary tiles:** full projection, projection to date, actual to date, achievement to date, attributed and 3 min revenue, remaining projection, and the daily average the remaining days need to reach the full projection.
+3. The % columns are recalculated from the amounts, so the tab only needs Date, DoW, Week_Flag, Sale_Percentage, Company_Projection, Company_Actual, Attributed_Revenue and 3_min_Revenue. Paste the updated `Code.gs` and run Sync Now.
+
+---
+
 ## v8.2, 17 Oct 2026: Business Overview in Team Summary and Targets
 
 1. **Business Overview** at the top of Team Summary and Targets: month by month and per tier (HO Caller, Store Callers - Andheri, Store Callers - Bangalore, and the total / team average): outbound and connected calls, averages per agent per day, talk time, revenue, average revenue per agent, active team size, AOV and Quality Score (Pre Sales quality as well for the total).

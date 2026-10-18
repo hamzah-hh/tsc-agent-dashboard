@@ -8,7 +8,9 @@ import {
   CohortRow,
   CohortTableRow,
   CompanyDay,
+  DiwaliDay,
   attributedRevenue,
+  diwaliTotals,
   companyForPeriod,
   cohortTableForPeriod,
   growth,
@@ -54,6 +56,7 @@ function periodTag(base: CohortPeriod, p: CohortPeriod): string {
 export function CohortReportView({ getIdToken }: CohortReportViewProps) {
   const [rows, setRows] = useState<CohortRow[]>([]);
   const [company, setCompany] = useState<CompanyDay[]>([]);
+  const [diwali, setDiwali] = useState<DiwaliDay[]>([]);
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -89,6 +92,7 @@ export function CohortReportView({ getIdToken }: CohortReportViewProps) {
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
       setRows(json.rows || []);
       setCompany(json.company || []);
+      setDiwali(json.diwali || []);
       setUpdatedAt(json.updatedAt || null);
     } catch (err: any) {
       setError(err?.message || 'Could not load the report.');
@@ -340,6 +344,7 @@ export function CohortReportView({ getIdToken }: CohortReportViewProps) {
           company={company}
           tags={periods.map((p, i) => (i === 0 ? 'Base' : periodTag(base, p) || `Comparison ${i}`))}
         />
+        <DiwaliSection days={diwali} />
       </div>
     </div>
   );
@@ -620,5 +625,111 @@ function CompanySection({
         </div>
       </section>
     </>
+  );
+}
+
+const ach = (actual: number, projection: number) => (projection > 0 ? (actual / projection) * 100 : null);
+const pctText = (v: number | null) => (v === null ? '-' : `${v.toFixed(1)}%`);
+const achClass = (v: number | null) =>
+  v === null ? 'text-slate-400' : v >= 100 ? 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40' : v >= 85 ? 'text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40' : 'text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40';
+
+/**
+ * Diwali projection (Diwali_Projection tab): the company's daily projection against the actual, with attributed
+ * and 3 minute revenue as a share of the actual. Days with an actual of 0 are still ahead.
+ */
+function DiwaliSection({ days }: { days: DiwaliDay[] }) {
+  if (days.length === 0) {
+    return (
+      <section className={`${card} p-5 text-xs text-slate-500`}>
+        No Diwali projection yet. It arrives with the next sync of the Diwali_Projection tab (paste the updated Code.gs first).
+      </section>
+    );
+  }
+  const t = diwaliTotals(days);
+  const achieved = ach(t.actual, t.projectionToDate);
+  const ofAll = ach(t.actual, t.projectionAll);
+  // What the remaining days must average to still reach the full projection
+  const needPerDay = t.remainingDays > 0 ? Math.max(0, t.projectionAll - t.actual) / t.remainingDays : null;
+  const projPerDay = t.remainingDays > 0 ? t.remainingProjection / t.remainingDays : null;
+  const tiles: Array<{ label: string; value: string; sub?: string; cls?: string }> = [
+    { label: 'Projection (full period)', value: money(t.projectionAll), sub: `${fmtDay(days[0].date)} to ${fmtDay(days[days.length - 1].date)}` },
+    { label: 'Projection to date', value: money(t.projectionToDate), sub: `${t.days} day(s) played` },
+    { label: 'Actual to date', value: money(t.actual), sub: `${pctText(ofAll)} of full projection` },
+    { label: 'Achievement to date', value: pctText(achieved), cls: achClass(achieved) },
+    { label: 'Attributed Revenue', value: money(t.attributed), sub: `${pctText(ach(t.attributed, t.actual))} of actual` },
+    { label: '3 min Revenue', value: money(t.threeMin), sub: `${pctText(ach(t.threeMin, t.actual))} of actual` },
+    { label: 'Remaining projection', value: money(t.remainingProjection), sub: `${t.remainingDays} day(s) left` },
+    { label: 'Needed per day to reach full', value: money(needPerDay), sub: projPerDay === null ? undefined : `projected avg ${money(projPerDay)}` },
+  ];
+  return (
+    <section className={`${card} overflow-hidden`}>
+      <h3 className="px-4 py-2.5 text-sm font-bold text-slate-950 dark:text-white border-b border-slate-200 dark:border-slate-800">
+        Diwali Projection
+        <span className="ml-2 text-[11px] font-normal text-slate-500">Diwali_Projection tab; achievement = actual / projection</span>
+      </h3>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3">
+        {tiles.map((x) => (
+          <div key={x.label} className={`rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 ${x.cls || ''}`}>
+            <div className="text-[10px] font-medium text-slate-500 dark:text-slate-400 leading-tight">{x.label}</div>
+            <div className="text-sm font-bold tabular-nums text-slate-900 dark:text-white">{x.value}</div>
+            {x.sub && <div className="text-[10px] text-slate-500 dark:text-slate-400 tabular-nums">{x.sub}</div>}
+          </div>
+        ))}
+      </div>
+      <div className="overflow-x-auto" data-scroll-box="true">
+        <table className="w-full text-xs border-collapse table-fixed" style={{ minWidth: '900px' }}>
+          <thead className="bg-slate-50 dark:bg-slate-800/60">
+            <tr>
+              <th className="py-2 px-2 text-[11px] font-semibold text-slate-700 dark:text-slate-200 text-left w-28">Date</th>
+              <th className={thWrap}>Week flag</th>
+              <th className={thWrap}>Sale %</th>
+              <th className={thWrap}>Company projection</th>
+              <th className={thWrap}>Company actual</th>
+              <th className={thWrap}>Achievement</th>
+              <th className={thWrap}>Attributed revenue</th>
+              <th className={thWrap}>Attributed %</th>
+              <th className={thWrap}>3 min revenue</th>
+              <th className={thWrap}>3 min %</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+            {days.map((d) => {
+              const played = d.actual > 0;
+              const a = played ? ach(d.actual, d.projection) : null;
+              return (
+                <tr key={d.date} className={played ? '' : 'text-slate-400'}>
+                  <td className="py-1.5 px-2 text-[11px] font-semibold whitespace-nowrap text-slate-900 dark:text-white">
+                    {fmtDay(d.date, false)} <span className="font-normal text-slate-500">{d.dow}</span>
+                  </td>
+                  <td className={td}>{d.weekFlag}</td>
+                  <td className={td}>{d.salePct === null ? '-' : `${Math.round(d.salePct * 100)}%`}</td>
+                  <td className={td}>{money(d.projection)}</td>
+                  <td className={`${td} font-bold`}>{played ? money(d.actual) : '-'}</td>
+                  <td className={`${td} ${achClass(a)}`}>{pctText(a)}</td>
+                  <td className={td}>{played ? money(d.attributed) : '-'}</td>
+                  <td className={td}>{played ? pctText(ach(d.attributed, d.actual)) : '-'}</td>
+                  <td className={td}>{played ? money(d.threeMin) : '-'}</td>
+                  <td className={td}>{played ? pctText(ach(d.threeMin, d.actual)) : '-'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot className="bg-slate-50 dark:bg-slate-800/60 font-bold">
+            <tr>
+              <td className="py-1.5 px-2 text-[11px] text-slate-900 dark:text-white">Played days</td>
+              <td className={td} />
+              <td className={td} />
+              <td className={td}>{money(t.projectionToDate)}</td>
+              <td className={td}>{money(t.actual)}</td>
+              <td className={`${td} ${achClass(achieved)}`}>{pctText(achieved)}</td>
+              <td className={td}>{money(t.attributed)}</td>
+              <td className={td}>{pctText(ach(t.attributed, t.actual))}</td>
+              <td className={td}>{money(t.threeMin)}</td>
+              <td className={td}>{pctText(ach(t.threeMin, t.actual))}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </section>
   );
 }
