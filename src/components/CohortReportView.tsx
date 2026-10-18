@@ -654,6 +654,8 @@ function ragByRank(values: Array<number | null>): Array<Rag | null> {
  * and 3 minute revenue as a share of the actual. Days with an actual of 0 are still ahead.
  */
 function DiwaliSection({ days }: { days: DiwaliDay[] }) {
+  // Days without data yet are folded away until asked for
+  const [showAhead, setShowAhead] = useState(false);
   if (days.length === 0) {
     return (
       <section className={`${card} p-5 text-xs text-slate-500`}>
@@ -672,6 +674,8 @@ function DiwaliSection({ days }: { days: DiwaliDay[] }) {
   const threeShare = days.map((d) => (d.actual > 0 ? ach(d.threeMin, d.actual) : null));
   const attrRag = ragByRank(attrShare);
   const threeRag = ragByRank(threeShare);
+  const firstAhead = days.findIndex((x) => !(x.actual > 0));
+  const aheadCount = firstAhead < 0 ? 0 : days.length - firstAhead;
   const tiles: Array<{ label: string; value: string; sub?: string; cls?: string }> = [
     { label: 'Projection (full period)', value: money(t.projectionAll), sub: `${fmtDay(days[0].date)} to ${fmtDay(days[days.length - 1].date)}` },
     { label: 'Projection to date', value: money(t.projectionToDate), sub: `${t.days} day(s) played` },
@@ -718,8 +722,26 @@ function DiwaliSection({ days }: { days: DiwaliDay[] }) {
               const big = d.salePct !== null && Math.round(d.salePct * 100) === 45;
               const played = d.actual > 0;
               const a = played ? ach(d.actual, d.projection) : null;
+              // The toggle sits right after the last day with data, before the rows still ahead
+              const toggle =
+                i === firstAhead ? (
+                  <tr key="ahead-toggle">
+                    <td colSpan={10} className="p-0">
+                      <button
+                        onClick={() => setShowAhead((v) => !v)}
+                        className="w-full flex items-center justify-center gap-1 py-1.5 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-slate-50 dark:hover:bg-slate-800/40"
+                      >
+                        {showAhead ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                        {showAhead ? 'Hide' : 'Show'} {aheadCount} upcoming day(s) without data
+                      </button>
+                    </td>
+                  </tr>
+                ) : null;
+              if (!played && !showAhead) return toggle;
               return (
-                <tr key={d.date} className={`${played ? '' : 'text-slate-400'} ${big ? 'bg-indigo-50 dark:bg-indigo-950/30 shadow-[inset_3px_0_0_0_#4f46e5]' : ''}`}>
+                <React.Fragment key={d.date}>
+                {toggle}
+                <tr className={`${played ? '' : 'text-slate-400'} ${big ? 'bg-indigo-50 dark:bg-indigo-950/30 shadow-[inset_3px_0_0_0_#4f46e5]' : ''}`}>
                   <td className="py-1.5 px-2 text-[11px] font-semibold whitespace-nowrap text-slate-900 dark:text-white">
                     {fmtDay(d.date, false)} <span className="font-normal text-slate-500">{d.dow}</span>
                   </td>
@@ -741,6 +763,7 @@ function DiwaliSection({ days }: { days: DiwaliDay[] }) {
                   <td className={td}>{played ? money(d.threeMin) : '-'}</td>
                   <td className={`${td} font-semibold ${threeRag[i] ? ragClass[threeRag[i]!] : ''}`}>{played ? pctText(threeShare[i]) : '-'}</td>
                 </tr>
+                </React.Fragment>
               );
             })}
           </tbody>
