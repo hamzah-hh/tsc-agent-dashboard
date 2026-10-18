@@ -456,6 +456,29 @@ export function createApiApp(options: ApiOptions = {}): express.Express {
     })
   );
 
+  /**
+   * When the data was last updated, for the bar at the top of every page: the time of the last successful
+   * sync and the latest data date it carried. Any signed-in user; cached for a minute to save reads.
+   */
+  let dataStatusCache: { at: number; body: any } | null = null;
+  api.get(
+    '/api/data-status',
+    route(async (req, res) => {
+      await authenticate(req);
+      res.set('Cache-Control', 'private, max-age=60');
+      if (!dataStatusCache || Date.now() - dataStatusCache.at > 60_000) {
+        const snap = await adminDb.collection('syncLogs').orderBy('time', 'desc').limit(10).get();
+        const logs = snap.docs.map((d: any) => d.data());
+        const last = logs.find((l: any) => l.result === 'ok' && l.source !== 'test');
+        dataStatusCache = {
+          at: Date.now(),
+          body: { syncedAt: last?.time || null, lastDataDate: last?.lastDataDate || null, source: last?.source || null, lastFailed: logs[0]?.result === 'error' && logs[0]?.source !== 'test' },
+        };
+      }
+      return res.json(dataStatusCache.body);
+    })
+  );
+
   api.get(
     '/api/admin/sync-logs',
     route(async (req, res) => {

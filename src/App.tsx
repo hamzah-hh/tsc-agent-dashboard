@@ -10,6 +10,7 @@ import { setCachedSheetsToken } from './shared/sheets-auth';
 import { AgentView } from './components/AgentView';
 import { StaffPortal } from './components/StaffPortal';
 import { CohortReportView } from './components/CohortReportView';
+import { DataStatusProvider } from './components/DataStatusBar';
 import { LogIn, LogOut, ShieldAlert, Layers, AlertCircle, RefreshCw, Volume2, VolumeX, Clock, Timer } from 'lucide-react';
 import { soundFx } from './utils/audio';
 import { FestiveAura } from './components/FestiveAura';
@@ -369,6 +370,7 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-[1920px] w-full mx-auto px-3 sm:px-5 lg:px-6 py-6">
+        <DataStatusProvider enabled={Boolean(user) && ['agent', 'tl', 'manager', 'superAdmin', 'reportViewer'].includes(session?.role as string)} getIdToken={getIdToken}>
         {!user ? (
           // Logged Out Minimal Landing
           <div className="max-w-md mx-auto my-12 bg-white/95 backdrop-blur-md border border-slate-200 rounded-2xl p-8 shadow-xl text-center">
@@ -496,6 +498,7 @@ export default function App() {
             </button>
           </div>
         )}
+        </DataStatusProvider>
       </main>
 
       {/* Footer */}
