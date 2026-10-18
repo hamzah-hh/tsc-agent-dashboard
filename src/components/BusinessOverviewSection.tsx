@@ -1,8 +1,10 @@
-import React, { useMemo } from 'react';
-import { Briefcase } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { Briefcase, Download } from 'lucide-react';
 import { formatNumberINR } from '../shared/incentive';
 import { ALL_TIERS, BusinessOverviewRow } from '../shared/businessOverview';
 import { hms } from '../shared/teamOps';
+import { buildOverviewSheet } from '../shared/businessOverviewExport';
+import { useDataStatus } from './DataStatusBar';
 
 const card = 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs';
 
@@ -45,6 +47,8 @@ const TIER_ORDER = ['HO Caller', 'Store Callers - Andheri', 'Store Callers - Ban
  * Business_Overview tab; months of the cycle are worked out at every sync from Dialer, Orders and Quality.
  */
 export function BusinessOverviewSection({ rows }: { rows: BusinessOverviewRow[] }) {
+  const status = useDataStatus();
+  const [exporting, setExporting] = useState(false);
   const { months, tiers, byKey, hasAll } = useMemo(() => {
     const months = [...new Set(rows.map((r) => r.month))].sort().reverse();
     const tiers = [...new Set(rows.map((r) => r.tier).filter((t) => t !== ALL_TIERS))].sort((a, b) => {
@@ -63,6 +67,26 @@ export function BusinessOverviewSection({ rows }: { rows: BusinessOverviewRow[] 
     );
   }
 
+  // Downloads the table as an .xlsx in the layout of the Business Review files
+  const exportXlsx = async () => {
+    setExporting(true);
+    try {
+      const XLSX = await import('xlsx');
+      const sheet = buildOverviewSheet(rows);
+      const ws = XLSX.utils.aoa_to_sheet(sheet.cells.map((r) => r.map((c) => c ?? '')));
+      ws['!merges'] = sheet.merges;
+      ws['!cols'] = sheet.colWidths.map((wch) => ({ wch }));
+      // Latest data date (IST today when the status is not known): "Performance-till-30.09.2026"
+      const asOf = status?.lastDataDate || new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
+      const [y, m, d] = asOf.split('-');
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, `Performance-till-${d}.${m}.${y}`);
+      XLSX.writeFile(wb, `Business_Overview_${asOf}.xlsx`);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const cell = (month: string, tier: string, show: Show) => {
     const r = byKey.get(`${month}|${tier}`);
     return r ? show(r) : null;
@@ -79,6 +103,14 @@ export function BusinessOverviewSection({ rows }: { rows: BusinessOverviewRow[] 
         <span className="text-[11px] text-slate-500">
           month by month{liveMonths.size ? '; a month marked MTD is still running, so only its averages compare with full months' : ''}
         </span>
+        <button
+          onClick={exportXlsx}
+          disabled={exporting}
+          className="ml-auto inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-[11px] font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-60"
+          title="Download as an Excel file in the Business Review layout"
+        >
+          <Download className="w-3.5 h-3.5" /> {exporting ? 'Exporting...' : 'Export .xlsx'}
+        </button>
       </div>
       <div className="overflow-x-auto" data-scroll-box="true">
         <table className="w-full text-xs border-collapse">

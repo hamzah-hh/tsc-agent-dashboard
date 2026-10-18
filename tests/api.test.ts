@@ -1134,6 +1134,25 @@ export async function runApiTests() {
     const tlBo: any[] = r.json?.businessOverview || [];
     check('a TL sees the tiers of their own agents (here an HO and a Store agent) and no all-tier row; the Pre Sales and unknown tiers stay out',
       tlBo.length > 0 && tlBo.every((x) => x.tier === 'HO Caller' || x.tier === 'Store Callers - Andheri') && !tlBo.some((x) => x.tier === 'All'), JSON.stringify(tlBo.map((x) => x.tier)));
+
+    // Data status bar: any signed-in user, last good sync only
+    r = await call('GET', '/api/data-status', { token: tok(L.tlDighe) });
+    check('data status: any signed-in user gets the time of the last good sync and its last data date', r.status === 200 && typeof r.json?.syncedAt === 'string' && 'lastDataDate' in (r.json || {}), JSON.stringify(r.json));
+    r = await call('GET', '/api/data-status', {});
+    check('data status needs a sign-in (401)', r.status === 401, `${r.status}`);
+
+    // Business Overview export: Business Review layout (months newest first, quarter average after a full quarter)
+    const ex = await import('../src/shared/businessOverviewExport');
+    const mk = (month: string, tier: string, outbound: number, live = false): any => ({ month, tier, outbound, avgOutbound: 100, connected: 0, avgConnected: null, talkSec: 3600, avgTalkSec: 60, revenue: 1e7, avgRevenue: 1e5, teamSize: 2, aov: 100, quality: 0.8, ...(live ? { live: true } : {}), ...(tier === 'All' ? { qualityPreSales: 0.9 } : {}) });
+    const exRows = ['2026-07', '2026-08', '2026-09', '2026-10'].flatMap((m, i) => ['HO Caller', 'Store Callers - Andheri', 'All'].map((t) => mk(m, t, 100 * (i + 1), m === '2026-10')));
+    const exSheet = ex.buildOverviewSheet(exRows);
+    const exHead = exSheet.cells[0].map((c) => c?.v ?? '');
+    check('export header: KPIs, Oct-26 (MTD) newest first, Sep-26, Aug-26, Jul-26, then the full quarter average',
+      JSON.stringify(exHead.slice(0, 7)) === JSON.stringify(['KPIs', '', 'Oct-26 (MTD)', 'Sep-26', 'Aug-26', 'Jul-26', '2026-Q2 Average']) && exHead.length === 7, JSON.stringify(exHead));
+    const hoRow = exSheet.cells[3];
+    check('export rows: KPI name, tier, numbers; quarter average is the mean of its months (Jul 100, Aug 200, Sep 300 -> 200)', hoRow[0]?.v === 'Total Outbound Calls' && hoRow[1]?.v === 'HO Caller' && hoRow[3]?.v === 300 && hoRow[6]?.v === 200, JSON.stringify(hoRow));
+    check('export merges the KPI name over its tier rows and ends with the two quality rows', exSheet.merges.length === 10 && exSheet.merges[0].s.r === 3 && exSheet.merges[0].e.r === 5 && exSheet.cells[exSheet.cells.length - 1][0]?.v === 'MOM Quality Score (Pre Sales Team)', JSON.stringify(exSheet.merges[0]));
+    check('financial-year quarters: Apr-Jun = Q1, Jul-Sep = Q2, Oct-Dec = Q3, Jan-Mar = Q4 of the year before', ex.quarterOf('2026-04').key === '2026-Q1' && ex.quarterOf('2026-09').key === '2026-Q2' && ex.quarterOf('2026-12').key === '2026-Q3' && ex.quarterOf('2027-02').key === '2026-Q4');
   } finally {
     setGeminiForTests(null);
     await new Promise<void>((resolve) => server.close(() => resolve()));

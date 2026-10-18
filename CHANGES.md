@@ -4,6 +4,13 @@ Newest first. How to demo and go live: [docs/GUIDELINE.md](docs/GUIDELINE.md).
 
 ---
 
+## v8.4, 19 Oct 2026: Data status bar and Business Overview export
+
+1. **Last-updated bar** at the top of every page, for every role (agents, TLs, Managers, Super Admin and the cohort report viewer): the time of the last successful sync (IST) and the latest data date it carried. It turns amber when the data is more than 2 days old or the latest sync failed. It comes from the new `GET /api/data-status` (any signed-in user, cached for a minute so it costs few reads).
+2. **Export .xlsx** button on the Business Overview: months across newest first, a block of tier rows per KPI with the KPI name merged over it, a financial-year quarter average column after each complete quarter (Apr-Jun = Q1), and the two Quality Score rows, as in the Business Review sample files. Numbers stay numbers (Cr, L, hh:mm:ss, % formats). A TL exports only the tiers they can see. The sheet is named `Performance-till-DD.MM.YYYY` after the latest data date.
+
+---
+
 ## v8.3, 18 Oct 2026: Diwali Projection in the Cohort Report
 
 1. **Diwali Projection** section at the bottom of the Talk Time Cohort Report (Anirban and the owner only). It reads the new `Diwali_Projection` tab: company projection against actual per day, achievement %, attributed revenue and 3 min revenue as a share of the actual. Days with an actual of 0 are shown greyed as still ahead.
