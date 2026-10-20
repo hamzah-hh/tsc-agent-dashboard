@@ -15,6 +15,7 @@ import {
   Filter,
   PhoneIncoming,
   Sparkles,
+  Download,
 } from 'lucide-react';
 
 interface TeamViewProps {
@@ -29,6 +30,7 @@ interface TeamViewProps {
 type SortField =
   | 'name'
   | 'sales'
+  | 'aov'
   | 'achievementPct'
   | 'className'
   | 'qualityScore'
@@ -153,6 +155,10 @@ export function TeamView({
         valA = a.totals?.sales || 0;
         valB = b.totals?.sales || 0;
         break;
+      case 'aov':
+        valA = a.totals?.orders ? (a.totals.sales || 0) / a.totals.orders : -1;
+        valB = b.totals?.orders ? (b.totals.sales || 0) / b.totals.orders : -1;
+        break;
       case 'achievementPct':
         valA = a.result?.achievementPct || 0;
         valB = b.result?.achievementPct || 0;
@@ -263,6 +269,54 @@ export function TeamView({
   };
 
   const overallClassCounts = getClassCounts(revenueAgents);
+
+  // Downloads every row of the table as shown (filters and sort applied) with every column, plus the team row
+  const [exporting, setExporting] = useState(false);
+  const exportXlsx = async () => {
+    setExporting(true);
+    try {
+      const XLSX = await import('xlsx');
+      const header = ['Agent Name', 'Official Email', 'Location', 'Type', 'Revenue', 'Orders', 'AOV', 'Target %', 'Class', 'Quality Score %', 'Quality Band', 'Avg Unique Connects / Day (Pre Sales: calls / day)', 'Avg Talk Time (min / day; Pre Sales: sec / call)', 'Visits', 'Total Incentive'];
+      const rows: Array<Array<string | number>> = sortedAgents.map((a) => {
+        const t = a.totals;
+        const ps = a.agentType === 'PRE_SALES';
+        const days = t?.activeDays || 0;
+        return [
+          a.name,
+          a.officialEmail,
+          a.location,
+          ps ? 'Pre Sales' : a.agentType === 'HO' ? 'HO' : 'Store',
+          ps ? '' : Math.round(t?.sales || 0),
+          ps ? '' : t?.orders || 0,
+          ps || !t?.orders ? '' : Math.round(t.sales / t.orders),
+          ps ? '' : Number((a.result?.achievementPct || 0).toFixed(1)),
+          ps ? 'PS' : a.result?.className || 'NQ',
+          a.quality?.audits ? a.quality.score : '',
+          ps ? (a.result?.preSales?.eligible ? 'Gate met' : 'Locked') : a.result?.quality?.band || 'None',
+          ps ? a.result?.preSales?.calls.value ?? 0 : days > 0 ? Number((t.connects / days).toFixed(1)) : 0,
+          ps ? a.result?.preSales?.talk.value ?? 0 : days > 0 ? Number((t.talkSeconds / 60 / days).toFixed(1)) : 0,
+          ps ? '' : t?.visitsAttributed || 0,
+          Math.round(a.result?.total || 0),
+        ];
+      });
+      rows.push([
+        'Team (excl. Pre Sales, except incentive)', '', '', '',
+        Math.round(totalRevenue), teamOrders, teamAov === null ? '' : Math.round(teamAov),
+        Number(averageAgentAchievement.toFixed(1)), '', '', '',
+        teamConnectsPerDay === null ? '' : Number(teamConnectsPerDay.toFixed(1)),
+        teamTalkPerDay === null ? '' : Number((teamTalkPerDay / 60).toFixed(1)),
+        totalVisits, Math.round(totalIncentive),
+      ]);
+      const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+      ws['!cols'] = [28, 34, 16, 10, 14, 9, 11, 10, 8, 12, 12, 22, 22, 8, 14].map((wch) => ({ wch }));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Team');
+      const today = new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
+      XLSX.writeFile(wb, `Team_${activeCycleId}_${today}.xlsx`);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -606,6 +660,14 @@ export function TeamView({
             </div>
           </div>
 
+          <button
+            onClick={exportXlsx}
+            disabled={exporting || sortedAgents.length === 0}
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-60 shrink-0"
+            title="Download the table (with the current filters and sort) as an Excel file"
+          >
+            <Download className="w-3.5 h-3.5" /> {exporting ? 'Exporting...' : 'Export .xlsx'}
+          </button>
           <span className="text-xs text-slate-500 dark:text-slate-400 font-mono shrink-0">
             Showing <strong className="text-slate-800 dark:text-slate-200">{sortedAgents.length}</strong> of <strong className="text-slate-800 dark:text-slate-200">{visibleAgents.length}</strong> agents
           </span>
@@ -643,6 +705,15 @@ export function TeamView({
                     >
                       <div className="flex items-center justify-end gap-1">
                         Revenue
+                        <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                      </div>
+                    </th>
+                    <th
+                      onClick={() => handleSort('aov')}
+                      className="py-3 px-4 text-right cursor-pointer hover:text-slate-900 dark:hover:text-white"
+                    >
+                      <div className="flex items-center justify-end gap-1">
+                        AOV
                         <ArrowUpDown className="w-3 h-3 text-slate-400" />
                       </div>
                     </th>
@@ -748,6 +819,9 @@ export function TeamView({
                         <td className="py-3 px-4 text-right font-mono font-semibold text-slate-900 dark:text-slate-200 tabular-nums">
                           {isPS ? '—' : formatCurrencyINR(tot?.sales || 0)}
                         </td>
+                        <td className="py-3 px-4 text-right font-mono text-slate-900 dark:text-slate-200 tabular-nums">
+                          {isPS || !tot?.orders ? '—' : formatCurrencyINR(tot.sales / tot.orders)}
+                        </td>
                         <td className="py-3 px-4 text-right font-mono font-bold text-slate-950 dark:text-white tabular-nums">
                           {isPS ? '—' : `${formatNumberINR(res?.achievementPct || 0, 1)}%`}
                         </td>
@@ -805,6 +879,26 @@ export function TeamView({
                     );
                   })}
                 </tbody>
+                {/* Team row: the same numbers as the summary cards (Pre Sales left out except in the incentive) */}
+                <tfoot className="bg-slate-50 dark:bg-slate-950/60 border-t-2 border-slate-200 dark:border-slate-700 font-mono font-bold text-slate-900 dark:text-white">
+                  <tr>
+                    <td className="py-3 px-4">
+                      Team
+                      <span className="block text-[10px] font-normal text-slate-400">{revenueAgents.length} agents</span>
+                    </td>
+                    <td className="py-3 px-4 text-right tabular-nums">{formatCurrencyINR(totalRevenue)}</td>
+                    <td className="py-3 px-4 text-right tabular-nums">{teamAov === null ? '—' : formatCurrencyINR(teamAov)}</td>
+                    <td className="py-3 px-4 text-right tabular-nums">{formatNumberINR(averageAgentAchievement, 1)}%</td>
+                    <td className="py-3 px-4" />
+                    <td className="py-3 px-4" />
+                    <td className="py-3 px-4 text-center">{teamConnectsPerDay === null ? '—' : formatNumberINR(teamConnectsPerDay, 1)}</td>
+                    <td className="py-3 px-4 text-center">{teamTalkPerDay === null ? '—' : `${Math.round(teamTalkPerDay / 60)}m`}
+                      <span className="block text-[10px] font-normal text-slate-400">{teamTalkPerDay === null ? '' : hms(teamTalkPerDay)}</span>
+                    </td>
+                    <td className="py-3 px-4 text-center">{totalVisits}</td>
+                    <td className="py-3 px-4 text-right tabular-nums">{formatCurrencyINR(totalIncentive)}</td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
 
