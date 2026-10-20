@@ -318,6 +318,46 @@ export function TeamView({
     }
   };
 
+  // Team row: shown at the top and the bottom of the table
+  const teamRow = (
+    <tr>
+                    <td className="py-3 px-4">
+                      Team
+                      <span className="block text-[10px] font-normal text-slate-400">{revenueAgents.length} agents</span>
+                    </td>
+                    <td className="py-3 px-4 text-right tabular-nums">{formatCurrencyINR(totalRevenue)}</td>
+                    <td className="py-3 px-4 text-right tabular-nums">{teamAov === null ? '—' : formatCurrencyINR(teamAov)}</td>
+                    <td className="py-3 px-4 text-right tabular-nums">{formatNumberINR(averageAgentAchievement, 1)}%</td>
+                    <td className="py-3 px-4" />
+                    <td className="py-3 px-4" />
+                    <td className="py-3 px-4 text-center">{teamConnectsPerDay === null ? '—' : formatNumberINR(teamConnectsPerDay, 1)}</td>
+                    <td className="py-3 px-4 text-center">{teamTalkPerDay === null ? '—' : `${Math.round(teamTalkPerDay / 60)}m`}
+                      <span className="block text-[10px] font-normal text-slate-400">{teamTalkPerDay === null ? '' : hms(teamTalkPerDay)}</span>
+                    </td>
+                    <td className="py-3 px-4 text-center">{totalVisits}</td>
+                    <td className="py-3 px-4 text-right tabular-nums">{formatCurrencyINR(totalIncentive)}</td>
+                  </tr>
+  );
+  const teamRowTop = (
+    <tr className="bg-amber-50/60 dark:bg-amber-950/20 font-mono font-bold text-slate-900 dark:text-white border-b-2 border-slate-200 dark:border-slate-700">
+                    <td className="py-3 px-4">
+                      Team
+                      <span className="block text-[10px] font-normal text-slate-400">{revenueAgents.length} agents</span>
+                    </td>
+                    <td className="py-3 px-4 text-right tabular-nums">{formatCurrencyINR(totalRevenue)}</td>
+                    <td className="py-3 px-4 text-right tabular-nums">{teamAov === null ? '—' : formatCurrencyINR(teamAov)}</td>
+                    <td className="py-3 px-4 text-right tabular-nums">{formatNumberINR(averageAgentAchievement, 1)}%</td>
+                    <td className="py-3 px-4" />
+                    <td className="py-3 px-4" />
+                    <td className="py-3 px-4 text-center">{teamConnectsPerDay === null ? '—' : formatNumberINR(teamConnectsPerDay, 1)}</td>
+                    <td className="py-3 px-4 text-center">{teamTalkPerDay === null ? '—' : `${Math.round(teamTalkPerDay / 60)}m`}
+                      <span className="block text-[10px] font-normal text-slate-400">{teamTalkPerDay === null ? '' : hms(teamTalkPerDay)}</span>
+                    </td>
+                    <td className="py-3 px-4 text-center">{totalVisits}</td>
+                    <td className="py-3 px-4 text-right tabular-nums">{formatCurrencyINR(totalIncentive)}</td>
+                  </tr>
+  );
+
   return (
     <div className="space-y-6">
       {!loading && !error && <StaleBanner date={latestDataDate} />}
@@ -783,6 +823,7 @@ export function TeamView({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {teamRowTop}
                   {sortedAgents.map((agent) => {
                     const res = agent.result;
                     const tot = agent.totals;
@@ -881,23 +922,7 @@ export function TeamView({
                 </tbody>
                 {/* Team row: the same numbers as the summary cards (Pre Sales left out except in the incentive) */}
                 <tfoot className="bg-slate-50 dark:bg-slate-950/60 border-t-2 border-slate-200 dark:border-slate-700 font-mono font-bold text-slate-900 dark:text-white">
-                  <tr>
-                    <td className="py-3 px-4">
-                      Team
-                      <span className="block text-[10px] font-normal text-slate-400">{revenueAgents.length} agents</span>
-                    </td>
-                    <td className="py-3 px-4 text-right tabular-nums">{formatCurrencyINR(totalRevenue)}</td>
-                    <td className="py-3 px-4 text-right tabular-nums">{teamAov === null ? '—' : formatCurrencyINR(teamAov)}</td>
-                    <td className="py-3 px-4 text-right tabular-nums">{formatNumberINR(averageAgentAchievement, 1)}%</td>
-                    <td className="py-3 px-4" />
-                    <td className="py-3 px-4" />
-                    <td className="py-3 px-4 text-center">{teamConnectsPerDay === null ? '—' : formatNumberINR(teamConnectsPerDay, 1)}</td>
-                    <td className="py-3 px-4 text-center">{teamTalkPerDay === null ? '—' : `${Math.round(teamTalkPerDay / 60)}m`}
-                      <span className="block text-[10px] font-normal text-slate-400">{teamTalkPerDay === null ? '' : hms(teamTalkPerDay)}</span>
-                    </td>
-                    <td className="py-3 px-4 text-center">{totalVisits}</td>
-                    <td className="py-3 px-4 text-right tabular-nums">{formatCurrencyINR(totalIncentive)}</td>
-                  </tr>
+                  {teamRow}
                 </tfoot>
               </table>
             </div>
