@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { AgentRecord, AgentType } from '../shared/types';
 import { formatCurrencyINR, formatNumberINR } from '../shared/incentive';
 import { StaleBanner } from './StaleBanner';
+import { hms } from '../shared/teamOps';
 import {
   Users,
   Search,
@@ -231,6 +232,15 @@ export function TeamView({
 
   const totalVisits = revenueAgents.reduce((acc, a) => acc + (a.totals?.visitsAttributed || 0), 0);
 
+  // Team averages are pooled (all orders, all worked days), not an average of the agents' averages
+  const teamOrders = revenueAgents.reduce((acc, a) => acc + (a.totals?.orders || 0), 0);
+  const teamAgentDays = revenueAgents.reduce((acc, a) => acc + (a.totals?.activeDays || 0), 0);
+  const teamConnects = revenueAgents.reduce((acc, a) => acc + (a.totals?.connects || 0), 0);
+  const teamTalkSeconds = revenueAgents.reduce((acc, a) => acc + (a.totals?.talkSeconds || 0), 0);
+  const teamAov = teamOrders > 0 ? totalRevenue / teamOrders : null;
+  const teamConnectsPerDay = teamAgentDays > 0 ? teamConnects / teamAgentDays : null;
+  const teamTalkPerDay = teamAgentDays > 0 ? teamTalkSeconds / teamAgentDays : null;
+
   const totalIncentive = statAgents.reduce(
     (acc, a) => acc + (a.result?.total || 0),
     0
@@ -259,7 +269,7 @@ export function TeamView({
       {!loading && !error && <StaleBanner date={latestDataDate} />}
 
       {/* 1. Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Agents */}
         <div className="bg-white/95 dark:bg-slate-900/90 backdrop-blur-sm border border-slate-200/90 dark:border-slate-800 rounded-2xl p-5 shadow-xs">
           <span className="text-xs uppercase tracking-wider font-bold text-slate-400 dark:text-slate-500 font-mono block mb-1">
@@ -317,6 +327,37 @@ export function TeamView({
             {formatCurrencyINR(totalIncentive)}
           </div>
           <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">Combined payout to date</p>
+        </div>
+
+        {/* Team averages, from the agents' totals */}
+        <div className="bg-white/95 dark:bg-slate-900/90 backdrop-blur-sm border border-slate-200/90 dark:border-slate-800 rounded-2xl p-5 shadow-xs">
+          <span className="text-xs uppercase tracking-wider font-bold text-slate-400 dark:text-slate-500 font-mono block mb-1">
+            Team AOV
+          </span>
+          <div className="text-2xl font-extrabold text-slate-900 dark:text-white font-mono">
+            {teamAov === null ? '-' : formatCurrencyINR(teamAov)}
+          </div>
+          <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">Total revenue / total orders</p>
+        </div>
+
+        <div className="bg-white/95 dark:bg-slate-900/90 backdrop-blur-sm border border-slate-200/90 dark:border-slate-800 rounded-2xl p-5 shadow-xs">
+          <span className="text-xs uppercase tracking-wider font-bold text-slate-400 dark:text-slate-500 font-mono block mb-1">
+            Avg Unique Connects
+          </span>
+          <div className="text-2xl font-extrabold text-slate-900 dark:text-white font-mono">
+            {teamConnectsPerDay === null ? '-' : formatNumberINR(teamConnectsPerDay, 1)}
+          </div>
+          <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">Per agent per day (unique connected calls / worked days)</p>
+        </div>
+
+        <div className="bg-white/95 dark:bg-slate-900/90 backdrop-blur-sm border border-slate-200/90 dark:border-slate-800 rounded-2xl p-5 shadow-xs">
+          <span className="text-xs uppercase tracking-wider font-bold text-slate-400 dark:text-slate-500 font-mono block mb-1">
+            Avg Talk Time
+          </span>
+          <div className="text-2xl font-extrabold text-slate-900 dark:text-white font-mono">
+            {teamTalkPerDay === null ? '-' : hms(teamTalkPerDay)}
+          </div>
+          <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">Per agent per day (hh:mm:ss)</p>
         </div>
       </div>
 
