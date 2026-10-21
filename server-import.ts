@@ -428,12 +428,46 @@ const LEGACY_CODE_MANAGER = 'snehatsc@gmail.com';
  * - Documents from an older version are upgraded in place (Pre Sales tier and plan). Safe to repeat.
  */
 // Per-server-instance read cache. Every page load used to re-read config/app, the cycle and the whole
-// agents collection, which runs into Firestore's free daily read quota. Entries live CACHE_TTL_MS and are
-// dropped by invalidateReadCache() after any write this server makes (sync, import, Admin changes).
-// Another instance may serve data up to CACHE_TTL_MS old.
-const CACHE_TTL_MS = 30000;
+// agents collection, which runs into Firestore's free daily read quota. The small config/cycle documents
+// live CACHE_TTL_MS. The agents collection (one read per agent) is kept until config/app.dataVersion changes,
+// which every write of agent records bumps, or AGENTS_MAX_AGE_MS passes. Both are dropped by
+// invalidateReadCache() after any write this server makes (sync, import, Admin changes).
+// Another instance may serve config up to CACHE_TTL_MS old, so agent data can show up that late after a sync.
+const CACHE_TTL_MS = 60000;
+const AGENTS_MAX_AGE_MS = 30 * 60000;
 let seedCache: { at: number; value: { appConfig: AppConfig; cycle: Cycle } } | null = null;
-const agentsCache = new Map<string, { at: number; value: AgentRecord[] }>();
+const agentsCache = new Map<string, { at: number; version: number | undefined; value: AgentRecord[] }>();
+
+/** A new stamp for config/app.dataVersion, written in the same batch as the agent records it covers. */
+function newDataVersion(): number {
+  return Date.now();
+}
+
+/** Key order and undefined fields do not matter when comparing what is stored with what a sync computed. */
+function stableJson(v: any): string {
+  return JSON.stringify(v, (_k, val) => {
+    if (val && typeof val === 'object' && !Array.isArray(val)) {
+      const out: Record<string, any> = {};
+      for (const k of Object.keys(val).sort()) if (val[k] !== undefined) out[k] = val[k];
+      return out;
+    }
+    return val;
+  });
+}
+
+/** True when the stored agent record already holds the same data (updatedAt is not data). */
+function sameAgentRecord(stored: any, next: any): boolean {
+  if (!stored || !next) return false;
+  const { updatedAt: _a, ...a } = stored;
+  const { updatedAt: _b, ...b } = next;
+  return stableJson(a) === stableJson(b);
+}
+
+/** True when every field of the merge-write is already stored with the same value. */
+function accessAlreadyHolds(stored: any, patch: Record<string, any>): boolean {
+  if (!stored) return false;
+  return Object.entries(patch).every(([k, v]) => v === undefined || stableJson(stored[k]) === stableJson(v));
+}
 
 export function invalidateReadCache(): void {
   seedCache = null;
@@ -551,11 +585,14 @@ async function ensureSeedDataUncached(): Promise<{ appConfig: AppConfig; cycle: 
 
 /** All agents of a cycle. */
 export async function loadAgents(cycleId: string): Promise<AgentRecord[]> {
+  // config/app comes from the short cache above, so this costs no read most of the time
+  const { appConfig } = await ensureSeedData();
+  const version = appConfig.dataVersion;
   const hit = agentsCache.get(cycleId);
-  if (hit && Date.now() - hit.at < CACHE_TTL_MS) return structuredClone(hit.value);
+  if (hit && hit.version === version && Date.now() - hit.at < AGENTS_MAX_AGE_MS) return structuredClone(hit.value);
   const snap = await adminDb.collection('cycles').doc(cycleId).collection('agents').get();
   const agents = snap.docs.map((d) => d.data() as AgentRecord);
-  agentsCache.set(cycleId, { at: Date.now(), value: structuredClone(agents) });
+  agentsCache.set(cycleId, { at: Date.now(), version, value: structuredClone(agents) });
   return agents;
 }
 
@@ -628,6 +665,7 @@ export async function clearTestData(
   });
 
   logsSnap.forEach((d) => batch.delete(d.ref));
+  batch.set(adminDb.collection('config').doc('app'), { dataVersion: newDataVersion() }, { merge: true });
   await batch.commit();
 
   await rebuildLeaderboards(appConfig);
@@ -648,6 +686,7 @@ export async function saveAiText(cycleId: string, agents: AgentRecord[]): Promis
       batch.set(col.doc(agent.officialEmail), { aiSuggestions: agent.aiSuggestions }, { merge: true });
     }
   }
+  batch.set(adminDb.collection('config').doc('app'), { dataVersion: newDataVersion() }, { merge: true });
   await batch.commit();
 }
 
@@ -924,8 +963,10 @@ export async function processImport(
     // Preload known TL access mappings so agents with TL_Official_Email automatically link to the TL's login email
     const knownTlAccessSnap = await adminDb.collection('access').get();
     const tlOfficialToPersonal = new Map<string, string>();
+    const existingAccess = new Map<string, any>();
     knownTlAccessSnap.forEach((d: any) => {
       const data = d.data();
+      existingAccess.set(d.id, data);
       if (data?.role === 'tl' && data.officialEmail) {
         tlOfficialToPersonal.set(normalizeEmail(data.officialEmail), d.id);
       }
@@ -1131,7 +1172,9 @@ export async function processImport(
       .doc(cycleId)
       .collection('agents');
 
+    // Only records whose data changed are written: a sync that finds the same numbers costs no writes
     for (const agent of updatedAgents) {
+      if (sameAgentRecord(existingAgentData.get(agent.officialEmail), agent)) continue;
       batch.set(agentsCollection.doc(agent.officialEmail), agent);
     }
 
@@ -1140,6 +1183,7 @@ export async function processImport(
     }
 
     for (const entry of agentAccessEntries) {
+      if (accessAlreadyHolds(existingAccess.get(entry.email), entry.doc)) continue;
       batch.set(adminDb.collection('access').doc(entry.email), entry.doc, { merge: true });
     }
     const tlMap = new Map<string, any>();
@@ -1155,6 +1199,7 @@ export async function processImport(
     }
 
     for (const [email, doc] of tlMap.entries()) {
+      if (accessAlreadyHolds(existingAccess.get(email), doc)) continue;
       batch.set(adminDb.collection('access').doc(email), doc, { merge: true });
     }
 
@@ -1205,6 +1250,7 @@ export async function processImport(
       warnings,
     };
     batch.set(syncLogRef, syncLogDoc);
+    batch.set(adminDb.collection('config').doc('app'), { dataVersion: newDataVersion() }, { merge: true });
 
     await batch.commit();
 

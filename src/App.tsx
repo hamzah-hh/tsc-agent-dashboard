@@ -155,7 +155,7 @@ export default function App() {
       });
     }, 1000);
 
-    // 2. Periodic 20-second heartbeat to sync with server and accumulate used time
+    // 2. Periodic 60-second heartbeat to sync with server and accumulate used time (the countdown above runs locally)
     const heartbeatTimer = setInterval(async () => {
       try {
         const token = await user.getIdToken();
@@ -183,7 +183,7 @@ export default function App() {
       } catch (err) {
         console.warn('Heartbeat failed:', err);
       }
-    }, 20000);
+    }, 60000);
 
     return () => {
       clearInterval(countdownTimer);

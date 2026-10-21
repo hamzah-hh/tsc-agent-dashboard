@@ -83,7 +83,7 @@ function sameSecret(a: string, b: string): boolean {
 }
 
 // Same short read cache as ensureSeedData/loadAgents (server-import.ts), dropped by clearRouteCache()
-const ROUTE_CACHE_TTL_MS = 30000;
+const ROUTE_CACHE_TTL_MS = 120000;
 const excludedCache = new Map<string, { at: number; value: Set<string> }>();
 const accessCache = new Map<string, { at: number; value: any }>();
 

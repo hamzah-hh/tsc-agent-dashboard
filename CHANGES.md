@@ -4,6 +4,15 @@ Newest first. How to demo and go live: [docs/GUIDELINE.md](docs/GUIDELINE.md).
 
 ---
 
+## v8.5, 21 Oct 2026: Fewer Firestore reads and writes
+
+Free-tier quota (50k reads, 20k writes a day) was running out. Where it went, and what changed:
+
+1. **Agent heartbeats** (the biggest user): every open agent session pinged every 20 s, and each ping was a read and a write. Now the ping is every 60 s, the day's record is kept in memory, and it is saved to Firestore at most every 2 minutes (at once for the first ping, and when the time left runs low). Roughly 6x fewer writes and almost no reads. If a server restarts, up to 2 minutes of use can go uncounted.
+2. **Agent list reads**: the whole agents collection (one read per agent) was re-read every 30 s per server. It is now kept until a sync, AI run or clean-up changes `config/app.dataVersion` (or 30 minutes pass). Config, access and excluded-agent caches went from 30 s to 60 s / 2 min.
+3. **Sync writes**: agent and access records whose data did not change are no longer rewritten, so a repeat sync writes only what moved (plus leaderboards, team revenue, the log and the version stamp).
+
+---
 ## v8.4, 19 Oct 2026: Data status bar and Business Overview export
 
 1. **Last-updated bar** at the top of every page, for every role (agents, TLs, Managers, Super Admin and the cohort report viewer): the time of the last successful sync (IST) and the latest data date it carried. It turns amber when the data is more than 2 days old or the latest sync failed. It comes from the new `GET /api/data-status` (any signed-in user, cached for a minute so it costs few reads).

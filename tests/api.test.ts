@@ -659,6 +659,20 @@ export async function runApiTests() {
     r = await call('POST', '/api/agent/heartbeat', { token: tok('riya.login@gmail.com') });
     check('heartbeat agent: initial heartbeat is allowed', r.status === 200 && r.json.allowed === true && r.json.remainingSeconds > 0);
 
+    // Quota: heartbeats are kept in memory and saved to Firestore only now and then
+    const lt = await import('../server-login-tracker');
+    const hbCfg = { enabled: true, amWindowMinutes: 30, pmWindowMinutes: 30, timezone: 'Asia/Kolkata' };
+    const hbBase = new Date('2026-10-20T05:00:00Z').getTime();
+    const hbDoc = () => adminDb.collection('loginActivity').doc('quota.agent@co.in_2026-10-20').get().then((x: any) => x.data());
+    await lt.recordAgentHeartbeat('quota.agent@co.in', hbCfg, new Date(hbBase));
+    const hbFirst = await hbDoc();
+    await lt.recordAgentHeartbeat('quota.agent@co.in', hbCfg, new Date(hbBase + 60000));
+    const hbSecond = await hbDoc();
+    check('heartbeat: the first one is saved, the second (60 s later) is only counted in memory', hbFirst?.amSecondsUsed === 1 && hbSecond?.amSecondsUsed === 1, JSON.stringify(hbSecond));
+    const hbThird = await lt.recordAgentHeartbeat('quota.agent@co.in', hbCfg, new Date(hbBase + 120000));
+    const hbSaved = await hbDoc();
+    check('heartbeat: 2 minutes after the last save it is saved, with the time of the unsaved one included', hbThird.usedSeconds === 121 && hbSaved?.amSecondsUsed === 121, JSON.stringify([hbThird.usedSeconds, hbSaved?.amSecondsUsed]));
+
     r = await call('GET', '/api/auth/session', { token: tok('riya.login@gmail.com') });
     check('session agent: includes login tracker session state', r.status === 200 && r.json.loginTracker !== undefined && r.json.loginTracker.allowed === true);
 

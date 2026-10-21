@@ -66,6 +66,24 @@ export function getWindowInfo(now: Date = new Date(), config?: LoginTrackerConfi
   };
 }
 
+// Heartbeats come every 60 s from every open agent session. Reading and writing Firestore on each one used up
+// most of the free daily quota, so the day's record is kept in memory and saved at most every
+// PERSIST_EVERY_MS (at once for the first heartbeat of a window, and when the time left runs low).
+// A restarted or second server instance reads the saved copy, so at most PERSIST_EVERY_MS of use goes uncounted.
+const ACTIVITY_CACHE_MS = 3 * 60000;
+const PERSIST_EVERY_MS = 2 * 60000;
+const LOW_REMAINING_SECONDS = 150;
+const activityCache = new Map<string, { at: number; persistedAt: number; data: Partial<AgentDailyLoginActivity> | null }>();
+
+async function readActivity(docId: string, nowMs: number) {
+  const hit = activityCache.get(docId);
+  if (hit && nowMs - hit.at < ACTIVITY_CACHE_MS) return hit;
+  const snap = await adminDb.collection('loginActivity').doc(docId).get();
+  const entry = { at: nowMs, persistedAt: nowMs, data: snap.exists ? (snap.data() as Partial<AgentDailyLoginActivity>) : null };
+  activityCache.set(docId, entry);
+  return entry;
+}
+
 /**
  * Checks whether an agent is allowed to access the dashboard right now.
  */
@@ -93,8 +111,7 @@ export async function checkAgentAllowance(
 
   const cleanEmail = normalizeEmail(agentEmail);
   const docId = `${cleanEmail}_${windowInfo.dateKey}`;
-  const docSnap = await adminDb.collection('loginActivity').doc(docId).get();
-  const data = docSnap.exists ? (docSnap.data() as Partial<AgentDailyLoginActivity>) : null;
+  const data = (await readActivity(docId, now.getTime())).data;
 
   const usedSeconds = windowInfo.isAm
     ? data?.amSecondsUsed || 0
@@ -153,10 +170,9 @@ export async function recordAgentHeartbeat(
   const cleanEmail = normalizeEmail(agentEmail);
   const docId = `${cleanEmail}_${windowInfo.dateKey}`;
   const docRef = adminDb.collection('loginActivity').doc(docId);
-  const docSnap = await docRef.get();
-  const data = docSnap.exists ? (docSnap.data() as Partial<AgentDailyLoginActivity>) : null;
-
   const nowMs = now.getTime();
+  const cached = await readActivity(docId, nowMs);
+  const data = cached.data;
   const lastTime = data?.lastHeartbeatTime;
   const lastWindow = data?.lastWindow;
 
@@ -164,9 +180,9 @@ export async function recordAgentHeartbeat(
   let delta = 0;
   if (lastTime && lastWindow === windowInfo.windowId) {
     const diffMs = nowMs - lastTime;
-    // Heartbeats are sent every 15-20s. If diff is under 45s, count actual elapsed seconds
-    if (diffMs > 0 && diffMs <= 45000) {
-      delta = Math.min(30, Math.max(1, Math.round(diffMs / 1000)));
+    // Heartbeats are sent every 60s. If diff is under 100s, count actual elapsed seconds
+    if (diffMs > 0 && diffMs <= 100000) {
+      delta = Math.min(75, Math.max(1, Math.round(diffMs / 1000)));
     } else {
       // Returned after idle/away or new tab, count 1 second for reconnection
       delta = 1;
@@ -186,18 +202,21 @@ export async function recordAgentHeartbeat(
   const remainingSeconds = Math.max(0, windowInfo.windowLimitSeconds - currentUsed);
   const allowed = remainingSeconds > 0;
 
-  await docRef.set(
-    {
-      agentEmail: cleanEmail,
-      date: windowInfo.dateKey,
-      amSecondsUsed: newAm,
-      pmSecondsUsed: newPm,
-      lastHeartbeatTime: nowMs,
-      lastWindow: windowInfo.windowId,
-      updatedAt: now.toISOString(),
-    },
-    { merge: true }
-  );
+  const next: Partial<AgentDailyLoginActivity> = {
+    agentEmail: cleanEmail,
+    date: windowInfo.dateKey,
+    amSecondsUsed: newAm,
+    pmSecondsUsed: newPm,
+    lastHeartbeatTime: nowMs,
+    lastWindow: windowInfo.windowId,
+    updatedAt: now.toISOString(),
+  };
+  const neverSaved = !data;
+  const windowChanged = Boolean(lastWindow) && lastWindow !== windowInfo.windowId;
+  const due = nowMs - cached.persistedAt >= PERSIST_EVERY_MS;
+  const persist = neverSaved || windowChanged || due || remainingSeconds <= LOW_REMAINING_SECONDS;
+  activityCache.set(docId, { at: nowMs, persistedAt: persist ? nowMs : cached.persistedAt, data: { ...data, ...next } });
+  if (persist) await docRef.set(next, { merge: true });
 
   let reason: string | undefined = undefined;
   if (!allowed) {
@@ -229,6 +248,7 @@ export async function resetAgentLoginUsage(agentEmail: string, dateKey?: string,
   const targetDateKey = dateKey || windowInfo.dateKey;
   const cleanEmail = normalizeEmail(agentEmail);
   const docId = `${cleanEmail}_${targetDateKey}`;
+  activityCache.delete(docId);
 
   await adminDb.collection('loginActivity').doc(docId).set(
     {

@@ -122,6 +122,8 @@ export interface AppConfig {
   aiTone: 'english' | 'hinglish';
   googleSpreadsheetUrl?: string;
   loginTracker?: LoginTrackerConfig;
+  /** Changes whenever agent records are rewritten (sync, AI text, clean-up). Servers keep the agent list cached while it stays the same. */
+  dataVersion?: number;
 }
 
 export interface AccessRecord {
