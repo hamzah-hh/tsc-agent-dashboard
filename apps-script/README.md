@@ -78,7 +78,7 @@ Click **Save script properties**.
 
 ### 6. Authorize & Test
 1. Refresh the spreadsheet. A new menu item **Incentive App** will appear in the top menu bar.
-2. Click **Incentive App** > **Sync Now (all sheets)**, or **Sync selected sheets...** to tick only the sheets you want (the incentive data is one unit; every report tab can be chosen alone). Choosing only report tabs saves just those and leaves the rest of the dashboard, and the "data last updated" bar, untouched. The daily trigger always syncs all sheets.
+2. Click **Incentive App** > **Sync Now**, which asks which sheets to sync (all are ticked; untick what you do not want; **Sync all sheets (no questions)** skips the question). You can tick only the sheets you want (the incentive data is one unit; every report tab can be chosen alone). Choosing only report tabs saves just those and leaves the rest of the dashboard, and the "data last updated" bar, untouched. The daily trigger always syncs all sheets without asking.
 3. When prompted, review and grant the required permissions (Spreadsheets and External Connections).
 4. Verify the dialog shows success with the count of rows and agents processed.
 

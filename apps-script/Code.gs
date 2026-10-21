@@ -6,8 +6,8 @@
 function onOpen() {
   var ui = SpreadsheetApp.getUi();
   ui.createMenu('Incentive App')
-    .addItem('Sync Now (all sheets)', 'syncNow')
-    .addItem('Sync selected sheets...', 'showSyncPicker')
+    .addItem('Sync Now', 'syncNow')
+    .addItem('Sync all sheets (no questions)', 'syncAll')
     .addItem('Install daily trigger', 'installDailyTrigger')
     .addToUi();
 }
@@ -51,7 +51,20 @@ function report_(interactive, ss, title, message, isError) {
   }
 }
 
+/**
+ * From the menu: opens the list of sheets to choose from (all ticked). From the daily trigger, where nobody
+ * can answer a dialog: syncs all sheets.
+ */
 function syncNow() {
+  if (isInteractive_()) {
+    showSyncPicker();
+    return;
+  }
+  syncAll();
+}
+
+/** Syncs every sheet without asking. */
+function syncAll() {
   var interactive = isInteractive_();
   var ss = SpreadsheetApp.getActiveSpreadsheet();
 
