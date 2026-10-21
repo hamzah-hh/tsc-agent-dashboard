@@ -34,7 +34,7 @@ import { DEFAULT_RAW_SHEET_URL, saveRawPayload, syncRawSheetData } from './serve
 import { buildFromCleanSheet, CleanSheetTabs } from './server-clean-sheet';
 import { saveTeamOps } from './server-team-ops';
 import { parseBusinessOverviewRows, saveBusinessOverview } from './server-business-overview';
-import { parseCohortRows, parseCompanyDodRows, parseDiwaliRows, saveCohortRows, saveCompanyDod, saveDiwali } from './server-cohort-report';
+import { parseCohortRows, parseCompanyDodRows, parseDiwaliRows, saveCohortRows, saveCohortV2Rows, saveCompanyDod, saveDiwali } from './server-cohort-report';
 
 const REQUIRED_MAIN_HEADERS = [
   'Date',
@@ -1327,6 +1327,84 @@ export async function processImport(
 }
 
 /**
+ * Saves the private report tabs that are in the payload (a tab that was not sent is left as saved).
+ * Warnings give counts only, never the numbers. Returns what was saved, as "Tab (N rows)".
+ */
+async function saveReportTabs(tabs: CleanSheetTabs, warnings: string[]): Promise<string[]> {
+  const saved: string[] = [];
+  const jobs: Array<{ tab: string; rows: any[] | undefined; run: (rows: any[]) => Promise<{ count: number; skipped: number }> }> = [
+    {
+      tab: 'Anirban_Ref',
+      rows: tabs.cohortRows,
+      run: async (rows) => {
+        const p = parseCohortRows(rows);
+        await saveCohortRows(p.rows);
+        return { count: p.rows.length, skipped: p.skipped };
+      },
+    },
+    {
+      tab: 'Anirban_Cohort_Reportv2',
+      rows: tabs.cohortV2Rows,
+      run: async (rows) => {
+        const p = parseCohortRows(rows);
+        await saveCohortV2Rows(p.rows);
+        return { count: p.rows.length, skipped: p.skipped };
+      },
+    },
+    {
+      tab: 'Company_DOD',
+      rows: tabs.companyDodRows,
+      run: async (rows) => {
+        const p = parseCompanyDodRows(rows);
+        await saveCompanyDod(p.rows);
+        return { count: p.rows.length, skipped: p.skipped };
+      },
+    },
+    {
+      tab: 'Diwali_Projection',
+      rows: tabs.diwaliRows,
+      run: async (rows) => {
+        const p = parseDiwaliRows(rows);
+        await saveDiwali(p.rows);
+        return { count: p.rows.length, skipped: p.skipped };
+      },
+    },
+  ];
+  for (const job of jobs) {
+    if (!job.rows) continue;
+    try {
+      const r = await job.run(job.rows);
+      saved.push(`${job.tab} (${r.count} rows)`);
+      if (r.skipped) warnings.push(`${job.tab}: ${r.skipped} row(s) could not be read and were left out.`);
+    } catch (err: any) {
+      warnings.push(`${job.tab} not saved: ${err?.message || String(err)}`);
+    }
+  }
+  return saved;
+}
+
+/**
+ * A sync of only some report tabs (Apps Script "Sync selected sheets" without the incentive data):
+ * saves the tabs sent and nothing else. It is not a data sync, so it writes no sync log and the
+ * "data last updated" bar does not move.
+ */
+export async function processReportTabs(tabs: CleanSheetTabs): Promise<{ result: 'ok'; partial: true; rows: number; agents: number; lastDataDate: string; saved: string[]; warnings: string[] }> {
+  const warnings: string[] = [];
+  const saved = await saveReportTabs(tabs, warnings);
+  if (tabs.businessOverviewRows) {
+    try {
+      const parsed = parseBusinessOverviewRows(tabs.businessOverviewRows);
+      await saveBusinessOverview(parsed.rows, null);
+      saved.push(`Business_Overview (${parsed.rows.length} rows)`);
+      if (parsed.skipped) warnings.push(`Business_Overview: ${parsed.skipped} row(s) had no Month or Tier and were left out.`);
+    } catch (err: any) {
+      warnings.push(`Business Overview not saved: ${err?.message || String(err)}`);
+    }
+  }
+  return { result: 'ok', partial: true, rows: 0, agents: 0, lastDataDate: '', saved, warnings };
+}
+
+/**
  * A sync or import in the clean layout (Agents, Orders, Visits, Dialer, PreSales, Quality tabs):
  * the daily rows are built from those tabs (server-clean-sheet.ts) and then imported as before.
  */
@@ -1348,36 +1426,7 @@ export async function processCleanSheetImport(
   } catch (err: any) {
     early.push(`Breaks / Targets not saved: ${err?.message || String(err)}`);
   }
-  if (tabs.cohortRows) {
-    // Warnings about the private cohort report give counts only, never its numbers
-    try {
-      const parsed = parseCohortRows(tabs.cohortRows);
-      await saveCohortRows(parsed.rows);
-      if (parsed.skipped) early.push(`Anirban_Ref: ${parsed.skipped} row(s) could not be read and were left out.`);
-    } catch (err: any) {
-      early.push(`Anirban_Ref not saved: ${err?.message || String(err)}`);
-    }
-  }
-
-  if (tabs.companyDodRows) {
-    try {
-      const parsed = parseCompanyDodRows(tabs.companyDodRows);
-      await saveCompanyDod(parsed.rows);
-      if (parsed.skipped) early.push(`Company_DOD: ${parsed.skipped} row(s) could not be read and were left out.`);
-    } catch (err: any) {
-      early.push(`Company_DOD not saved: ${err?.message || String(err)}`);
-    }
-  }
-
-  if (tabs.diwaliRows) {
-    try {
-      const parsed = parseDiwaliRows(tabs.diwaliRows);
-      await saveDiwali(parsed.rows);
-      if (parsed.skipped) early.push(`Diwali_Projection: ${parsed.skipped} row(s) could not be read and were left out.`);
-    } catch (err: any) {
-      early.push(`Diwali_Projection not saved: ${err?.message || String(err)}`);
-    }
-  }
+  await saveReportTabs(tabs, early);
 
   // Business Overview: past months from the tab (kept as saved when an older Apps Script does not send it),
   // the months of the cycle worked out above

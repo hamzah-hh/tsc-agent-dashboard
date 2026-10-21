@@ -85,11 +85,12 @@ async function read(): Promise<Stored> {
 }
 
 /** Saves what the sync sent. `history` null = the tab was not sent (older Apps Script): keep what is saved. */
-export async function saveBusinessOverview(history: BusinessOverviewRow[] | null, live: BusinessOverviewRow[]): Promise<void> {
+/** null keeps what is saved (history: the tab was not sent; live: a sync of the report tabs only). */
+export async function saveBusinessOverview(history: BusinessOverviewRow[] | null, live: BusinessOverviewRow[] | null): Promise<void> {
   const old = await read();
   await ref().set({
     history: history ?? old.history ?? [],
-    live,
+    live: live ?? old.live ?? [],
     updatedAt: new Date().toISOString(),
   });
 }

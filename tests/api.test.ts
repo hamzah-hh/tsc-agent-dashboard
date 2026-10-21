@@ -1083,6 +1083,30 @@ export async function runApiTests() {
     check('the report hands out the Diwali days (commas read, percent as a fraction)', diwali.length === 2 && diwali[0].projection === 23000000 && diwali[0].actual === 26142804 && diwali[0].salePct === 0.4 && diwali[0].threeMin === 1601109, JSON.stringify(diwali));
     const dt = cr.diwaliTotals(diwali);
     check('Diwali totals: played days only count to date, the rest is remaining', dt.days === 1 && dt.projectionToDate === 23000000 && dt.projectionAll === 54200000 && dt.remainingDays === 1 && dt.remainingProjection === 31200000, JSON.stringify(dt));
+    // Anirban_Cohort_Reportv2 (April onwards attribution): its own store, served by its own route
+    const v2row = (date: string, sales: number) => ({ Month: 'Apr-2026', Day_Number: 1, Date: date, Sale_Category: '1. Shopify', TT_Cohort: '01.1 Second Plus', Order_Count: 7, Sales: sales });
+    r = await call('POST', '/api/sync', {
+      headers: { 'X-Sync-Key': process.env.SYNC_KEY! },
+      body: { agentsRows: [person('cia@co.in', 'Clean Cia', 'HO Callers', 'Dighe')], cohortV2Rows: [v2row('2026-04-01', 153445), v2row('2026-04-02', 100), { Month: 'Apr-2026', Date: 'bad' }] },
+    });
+    check('Anirban_Cohort_Reportv2 syncs; a bad row is a count-only warning', (r.json?.warnings || []).includes('Anirban_Cohort_Reportv2: 1 row(s) could not be read and were left out.'), JSON.stringify(r.json?.warnings));
+    r = await call('GET', '/api/cohort-report-v2', { token: tok(anirban) });
+    check('the April onwards report is served to the cohort viewers, separate from the first report', r.status === 200 && r.json.rows.length === 2 && r.json.rows[0].sales === 153445, r.text.slice(0, 200));
+    r = await call('GET', '/api/cohort-report-v2', { token: tok(L.manager) });
+    check('a Manager cannot read the April onwards report (403)', r.status === 403, `${r.status}`);
+    // A sync of selected report tabs without the incentive data saves only those tabs and is not a data sync
+    const logsBefore = (await adminDb.collection('syncLogs').get()).size;
+    r = await call('POST', '/api/sync', {
+      headers: { 'X-Sync-Key': process.env.SYNC_KEY! },
+      body: { format: 'clean-v1', partial: true, cohortV2Rows: [v2row('2026-04-03', 5)] },
+    });
+    check('selected-sheets sync (no Agents tab): ok, says what was saved, writes no sync log', r.json?.result === 'ok' && r.json.partial === true && r.json.saved?.join() === 'Anirban_Cohort_Reportv2 (1 rows)' && (await adminDb.collection('syncLogs').get()).size === logsBefore, JSON.stringify(r.json));
+    r = await call('GET', '/api/cohort-report-v2', { token: tok(anirban) });
+    const r1 = await call('GET', '/api/cohort-report', { token: tok(anirban) });
+    check('… the April onwards rows were replaced, and the other report tabs were left as they were', r.json.rows.length === 1 && r.json.rows[0].sales === 5 && (r1.json.diwali || []).length === 2 && (r1.json.company || []).length === 3, JSON.stringify([r.json.rows.length, (r1.json.diwali || []).length, (r1.json.company || []).length]));
+    r = await call('POST', '/api/sync', { headers: { 'X-Sync-Key': 'wrong' }, body: { format: 'clean-v1', partial: true, cohortV2Rows: [] } });
+    check('selected-sheets sync still needs the sync key (401)', r.status === 401, `${r.status}`);
+
     r = await call('GET', '/api/cohort-report', { token: tok(L.manager) });
     check('a Manager still cannot read the company days (403)', r.status === 403, `${r.status}`);
     const ctot = cr.companyForPeriod(company, { from: '2026-10-01', to: '2026-10-02' });

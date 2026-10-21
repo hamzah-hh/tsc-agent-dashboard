@@ -346,6 +346,155 @@ export function CohortReportView({ getIdToken }: CohortReportViewProps) {
         />
         <DiwaliSection days={diwali} />
       </div>
+      <AprilAttributionSection getIdToken={getIdToken} periods={periods} picked={picked} onPick={setPicked} />
+    </div>
+  );
+}
+
+/**
+ * The same cohort tables on the April onwards attribution (Anirban_Cohort_Reportv2). Hidden until its button is
+ * pressed; the rows are fetched then, not with the page. It uses the base period and comparisons chosen above.
+ */
+function AprilAttributionSection({
+  getIdToken,
+  periods,
+  picked,
+  onPick,
+}: {
+  getIdToken: () => Promise<string>;
+  periods: CohortPeriod[];
+  picked: string | null;
+  onPick: (c: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [rows, setRows] = useState<CohortRow[] | null>(null);
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [copyState, setCopyState] = useState<'idle' | 'busy' | 'copied' | 'saved' | 'error'>('idle');
+  const ref = useRef<HTMLDivElement>(null);
+
+  const load = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/cohort-report-v2', { headers: { Authorization: `Bearer ${await getIdToken()}` } });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      setRows(json.rows || []);
+      setUpdatedAt(json.updatedAt || null);
+    } catch (err: any) {
+      setError(err?.message || 'Could not load the report.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const show = () => {
+    setOpen(true);
+    if (rows === null && !loading) load();
+  };
+
+  const tables = useMemo(() => (rows ? periods.map((p) => cohortTableForPeriod(rows, p)) : []), [rows, periods]);
+
+  if (!open) {
+    return (
+      <div className="flex justify-center">
+        <button onClick={show} className={`${smallBtn} inline-flex items-center gap-1.5 px-4 py-2`}>
+          <ChevronDown className="w-3.5 h-3.5" /> View April_Onwards Attribution
+        </button>
+      </div>
+    );
+  }
+
+  const base = periods[0];
+  const comparisons = periods.slice(1).map((p, i) => ({ period: p, table: tables[i + 1], tag: periodTag(base, p) }));
+
+  const copyPng = async () => {
+    if (!ref.current) return;
+    setCopyState('busy');
+    try {
+      const dark = document.documentElement.classList.contains('dark');
+      const blob = await elementToPng(ref.current, { background: dark ? '#020617' : '#f8fafc' });
+      try {
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        setCopyState('copied');
+      } catch {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `april_onwards_attribution_${base.from}_to_${base.to}.png`;
+        a.click();
+        URL.revokeObjectURL(url);
+        setCopyState('saved');
+      }
+    } catch (err) {
+      console.error('Copy as PNG failed:', err);
+      setCopyState('error');
+    }
+    setTimeout(() => setCopyState('idle'), 2500);
+  };
+  const copyLabel = { idle: 'Copy as PNG', busy: 'Copying...', copied: 'Copied!', saved: 'Saved as PNG', error: 'Copy failed' }[copyState];
+
+  return (
+    <div className="space-y-4">
+      <div className={`${card} p-5 flex flex-col sm:flex-row sm:items-start justify-between gap-3`}>
+        <div>
+          <h2 className="text-lg font-bold text-slate-950 dark:text-white flex items-center gap-2">
+            April Onwards Attribution <Lock className="w-4 h-4 text-slate-400" />
+          </h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            The same cohort tables on the April onwards attribution (sheet Anirban_Cohort_Reportv2), for the periods chosen above. Updated{' '}
+            {updatedAt ? new Date(updatedAt).toLocaleString('en-IN') : '-'}.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={copyPng} disabled={copyState === 'busy' || !rows?.length} className={`${smallBtn} inline-flex items-center gap-1 disabled:opacity-60`} title="Copy these tables as one image">
+            <Copy className="w-3.5 h-3.5" /> {copyLabel}
+          </button>
+          <button onClick={load} disabled={loading} className="p-2 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 disabled:opacity-60" title="Reload">
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+          <button onClick={() => setOpen(false)} className={`${smallBtn} inline-flex items-center gap-1`}>
+            <ChevronUp className="w-3.5 h-3.5" /> Hide
+          </button>
+        </div>
+      </div>
+
+      {loading && rows === null ? (
+        <div className={`${card} p-10 text-center text-xs text-slate-500`}>Loading the report...</div>
+      ) : error ? (
+        <div className={`${card} p-10 text-center`}>
+          <p className="text-xs text-rose-600 font-semibold mb-3">{error}</p>
+          <button onClick={load} className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold">
+            Retry
+          </button>
+        </div>
+      ) : !rows?.length ? (
+        <div className={`${card} p-10 text-center text-xs text-slate-500`}>No data yet. It arrives with the next sync of the Anirban_Cohort_Reportv2 tab.</div>
+      ) : (
+        <div ref={ref} className="space-y-4 p-1">
+          <CohortTable
+            title={`April onwards, Base: ${periodText(base)}`}
+            table={tables[0]}
+            growth={comparisons.map((c) => ({ label: c.tag ? `${c.tag} · ${periodText(c.period)}` : periodText(c.period), table: c.table }))}
+            slots={comparisons.length}
+            picked={picked}
+            onPick={onPick}
+          />
+          {comparisons.map((c, i) => (
+            <CohortTable
+              key={i}
+              title={`April onwards, Comparison ${i + 1}: ${periodText(c.period)}${c.tag ? ` · ${c.tag}` : ''}`}
+              table={c.table}
+              growth={[]}
+              slots={comparisons.length}
+              picked={picked}
+              onPick={onPick}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

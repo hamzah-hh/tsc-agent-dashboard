@@ -4,6 +4,14 @@ Newest first. How to demo and go live: [docs/GUIDELINE.md](docs/GUIDELINE.md).
 
 ---
 
+## v8.6, 21 Oct 2026: Choose the sheets to sync, and the April onwards attribution report
+
+1. **Sync selected sheets** (Incentive App menu): a picker with a tick box per sheet group. The incentive data (Agents, Orders, Visits, Dialer, PreSales, Quality, Breaks, Targets) is one unit; Anirban_Ref, Anirban_Cohort_Reportv2, Company_DOD, Diwali_Projection and Business_Overview can each be chosen alone. Report tabs only: the server saves just those (`partial` payload), writes no sync log and leaves everything else as it was. **Sync Now (all sheets)** and the daily trigger work as before. A report tab missing from the spreadsheet is no longer sent as empty, so it can never blank saved data.
+2. **April Onwards Attribution** on the Cohort Report page: a **View April_Onwards Attribution** button under the other sections opens the same cohort tables (cumulative talk time, Shopify / Alt / MP / POS OC, growth against the comparisons) from the new `Anirban_Cohort_Reportv2` tab, for the periods chosen at the top. Loaded only when pressed (`GET /api/cohort-report-v2`, cohort viewers only). Needs the new Code.gs and a sync.
+3. Cohort rows that did not change are no longer rewritten on a sync (a content hash is kept), saving writes.
+
+---
+
 ## v8.5, 21 Oct 2026: Fewer Firestore reads and writes
 
 Free-tier quota (50k reads, 20k writes a day) was running out. Where it went, and what changed:

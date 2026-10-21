@@ -40,6 +40,8 @@ export interface CleanSheetTabs {
   targetsRows?: any[];
   /** Anirban_Ref: the private cohort report, saved on its own (server-cohort-report.ts). */
   cohortRows?: any[];
+  /** Anirban_Cohort_Reportv2: the same report as Anirban_Ref with the April onwards attribution. */
+  cohortV2Rows?: any[];
   /** Company_DOD: company orders and revenue per day, for the private cohort report. */
   companyDodRows?: any[];
   /** Diwali_Projection: daily company projection against actual, for the private cohort report. */

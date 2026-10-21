@@ -10,12 +10,13 @@ import {
   loadAgents,
   processImport,
   processCleanSheetImport,
+  processReportTabs,
   rebuildLeaderboards,
   saveAiText,
 } from './server-import';
 import { isCleanSheetPayload } from './server-clean-sheet';
 import { loadTeamOps } from './server-team-ops';
-import { canSeeCohortReport, cohortReportStatus, loadCohortRows, loadCompanyDod, loadDiwali } from './server-cohort-report';
+import { canSeeCohortReport, cohortReportStatus, loadCohortRows, loadCohortV2Rows, loadCompanyDod, loadDiwali } from './server-cohort-report';
 import { TeamSummaryResponse } from './src/shared/teamOps';
 import { buildReadiness } from './server-readiness';
 import { generateAiText, isAiConfigured, runBatchAiGeneration } from './server-ai';
@@ -282,6 +283,10 @@ export function createApiApp(options: ApiOptions = {}): express.Express {
         if (isCleanSheetPayload(req.body)) {
           return res.json(await processCleanSheetImport('apps-script', req.body));
         }
+        // "Sync selected sheets" without the incentive data: only the report tabs that were sent are saved
+        if (req.body?.format === 'clean-v1' && req.body?.partial === true) {
+          return res.json(await processReportTabs(req.body));
+        }
         const { mainRows, qualityRows, revenueRows, leaderMappingRows, excludedAgentsRows, rawVisitRows, rawRevenueTabRows } = req.body || {};
         const result = await processImport('apps-script', mainRows || [], qualityRows || [], {
           revenueRows: revenueRows || [],
@@ -309,6 +314,17 @@ export function createApiApp(options: ApiOptions = {}): express.Express {
       res.set('Cache-Control', 'private, no-store');
       const [cohort, company, diwali] = await Promise.all([loadCohortRows(), loadCompanyDod(), loadDiwali()]);
       return res.json({ ...cohort, company, diwali });
+    })
+  );
+
+  /** The April onwards attribution version of the cohort report (Anirban_Cohort_Reportv2). Loaded when its button is pressed. */
+  api.get(
+    '/api/cohort-report-v2',
+    route(async (req, res) => {
+      const user = await authenticate(req);
+      if (!canSeeCohortReport(user.email)) throw new HttpError(403, 'This report is private.');
+      res.set('Cache-Control', 'private, no-store');
+      return res.json(await loadCohortV2Rows());
     })
   );
 

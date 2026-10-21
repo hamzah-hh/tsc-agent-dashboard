@@ -5,14 +5,16 @@
  * no browser can read it directly, and only GET /api/cohort-report hands it out, to COHORT_REPORT_VIEWERS.
  * Sync warnings about this tab give counts only, never values.
  */
+import crypto from 'crypto';
 import { adminDb } from './server-firebase-admin';
 import { normalizeEmail } from './src/shared/incentive';
 import { COHORT_REPORT_VIEWERS, CohortRow, CompanyDay, DiwaliDay } from './src/shared/cohortReport';
 import { sheetDateTime } from './server-clean-sheet';
 
 const CHUNK = 2000;
-const headRef = () => adminDb.collection('privateReports').doc('cohort');
-const chunksCol = () => headRef().collection('chunks');
+// Two reports of the same shape: 'cohort' (Anirban_Ref) and 'cohortV2' (Anirban_Cohort_Reportv2, the April onwards attribution)
+const headRefOf = (name: string) => adminDb.collection('privateReports').doc(name);
+const chunksColOf = (name: string) => headRefOf(name).collection('chunks');
 
 /** COHORT_REPORT_VIEWERS, or the comma-separated COHORT_REPORT_VIEWERS environment variable when set. */
 export function canSeeCohortReport(email: string | undefined | null): boolean {
@@ -98,31 +100,41 @@ export async function loadCompanyDod(): Promise<CompanyDay[]> {
   return snap.exists ? ((snap.data() as any)?.rows as CompanyDay[]) || [] : [];
 }
 
-export async function saveCohortRows(rows: CohortRow[]): Promise<void> {
-  const prev = await headRef().get();
-  const prevChunks = prev.exists ? (prev.data() as any)?.chunks || 0 : 0;
+/** Saves the rows in chunks. Rows identical to what is saved are not written again (a quota saver). */
+async function saveRowsOf(name: string, rows: CohortRow[]): Promise<void> {
+  const hash = crypto.createHash('sha256').update(JSON.stringify(rows)).digest('hex');
+  const prev = await headRefOf(name).get();
+  const prevData: any = prev.exists ? prev.data() : {};
+  if (prevData?.hash === hash) return;
+  const prevChunks = prevData?.chunks || 0;
   const parts: CohortRow[][] = [];
   for (let i = 0; i < rows.length; i += CHUNK) parts.push(rows.slice(i, i + CHUNK));
   const batch = adminDb.batch();
-  parts.forEach((p, i) => batch.set(chunksCol().doc(`rows-${i}`), { rows: p }));
-  for (let i = parts.length; i < prevChunks; i++) batch.delete(chunksCol().doc(`rows-${i}`));
-  batch.set(headRef(), { chunks: parts.length, count: rows.length, updatedAt: new Date().toISOString() });
+  parts.forEach((p, i) => batch.set(chunksColOf(name).doc(`rows-${i}`), { rows: p }));
+  for (let i = parts.length; i < prevChunks; i++) batch.delete(chunksColOf(name).doc(`rows-${i}`));
+  batch.set(headRefOf(name), { chunks: parts.length, count: rows.length, hash, updatedAt: new Date().toISOString() });
   await batch.commit();
 }
 
-/** How much is saved (a count and a time, never the report's numbers), for the monitor. */
-export async function cohortReportStatus(): Promise<{ count: number; updatedAt: string | null }> {
-  const head = await headRef().get();
-  const d: any = head.exists ? head.data() : {};
-  return { count: d.count || 0, updatedAt: d.updatedAt || null };
-}
-
-export async function loadCohortRows(): Promise<{ rows: CohortRow[]; updatedAt: string | null }> {
-  const head = await headRef().get();
+async function loadRowsOf(name: string): Promise<{ rows: CohortRow[]; updatedAt: string | null }> {
+  const head = await headRefOf(name).get();
   if (!head.exists) return { rows: [], updatedAt: null };
   const d: any = head.data();
-  const parts = await Promise.all(Array.from({ length: d.chunks || 0 }, (_, i) => chunksCol().doc(`rows-${i}`).get()));
+  const parts = await Promise.all(Array.from({ length: d.chunks || 0 }, (_, i) => chunksColOf(name).doc(`rows-${i}`).get()));
   return { rows: parts.flatMap((p: any) => (p.exists ? p.data()?.rows || [] : [])), updatedAt: d.updatedAt || null };
+}
+
+export const saveCohortRows = (rows: CohortRow[]) => saveRowsOf('cohort', rows);
+export const loadCohortRows = () => loadRowsOf('cohort');
+/** Anirban_Cohort_Reportv2: the same report with the April onwards attribution. */
+export const saveCohortV2Rows = (rows: CohortRow[]) => saveRowsOf('cohortV2', rows);
+export const loadCohortV2Rows = () => loadRowsOf('cohortV2');
+
+/** How much is saved (a count and a time, never the report's numbers), for the monitor. */
+export async function cohortReportStatus(): Promise<{ count: number; updatedAt: string | null }> {
+  const head = await headRefOf('cohort').get();
+  const d: any = head.exists ? head.data() : {};
+  return { count: d.count || 0, updatedAt: d.updatedAt || null };
 }
 
 /** Reads the Diwali_Projection tab (one row per day). A row without a date is counted in `skipped`. */

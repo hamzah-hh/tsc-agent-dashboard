@@ -6,7 +6,8 @@
 function onOpen() {
   var ui = SpreadsheetApp.getUi();
   ui.createMenu('Incentive App')
-    .addItem('Sync Now', 'syncNow')
+    .addItem('Sync Now (all sheets)', 'syncNow')
+    .addItem('Sync selected sheets...', 'showSyncPicker')
     .addItem('Install daily trigger', 'installDailyTrigger')
     .addToUi();
 }
@@ -299,6 +300,14 @@ function sendPayload_(interactive, ss, syncUrl, syncKey, data) {
   }
 
   if (responseCode >= 200 && responseCode < 300 && json.result === 'ok') {
+    if (json.partial) {
+      var partialMsg = 'Saved: ' + ((json.saved && json.saved.length) ? json.saved.join(', ') : 'nothing (the chosen sheets were empty or missing)') + '. The incentive data was not synced.';
+      if (json.warnings && json.warnings.length > 0) {
+        partialMsg += '\nWarnings: ' + json.warnings.join('; ');
+      }
+      report_(interactive, ss, 'Sync Complete', partialMsg, false);
+      return;
+    }
     var successMsg = 'Sync successful! Rows: ' + (json.rows || 0) + ', Agents: ' + (json.agents || 0) + (json.lastDataDate ? ' (Data up to ' + json.lastDataDate + ')' : '');
     if (json.warnings && json.warnings.length > 0) {
       successMsg += '\nWarnings: ' + json.warnings.join('; ');
@@ -324,6 +333,7 @@ var CLEAN_TABS_ = {
   breaksRows: 'Breaks',
   targetsRows: 'Targets',
   cohortRows: 'Anirban_Ref',
+  cohortV2Rows: 'Anirban_Cohort_Reportv2',
   companyDodRows: 'Company_DOD',
   businessOverviewRows: 'Business_Overview',
   diwaliRows: 'Diwali_Projection',
@@ -354,13 +364,109 @@ function readTab_(ss, name, timeZone) {
   return rows;
 }
 
-function cleanPayload_(ss) {
+/**
+ * What "Sync selected sheets" offers. The incentive data (first group) is one unit: its tabs depend on each
+ * other, so they are synced together or not at all. Every report tab can be chosen on its own.
+ */
+var SYNC_GROUPS_ = [
+  {
+    id: 'core',
+    label: 'Incentive data: Agents, Orders, Visits, Dialer, PreSales, Quality, Breaks, Targets',
+    keys: ['agentsRows', 'ordersRows', 'visitsRows', 'dialerRows', 'preSalesRows', 'qualityRows', 'breaksRows', 'targetsRows'],
+    required: 'Agents',
+  },
+  { id: 'cohort', label: 'Anirban_Ref (Talk Time Cohort report)', keys: ['cohortRows'] },
+  { id: 'cohortV2', label: 'Anirban_Cohort_Reportv2 (April onwards attribution)', keys: ['cohortV2Rows'] },
+  { id: 'companyDod', label: 'Company_DOD', keys: ['companyDodRows'] },
+  { id: 'diwali', label: 'Diwali_Projection', keys: ['diwaliRows'] },
+  { id: 'businessOverview', label: 'Business_Overview (past months)', keys: ['businessOverviewRows'] },
+];
+
+/** Every tab of the full sync. Report tabs that do not exist in this spreadsheet are left out, so they are never emptied. */
+function cleanPayload_(ss, onlyKeys) {
   var timeZone = ss.getSpreadsheetTimeZone() || 'Asia/Kolkata';
   var data = { format: 'clean-v1' };
+  var coreKeys = SYNC_GROUPS_[0].keys;
   for (var key in CLEAN_TABS_) {
+    if (onlyKeys && onlyKeys.indexOf(key) < 0) continue;
+    var isCore = coreKeys.indexOf(key) >= 0;
+    if (!isCore && !ss.getSheetByName(CLEAN_TABS_[key])) continue;
     data[key] = readTab_(ss, CLEAN_TABS_[key], timeZone);
   }
   return data;
+}
+
+/** Opens the list of sheets to choose from. */
+function showSyncPicker() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var groups = [];
+  for (var i = 0; i < SYNC_GROUPS_.length; i++) {
+    var g = SYNC_GROUPS_[i];
+    var missing = [];
+    for (var k = 0; k < g.keys.length; k++) {
+      if (!ss.getSheetByName(CLEAN_TABS_[g.keys[k]])) missing.push(CLEAN_TABS_[g.keys[k]]);
+    }
+    // The incentive data needs its Agents tab; a report tab needs its own tab
+    var exists = g.required ? !!ss.getSheetByName(g.required) : missing.length === 0;
+    groups.push({ id: g.id, label: g.label, exists: exists, note: exists ? '' : 'sheet not found' });
+  }
+  var html =
+    '<div style="font-family:Arial,sans-serif;font-size:13px">' +
+    '<p style="margin:0 0 8px">Choose the sheets to sync. Sheets you leave out are not touched on the dashboard.</p>' +
+    '<div id="list"></div>' +
+    '<p style="margin:10px 0 0"><a href="#" onclick="setAll(true);return false">Select all</a> &middot; ' +
+    '<a href="#" onclick="setAll(false);return false">Clear</a></p>' +
+    '<p id="msg" style="color:#b00020;min-height:18px;margin:8px 0"></p>' +
+    '<button id="go" onclick="go()" style="padding:6px 16px">Sync selected</button> ' +
+    '<button onclick="google.script.host.close()" style="padding:6px 16px">Cancel</button>' +
+    '</div>' +
+    '<script>' +
+    'var groups=' + JSON.stringify(groups).replace(/</g, '\\u003c') + ';' +
+    'var list=document.getElementById("list");' +
+    'groups.forEach(function(g){var l=document.createElement("label");l.style.display="block";l.style.margin="4px 0";' +
+    'var c=document.createElement("input");c.type="checkbox";c.id="g_"+g.id;c.checked=g.exists;c.disabled=!g.exists;' +
+    'l.appendChild(c);l.appendChild(document.createTextNode(" "+g.label+(g.note?" ("+g.note+")":"")));list.appendChild(l);});' +
+    'function setAll(v){groups.forEach(function(g){if(g.exists)document.getElementById("g_"+g.id).checked=v;});}' +
+    'function go(){var ids=groups.filter(function(g){return g.exists&&document.getElementById("g_"+g.id).checked;}).map(function(g){return g.id;});' +
+    'var msg=document.getElementById("msg");if(!ids.length){msg.textContent="Choose at least one sheet.";return;}' +
+    'msg.style.color="#333";msg.textContent="Syncing...";document.getElementById("go").disabled=true;' +
+    'google.script.run.withSuccessHandler(function(){google.script.host.close();}).withFailureHandler(function(e){msg.style.color="#b00020";msg.textContent="Failed: "+e.message;document.getElementById("go").disabled=false;}).syncSelected(ids);}' +
+    '</script>';
+  SpreadsheetApp.getUi().showModalDialog(HtmlService.createHtmlOutput(html).setWidth(520).setHeight(360), 'Sync selected sheets');
+}
+
+/** Syncs the chosen groups (ids from SYNC_GROUPS_). Called by the picker. */
+function syncSelected(groupIds) {
+  var interactive = isInteractive_();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var props = PropertiesService.getScriptProperties();
+  var syncUrl = props.getProperty('SYNC_URL');
+  var syncKey = props.getProperty('SYNC_KEY');
+  if (!syncUrl || !syncKey) {
+    report_(interactive, ss, 'Configuration Error',
+      'Missing Script Properties: SYNC_URL or SYNC_KEY not set. Check Project Settings > Script Properties.', true);
+    return;
+  }
+  var keys = [];
+  var withCore = false;
+  for (var i = 0; i < SYNC_GROUPS_.length; i++) {
+    var g = SYNC_GROUPS_[i];
+    if (!groupIds || groupIds.indexOf(g.id) < 0) continue;
+    if (g.id === 'core') withCore = true;
+    keys = keys.concat(g.keys);
+  }
+  if (keys.length === 0) {
+    report_(interactive, ss, 'Nothing selected', 'Choose at least one sheet to sync.', true);
+    return;
+  }
+  if (withCore && !ss.getSheetByName('Agents')) {
+    report_(interactive, ss, 'Error', "The incentive data needs the 'Agents' sheet, which was not found.", true);
+    return;
+  }
+  var payload = cleanPayload_(ss, keys);
+  // Without the incentive data the server saves only the report tabs and leaves everything else alone
+  if (!withCore) payload.partial = true;
+  sendPayload_(interactive, ss, syncUrl, syncKey, payload);
 }
 
 function installDailyTrigger() {

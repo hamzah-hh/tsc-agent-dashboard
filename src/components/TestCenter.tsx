@@ -584,6 +584,7 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken, t
             breaksRows: tabRows('Breaks'),
             targetsRows: tabRows('Targets'),
             cohortRows: tabRows('Anirban_Ref'),
+            ...(workbook.SheetNames.includes('Anirban_Cohort_Reportv2') ? { cohortV2Rows: tabRows('Anirban_Cohort_Reportv2') } : {}),
             companyDodRows: tabRows('Company_DOD'),
             diwaliRows: tabRows('Diwali_Projection'),
             businessOverviewRows: tabRows('Business_Overview'),

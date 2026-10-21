@@ -25,6 +25,7 @@ Six input tabs: paste exports as values, no formulas. Headers are matched ignori
 
 | `Anirban_Ref` | day x category x cohort | `Month`, `Day_Number`, `Date`, `Sale_Category`, `TT_Cohort`, `Order_Count`, `Sales` |
 | `Business_Overview` | past months by tier (one row per Month and Tier) | `Month`, `Tier` (HO Caller / Store Callers - Andheri / Store Callers - Bangalore / All), `Outbound_Calls`, `Avg_Outbound_Calls_Per_Agent_Day`, `Connected_Calls`, `Avg_Connected_Calls_Per_Agent_Day`, `Talk_Time_Sec`, `Avg_Talk_Time_Sec`, `Revenue` (rupees), `Avg_Revenue_Per_Agent`, `Active_Team_Size`, `AOV`, `Quality_Score`, `Quality_Score_Pre_Sales` |
+| `Anirban_Cohort_Reportv2` | day, sale category, talk time cohort | Same columns as `Anirban_Ref` (`Month`, `Day_Number`, `Date`, `Sale_Category`, `TT_Cohort`, `Order_Count`, `Sales`), on the April onwards attribution. Shown behind the **View April_Onwards Attribution** button of the Cohort Report |
 | `Diwali_Projection` | day | `Date`, `DoW`, `Week_Flag`, `Sale_Percentage`, `Company_Projection`, `Company_Actual`, `Attributed_Revenue`, `3_min_Revenue` (the % columns are recalculated) |
 | `Company_DOD` | company revenue per day and channel | `date`, `channel`, `sales`, `order_id` (orders), `Main_Channel` (Retail / Website / Marketplace) |
 
@@ -77,7 +78,7 @@ Click **Save script properties**.
 
 ### 6. Authorize & Test
 1. Refresh the spreadsheet. A new menu item **Incentive App** will appear in the top menu bar.
-2. Click **Incentive App** > **Sync Now**.
+2. Click **Incentive App** > **Sync Now (all sheets)**, or **Sync selected sheets...** to tick only the sheets you want (the incentive data is one unit; every report tab can be chosen alone). Choosing only report tabs saves just those and leaves the rest of the dashboard, and the "data last updated" bar, untouched. The daily trigger always syncs all sheets.
 3. When prompted, review and grant the required permissions (Spreadsheets and External Connections).
 4. Verify the dialog shows success with the count of rows and agents processed.
 
