@@ -20,6 +20,8 @@ import { buildPreSalesSuggestions } from '../shared/suggestions';
 import { aiTextIsCurrent } from '../shared/aiText';
 import { AnimatedCounter } from './AnimatedCounter';
 import { fireMilestoneBurst } from '../utils/confetti';
+import { ExportCsvButton } from './ExportCsvButton';
+import { csvName, csvStamp } from '../utils/csv';
 import { soundFx } from '../utils/audio';
 import {
   AlertTriangle,
@@ -551,9 +553,20 @@ export function PreSalesActualTab({ agentRecord, plan, cycle, onNavigateToSimula
           <span className="text-xs uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 font-mono">
             Daily Inbound Calls
           </span>
-          <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">
-            Total active days: <strong className="text-slate-800 dark:text-slate-200">{totals.activeDays}</strong>
-          </span>
+          <div className="flex items-center gap-3">
+            <ExportCsvButton
+              filename={csvName('my_daily_calls', agentRecord.name, csvStamp())}
+              disabled={!daily || daily.length === 0}
+              title="Download your daily numbers as a CSV file"
+              getRows={() => [
+                ['Date', 'Day Type', 'Inbound Calls', 'Avg Talk Time (sec)', 'Total Talk Time (min)'],
+                ...(daily || []).map((d) => [d.date, d.day === 1 ? 'Full Day' : d.day === 0.5 ? 'Half Day' : d.day, d.calls ?? 0, Math.round(d.avgTalkSec || 0), Number((d.talkSeconds / 60).toFixed(1))]),
+              ]}
+            />
+            <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">
+              Total active days: <strong className="text-slate-800 dark:text-slate-200">{totals.activeDays}</strong>
+            </span>
+          </div>
         </div>
 
         {chartData.length === 0 ? (

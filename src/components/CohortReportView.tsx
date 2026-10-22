@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { elementToPng } from '../utils/captureImage';
+import { ExportCsvButton } from './ExportCsvButton';
+import { csvName, downloadCsv as saveCsv, CsvCell } from '../utils/csv';
 import { ChevronDown, ChevronUp, Copy, Download, Lock, Plus, RefreshCw, X } from 'lucide-react';
 import { formatNumberINR } from '../shared/incentive';
 import {
@@ -51,6 +53,20 @@ function periodTag(base: CohortPeriod, p: CohortPeriod): string {
     if (s.from === p.from && s.to === p.to) return n === 1 ? 'SDLM' : `Same days ${n} months back`;
   }
   return '';
+}
+
+/** The cohort tables of every period as flat rows: one row per period and cohort. */
+function cohortCsvRows(periods: CohortPeriod[], tables: CohortTableRow[][]): CsvCell[][] {
+  const base = periods[0];
+  const rows: CsvCell[][] = [
+    ['Period', 'From', 'To', 'Talk Time Cohort', ...COHORT_CATEGORIES.flatMap((c) => [`${c.label} Orders`, `${c.label} Revenue`]), 'Total Orders', 'Total Revenue', 'AOV'],
+  ];
+  periods.forEach((p, i) => {
+    for (const r of tables[i] || []) {
+      rows.push([i === 0 ? 'Base' : periodTag(base, p) || `Comparison ${i}`, p.from, p.to, r.cohort, ...COHORT_CATEGORIES.flatMap((c) => [r.byCategory[c.key].orders, Math.round(r.byCategory[c.key].revenue)]), r.orders, Math.round(r.revenue), r.aov === null ? '' : Math.round(r.aov)]);
+    }
+  });
+  return rows;
 }
 
 export function CohortReportView({ getIdToken }: CohortReportViewProps) {
@@ -155,23 +171,7 @@ export function CohortReportView({ getIdToken }: CohortReportViewProps) {
 
   const comparisons = periods.slice(1).map((p, i) => ({ period: p, table: tables[i + 1], tag: periodTag(base, p) }));
 
-  const downloadCsv = () => {
-    const head = ['Period', 'From', 'To', 'Talk Time Cohort', ...COHORT_CATEGORIES.flatMap((c) => [`${c.label} Orders`, `${c.label} Revenue`]), 'Total Orders', 'Total Revenue', 'AOV'];
-    const lines = [head.join(',')];
-    periods.forEach((p, i) => {
-      for (const r of tables[i]) {
-        lines.push(
-          [i === 0 ? 'Base' : periodTag(base, p) || `Comparison ${i}`, p.from, p.to, `"${r.cohort}"`, ...COHORT_CATEGORIES.flatMap((c) => [r.byCategory[c.key].orders, Math.round(r.byCategory[c.key].revenue)]), r.orders, Math.round(r.revenue), r.aov === null ? '' : Math.round(r.aov)].join(',')
-        );
-      }
-    });
-    const url = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' }));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `talk_time_cohort_${base.from}_to_${base.to}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  const downloadCsv = () => saveCsv(`talk_time_cohort_${base.from}_to_${base.to}`, cohortCsvRows(periods, tables));
 
   // All tables as one PNG on the clipboard; where the browser cannot copy images, the PNG is downloaded
   const copyPng = async () => {
@@ -449,6 +449,12 @@ function AprilAttributionSection({
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <ExportCsvButton
+            filename={`april_onwards_attribution_${base.from}_to_${base.to}`}
+            disabled={!rows?.length}
+            className={`${smallBtn} inline-flex items-center gap-1 disabled:opacity-60`}
+            getRows={() => cohortCsvRows(periods, tables)}
+          />
           <button onClick={copyPng} disabled={copyState === 'busy' || !rows?.length} className={`${smallBtn} inline-flex items-center gap-1 disabled:opacity-60`} title="Copy these tables as one image">
             <Copy className="w-3.5 h-3.5" /> {copyLabel}
           </button>
@@ -666,12 +672,25 @@ function CompanySection({
   return (
     <>
       <section className={`${card} overflow-hidden`}>
-        <h3 className="px-4 py-2.5 text-sm font-bold text-slate-950 dark:text-white border-b border-slate-200 dark:border-slate-800">
-          Company Revenue
-          <span className="ml-2 text-[11px] font-normal text-slate-500">
-            Company_DOD tab, {fmtDay(first)} to {fmtDay(last)}
-            {outside ? '; a period reaching outside these dates is partly empty' : ''}
+        <h3 className="px-4 py-2.5 text-sm font-bold text-slate-950 dark:text-white border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
+          <span>
+            Company Revenue
+            <span className="ml-2 text-[11px] font-normal text-slate-500">
+              Company_DOD tab, {fmtDay(first)} to {fmtDay(last)}
+              {outside ? '; a period reaching outside these dates is partly empty' : ''}
+            </span>
           </span>
+          <ExportCsvButton
+            filename="company_revenue"
+            getRows={() => [
+              ['Period', 'From', 'To', 'Days', 'Orders', 'Revenue', 'Retail Revenue', 'Marketplace Revenue', 'Website Revenue', 'AOV', 'Base Orders vs This %', 'Base Revenue vs This %', 'Base AOV vs This %'],
+              ...periods.map((p, i) => {
+                const t = totals[i];
+                const g = i === 0 ? [null, null, null] : [growth(totals[0].orders, t.orders), growth(totals[0].revenue, t.revenue), growth(totals[0].aov, t.aov)];
+                return [tags[i], p.from, p.to, t.days, t.orders, Math.round(t.revenue), Math.round(t.retail), Math.round(t.marketplace), Math.round(t.website), t.aov === null ? '' : Math.round(t.aov), ...g.map((v) => (v === null ? '' : Number((v * 100).toFixed(1)))) ];
+              }),
+            ]}
+          />
         </h3>
         <div className="overflow-x-auto" data-scroll-box="true">
           <table className="w-full text-xs border-collapse table-fixed" style={{ minWidth: '760px' }}>
@@ -714,11 +733,29 @@ function CompanySection({
       </section>
 
       <section className={`${card} overflow-hidden`}>
-        <h3 className="px-4 py-2.5 text-sm font-bold text-slate-950 dark:text-white border-b border-slate-200 dark:border-slate-800">
-          Attributed Revenue
-          <span className="ml-2 text-[11px] font-normal text-slate-500">
-            cumulative revenue of orders with 10 seconds or more of talk time, against the Company_DOD revenue
+        <h3 className="px-4 py-2.5 text-sm font-bold text-slate-950 dark:text-white border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
+          <span>
+            Attributed Revenue
+            <span className="ml-2 text-[11px] font-normal text-slate-500">
+              cumulative revenue of orders with 10 seconds or more of talk time, against the Company_DOD revenue
+            </span>
           </span>
+          <ExportCsvButton
+            filename="attributed_revenue"
+            getRows={() => [
+              ['Metric', ...periods.map((p, i) => `${tags[i]} (${p.from} to ${p.to})`), ...comps.map((_, i) => `Base vs ${tags[i + 1]} change (pp for % rows, % for others)`)],
+              ...metrics.map((m) => [
+                m.label,
+                ...m.values.map((v) => (v === null ? '' : m.percent ? Number(v.toFixed(2)) : Math.round(v))),
+                ...comps.map((_, i) => {
+                  const b = m.values[0];
+                  const o = m.values[i + 1];
+                  const change = m.percent ? (b !== null && o !== null ? b - o : null) : growth(b, o);
+                  return change === null ? '' : Number((m.percent ? change : change * 100).toFixed(2));
+                }),
+              ]),
+            ]}
+          />
         </h3>
         <div className="overflow-x-auto" data-scroll-box="true">
           <table className="w-full text-xs border-collapse table-fixed" style={{ minWidth: `${220 + periods.length * 150 + comps.length * 130}px` }}>
@@ -837,9 +874,23 @@ function DiwaliSection({ days }: { days: DiwaliDay[] }) {
   ];
   return (
     <section className={`${card} overflow-hidden`}>
-      <h3 className="px-4 py-2.5 text-sm font-bold text-slate-950 dark:text-white border-b border-slate-200 dark:border-slate-800">
-        Diwali Projection
-        <span className="ml-2 text-[11px] font-normal text-slate-500">Diwali_Projection tab; achievement = actual / projection</span>
+      <h3 className="px-4 py-2.5 text-sm font-bold text-slate-950 dark:text-white border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
+        <span>
+          Diwali Projection
+          <span className="ml-2 text-[11px] font-normal text-slate-500">Diwali_Projection tab; achievement = actual / projection</span>
+        </span>
+        <ExportCsvButton
+          filename="diwali_projection"
+          title="Every day, including the days still ahead"
+          getRows={() => [
+            ['Date', 'Day', 'Week Flag', 'Sale %', 'Company Projection', 'Company Actual', 'Achievement %', 'Attributed Revenue', 'Attributed %', '3 min Revenue', '3 min %'],
+            ...days.map((d, i) => {
+              const played = d.actual > 0;
+              const a = played ? ach(d.actual, d.projection) : null;
+              return [d.date, d.dow, d.weekFlag, d.salePct === null ? '' : Math.round(d.salePct * 100), Math.round(d.projection), played ? Math.round(d.actual) : '', a === null ? '' : Number(a.toFixed(1)), played ? Math.round(d.attributed) : '', attrShare[i] === null ? '' : Number(attrShare[i]!.toFixed(1)), played ? Math.round(d.threeMin) : '', threeShare[i] === null ? '' : Number(threeShare[i]!.toFixed(1))];
+            }),
+          ]}
+        />
       </h3>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3">
         {tiles.map((x) => (

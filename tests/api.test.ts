@@ -1173,6 +1173,13 @@ export async function runApiTests() {
     check('a TL sees the tiers of their own agents (here an HO and a Store agent) and no all-tier row; the Pre Sales and unknown tiers stay out',
       tlBo.length > 0 && tlBo.every((x) => x.tier === 'HO Caller' || x.tier === 'Store Callers - Andheri') && !tlBo.some((x) => x.tier === 'All'), JSON.stringify(tlBo.map((x) => x.tier)));
 
+    // CSV export helper: quoting, formulas kept as text, empty cells, file names
+    const csvu = await import('../src/utils/csv');
+    const csvText = csvu.toCsv([['Name', 'Note', 'N'], ['Sam, Jr', 'said "hi"', 5], ['=SUM(A1)', null, undefined], ['multi\nline', 'ok', NaN]]);
+    check('csv: commas and quotes are quoted, a formula stays text, empty and non-finite cells are empty, rows end in CRLF',
+      csvText === 'Name,Note,N\r\n"Sam, Jr","said ""hi""",5\r\n\'=SUM(A1),,\r\n"multi\nline",ok,', JSON.stringify(csvText));
+    check('csv: file name parts are made safe', csvu.csvName('leaderboard', 'Dighe (Pre Sales)', '2026-10-22') === 'leaderboard_Dighe_Pre_Sales_2026-10-22' && csvu.csvName() === 'export', csvu.csvName('leaderboard', 'Dighe (Pre Sales)', '2026-10-22'));
+
     // Data status bar: any signed-in user, last good sync only
     r = await call('GET', '/api/data-status', { token: tok(L.tlDighe) });
     check('data status: any signed-in user gets the time of the last good sync and its last data date', r.status === 200 && typeof r.json?.syncedAt === 'string' && 'lastDataDate' in (r.json || {}), JSON.stringify(r.json));

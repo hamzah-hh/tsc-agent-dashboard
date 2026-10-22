@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, Coffee, Gauge, RefreshCw, Target, X } from 'lucide-react';
 import { formatCurrencyINR, formatNumberINR } from '../shared/incentive';
 import { BusinessOverviewSection } from './BusinessOverviewSection';
+import { ExportCsvButton } from './ExportCsvButton';
+import { csvName, csvStamp } from '../utils/csv';
 import {
   BREAK_COLUMNS,
   BreakDay,
@@ -303,6 +305,24 @@ export function ProductivitySection({
         icon={<Gauge className="w-4 h-4 text-indigo-500" />}
         title="Average Productivity"
         note={`Per agent per worked day, from the Dialer tab. Red: below ${PRODUCTIVITY_RULES.minUniqueConnectsPerDay} unique connects or below ${hms(PRODUCTIVITY_RULES.minTalkSecondsPerDay)} talk time (half for a half day).`}
+        action={
+          <ExportCsvButton
+            filename={csvName('productivity', csvStamp())}
+            disabled={shown.length === 0}
+            title="One row per agent for the range shown (agents left out of the averages are marked)"
+            getRows={() => [
+              ['Location', 'Team Leader', 'Agent', 'Official Email', 'Included In Averages', 'Days Worked', 'Avg Unique Connects / Day', 'Avg Talk Time / Day', 'Days Below Connects', 'Days Below Talk Time'],
+              ...shown.flatMap((t) =>
+                [...t.emails]
+                  .filter((e) => days.some((d) => d.agentEmail.toLowerCase() === e))
+                  .map((e) => {
+                    const s = prodStats(days.filter((d) => d.agentEmail.toLowerCase() === e));
+                    return [t.location, t.tl.startsWith('no-tl:') ? 'No TL' : nameFromEmail(t.tl), agentsByEmail.get(e)?.name || e, e, excluded.has(e) ? 'No' : 'Yes', s.agentDays, s.avgConnects === null ? '' : Number(s.avgConnects.toFixed(1)), s.avgTalk === null ? '' : hms(s.avgTalk), s.daysLowConnects, s.daysLowTalk];
+                  })
+              ),
+            ]}
+          />
+        }
       />
       <ExcludedNote count={excluded.size} onReset={reset} />
       <div className="overflow-x-auto">
@@ -382,6 +402,13 @@ export function ProductivitySection({
               { label: 'Days Below Talk Time', value: String(drillStats.daysLowTalk) },
             ]}
           />
+          <div className="flex justify-end pb-2">
+            <ExportCsvButton
+              filename={csvName('dialer_days', agentsByEmail.get(drillAgent)?.name || drillAgent, csvStamp())}
+              disabled={drillDays.length === 0}
+              getRows={() => [['Date', 'Day Type', 'Unique Connects', 'Talk Time'], ...drillDays.map((d) => [d.date, dayLabel(d.day), d.connects, hms(d.talkSeconds)])]}
+            />
+          </div>
           <table className="w-full text-xs text-left">
             <thead className="bg-slate-50 dark:bg-slate-800/60">
               <tr>
@@ -504,6 +531,27 @@ export function BreaksSection({
         icon={<Coffee className="w-4 h-4 text-amber-500" />}
         title="Breaks"
         note={`Per agent per day (hh:mm:ss), from the Breaks tab. Red above the daily limit: ${limitNote}.`}
+        action={
+          hasData ? (
+            <ExportCsvButton
+              filename={csvName('breaks', csvStamp())}
+              disabled={rows.length === 0}
+              title="One row per agent for the range shown (agents left out of the averages are marked)"
+              getRows={() => {
+                const emails = [...new Set(rows.map((r) => r.agentEmail.toLowerCase()))];
+                return [
+                  ['Location', 'Agent', 'Official Email', 'Included In Averages', 'Days', ...BREAK_COLUMNS.map((c) => 'Avg ' + c.label), 'Days Over a Limit'],
+                  ...emails
+                    .sort((a, b) => locationOf(a).localeCompare(locationOf(b)) || a.localeCompare(b))
+                    .map((e) => {
+                      const a = breakAverages(rows.filter((r) => r.agentEmail.toLowerCase() === e));
+                      return [locationOf(e), agentsByEmail.get(e)?.name || e, e, excluded.has(e) ? 'No' : 'Yes', a.days, ...BREAK_COLUMNS.map((c) => breakText(c.key, a[c.key])), a.daysOver];
+                    }),
+                ];
+              }}
+            />
+          ) : undefined
+        }
       />
       {!hasData ? (
         <p className="px-5 pb-5 text-xs text-slate-500">
@@ -612,6 +660,16 @@ export function BreaksSection({
               ];
             })()}
           />
+          <div className="flex justify-end pb-2">
+            <ExportCsvButton
+              filename={csvName('breaks_days', agentsByEmail.get(drillAgent)?.name || drillAgent, csvStamp())}
+              disabled={drillRows.length === 0}
+              getRows={() => [
+                ['Date', 'Day Type', ...BREAK_COLUMNS.map((c) => c.label)],
+                ...drillRows.map((r) => [r.date, dayLabel(r.dayType), ...BREAK_COLUMNS.map((c) => breakText(c.key, c.key === 'idleAcwPct' ? idleAcwPct(r.idleAcw, r.staffed) : (r as any)[c.key]))]),
+              ]}
+            />
+          </div>
           <table className="w-full text-xs text-left">
             <thead className="bg-slate-50 dark:bg-slate-800/60">
               <tr>
@@ -674,6 +732,20 @@ export function TargetsSection({
         icon={<Target className="w-4 h-4 text-emerald-500" />}
         title="Period Targets and Achievement"
         note={`${cycle.name}: ${cycle.startDate} to ${cycle.endDate}. Day ${elapsed} of ${totalDays}, ${daysLeft} day(s) left; on pace means at least ${expectedPct.toFixed(1)}% achieved. From the Targets tab.`}
+        action={
+          <ExportCsvButton
+            filename={csvName('targets', cycle.name, csvStamp())}
+            disabled={targets.length === 0}
+            getRows={() => [
+              ['Manager / TL', 'Email', 'Team', 'Sales', 'Target', 'Achieved %', 'Remaining', 'Needed Per Day', 'Pace'],
+              ...targets.map((t) => {
+                const pct = t.target > 0 ? (t.sales / t.target) * 100 : 0;
+                const remaining = Math.max(0, t.target - t.sales);
+                return [nameFromEmail(t.managerEmail), t.managerEmail, teamOf(t.managerEmail), Math.round(t.sales), Math.round(t.target), Number(pct.toFixed(1)), Math.round(remaining), daysLeft > 0 ? Math.round(remaining / daysLeft) : '', pct >= expectedPct ? 'On pace' : 'Behind pace'];
+              }),
+            ]}
+          />
+        }
       />
       {targets.length === 0 ? (
         <p className="px-5 pb-5 text-xs text-slate-500">No target found for you in the Targets tab yet.</p>
@@ -720,14 +792,17 @@ export function TargetsSection({
 
 // ------------------------------------------------------------------ shared bits
 
-function SectionHeader({ icon, title, note }: { icon: React.ReactNode; title: string; note: string }) {
+function SectionHeader({ icon, title, note, action }: { icon: React.ReactNode; title: string; note: string; action?: React.ReactNode }) {
   return (
-    <div className="px-5 pt-5 pb-3">
-      <h3 className="text-sm font-bold text-slate-950 dark:text-white flex items-center gap-2">
-        {icon}
-        {title}
-      </h3>
-      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">{note}</p>
+    <div className="px-5 pt-5 pb-3 flex items-start justify-between gap-3">
+      <div>
+        <h3 className="text-sm font-bold text-slate-950 dark:text-white flex items-center gap-2">
+          {icon}
+          {title}
+        </h3>
+        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">{note}</p>
+      </div>
+      {action}
     </div>
   );
 }

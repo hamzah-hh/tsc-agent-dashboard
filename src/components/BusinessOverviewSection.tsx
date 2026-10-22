@@ -3,6 +3,8 @@ import { Briefcase, Download } from 'lucide-react';
 import { formatNumberINR } from '../shared/incentive';
 import { ALL_TIERS, BusinessOverviewRow } from '../shared/businessOverview';
 import { hms } from '../shared/teamOps';
+import { ExportCsvButton } from './ExportCsvButton';
+import { csvName, csvStamp } from '../utils/csv';
 import { buildOverviewSheet } from '../shared/businessOverviewExport';
 import { useDataStatus } from './DataStatusBar';
 
@@ -103,14 +105,42 @@ export function BusinessOverviewSection({ rows }: { rows: BusinessOverviewRow[] 
         <span className="text-[11px] text-slate-500">
           month by month{liveMonths.size ? '; a month marked MTD is still running, so only its averages compare with full months' : ''}
         </span>
-        <button
-          onClick={exportXlsx}
-          disabled={exporting}
-          className="ml-auto inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-[11px] font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-60"
-          title="Download as an Excel file in the Business Review layout"
-        >
-          <Download className="w-3.5 h-3.5" /> {exporting ? 'Exporting...' : 'Export .xlsx'}
-        </button>
+        <div className="ml-auto flex items-center gap-2">
+          <ExportCsvButton
+            filename={csvName('business_overview', status?.lastDataDate || csvStamp())}
+            title="One row per month and tier, with every KPI as a column"
+            getRows={() => [
+              ['Month', 'Tier', 'Month Still Running', 'Total Outbound Calls', 'Avg Outbound Calls / Agent / Day', 'Total Connected Calls', 'Avg Connected Calls / Agent / Day', 'Total Talk Time (sec)', 'Avg Talk Time / Agent / Day (sec)', 'Revenue', 'Avg Revenue / Active Agent', 'Team Size', 'AOV', 'Quality Score %', 'Quality Score % (Pre Sales)'],
+              ...[...rows]
+                .sort((a, b) => b.month.localeCompare(a.month) || a.tier.localeCompare(b.tier))
+                .map((r) => [
+                  r.month,
+                  r.tier,
+                  r.live ? 'Yes' : 'No',
+                  r.outbound,
+                  r.avgOutbound === null ? '' : Number(r.avgOutbound.toFixed(1)),
+                  r.connected,
+                  r.avgConnected === null ? '' : Number(r.avgConnected.toFixed(1)),
+                  Math.round(r.talkSec),
+                  r.avgTalkSec === null ? '' : Math.round(r.avgTalkSec),
+                  Math.round(r.revenue),
+                  r.avgRevenue === null ? '' : Math.round(r.avgRevenue),
+                  r.teamSize,
+                  r.aov === null ? '' : Number(r.aov.toFixed(2)),
+                  r.quality === null ? '' : Number((r.quality * 100).toFixed(1)),
+                  r.qualityPreSales === null || r.qualityPreSales === undefined ? '' : Number((r.qualityPreSales * 100).toFixed(1)),
+                ]),
+            ]}
+          />
+          <button
+            onClick={exportXlsx}
+            disabled={exporting}
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-[11px] font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-60"
+            title="Download as an Excel file in the Business Review layout"
+          >
+            <Download className="w-3.5 h-3.5" /> {exporting ? 'Exporting...' : 'Export .xlsx'}
+          </button>
+        </div>
       </div>
       <div className="overflow-x-auto" data-scroll-box="true">
         <table className="w-full text-xs border-collapse">

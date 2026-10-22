@@ -15,6 +15,8 @@ import {
   minSalesForClass,
   requiredPerDay,
 } from '../shared/planning';
+import { ExportCsvButton } from './ExportCsvButton';
+import { csvName, csvStamp } from '../utils/csv';
 import { buildSuggestions } from '../shared/suggestions';
 import { classSteps, scaleMaxPct } from '../shared/classes';
 import { aiTextIsCurrent } from '../shared/aiText';
@@ -1110,9 +1112,20 @@ export function ActualTab({ agentRecord, plan, cycle, onNavigateToSimulator, onN
           <span className="text-xs uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 font-mono">
             10. Daily Revenue Trend
           </span>
-          <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">
-            Total active days: <strong className="text-slate-800 dark:text-slate-200">{totals.activeDays}</strong>
-          </span>
+          <div className="flex items-center gap-3">
+            <ExportCsvButton
+              filename={csvName('my_daily_data', agentRecord.name, csvStamp())}
+              disabled={!daily || daily.length === 0}
+              title="Download your daily numbers as a CSV file"
+              getRows={() => [
+                ['Date', 'Day Type', 'Revenue', 'Orders', 'Unique Connects', 'Talk Time (min)', 'Visits Booked', 'Visits Attributed'],
+                ...(daily || []).map((d) => [d.date, d.day === 1 ? 'Full Day' : d.day === 0.5 ? 'Half Day' : d.day, Math.round(d.sales), d.orders, d.connects, Number((d.talkSeconds / 60).toFixed(1)), d.visitsBooked, d.visitsAttributed]),
+              ]}
+            />
+            <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">
+              Total active days: <strong className="text-slate-800 dark:text-slate-200">{totals.activeDays}</strong>
+            </span>
+          </div>
         </div>
 
         {chartData.length === 0 ? (

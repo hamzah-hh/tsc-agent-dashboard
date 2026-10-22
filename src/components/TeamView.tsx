@@ -3,6 +3,8 @@ import { AgentRecord, AgentType } from '../shared/types';
 import { formatCurrencyINR, formatNumberINR } from '../shared/incentive';
 import { StaleBanner } from './StaleBanner';
 import { hms } from '../shared/teamOps';
+import { ExportCsvButton } from './ExportCsvButton';
+import { csvName, csvStamp } from '../utils/csv';
 import {
   Users,
   Search,
@@ -15,7 +17,6 @@ import {
   Filter,
   PhoneIncoming,
   Sparkles,
-  Download,
 } from 'lucide-react';
 
 interface TeamViewProps {
@@ -270,52 +271,40 @@ export function TeamView({
 
   const overallClassCounts = getClassCounts(revenueAgents);
 
-  // Downloads every row of the table as shown (filters and sort applied) with every column, plus the team row
-  const [exporting, setExporting] = useState(false);
-  const exportXlsx = async () => {
-    setExporting(true);
-    try {
-      const XLSX = await import('xlsx');
-      const header = ['Agent Name', 'Official Email', 'Location', 'Type', 'Revenue', 'Orders', 'AOV', 'Target %', 'Class', 'Quality Score %', 'Quality Band', 'Avg Unique Connects / Day (Pre Sales: calls / day)', 'Avg Talk Time (min / day; Pre Sales: sec / call)', 'Visits', 'Total Incentive'];
-      const rows: Array<Array<string | number>> = sortedAgents.map((a) => {
-        const t = a.totals;
-        const ps = a.agentType === 'PRE_SALES';
-        const days = t?.activeDays || 0;
-        return [
-          a.name,
-          a.officialEmail,
-          a.location,
-          ps ? 'Pre Sales' : a.agentType === 'HO' ? 'HO' : 'Store',
-          ps ? '' : Math.round(t?.sales || 0),
-          ps ? '' : t?.orders || 0,
-          ps || !t?.orders ? '' : Math.round(t.sales / t.orders),
-          ps ? '' : Number((a.result?.achievementPct || 0).toFixed(1)),
-          ps ? 'PS' : a.result?.className || 'NQ',
-          a.quality?.audits ? a.quality.score : '',
-          ps ? (a.result?.preSales?.eligible ? 'Gate met' : 'Locked') : a.result?.quality?.band || 'None',
-          ps ? a.result?.preSales?.calls.value ?? 0 : days > 0 ? Number((t.connects / days).toFixed(1)) : 0,
-          ps ? a.result?.preSales?.talk.value ?? 0 : days > 0 ? Number((t.talkSeconds / 60 / days).toFixed(1)) : 0,
-          ps ? '' : t?.visitsAttributed || 0,
-          Math.round(a.result?.total || 0),
-        ];
-      });
-      rows.push([
-        'Team (excl. Pre Sales, except incentive)', '', '', '',
-        Math.round(totalRevenue), teamOrders, teamAov === null ? '' : Math.round(teamAov),
-        Number(averageAgentAchievement.toFixed(1)), '', '', '',
-        teamConnectsPerDay === null ? '' : Number(teamConnectsPerDay.toFixed(1)),
-        teamTalkPerDay === null ? '' : Number((teamTalkPerDay / 60).toFixed(1)),
-        totalVisits, Math.round(totalIncentive),
-      ]);
-      const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
-      ws['!cols'] = [28, 34, 16, 10, 14, 9, 11, 10, 8, 12, 12, 22, 22, 8, 14].map((wch) => ({ wch }));
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Team');
-      const today = new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
-      XLSX.writeFile(wb, `Team_${activeCycleId}_${today}.xlsx`);
-    } finally {
-      setExporting(false);
-    }
+  // Every row of the table as shown (filters and sort applied) with every column, plus the team row
+  const teamCsvRows = (): Array<Array<string | number>> => {
+    const header = ['Agent Name', 'Official Email', 'Location', 'Type', 'Revenue', 'Orders', 'AOV', 'Target %', 'Class', 'Quality Score %', 'Quality Band', 'Avg Unique Connects / Day (Pre Sales: calls / day)', 'Avg Talk Time (min / day; Pre Sales: sec / call)', 'Visits', 'Total Incentive'];
+    const rows: Array<Array<string | number>> = sortedAgents.map((a) => {
+      const t = a.totals;
+      const ps = a.agentType === 'PRE_SALES';
+      const days = t?.activeDays || 0;
+      return [
+        a.name,
+        a.officialEmail,
+        a.location,
+        ps ? 'Pre Sales' : a.agentType === 'HO' ? 'HO' : 'Store',
+        ps ? '' : Math.round(t?.sales || 0),
+        ps ? '' : t?.orders || 0,
+        ps || !t?.orders ? '' : Math.round(t.sales / t.orders),
+        ps ? '' : Number((a.result?.achievementPct || 0).toFixed(1)),
+        ps ? 'PS' : a.result?.className || 'NQ',
+        a.quality?.audits ? a.quality.score : '',
+        ps ? (a.result?.preSales?.eligible ? 'Gate met' : 'Locked') : a.result?.quality?.band || 'None',
+        ps ? a.result?.preSales?.calls.value ?? 0 : days > 0 ? Number((t.connects / days).toFixed(1)) : 0,
+        ps ? a.result?.preSales?.talk.value ?? 0 : days > 0 ? Number((t.talkSeconds / 60 / days).toFixed(1)) : 0,
+        ps ? '' : t?.visitsAttributed || 0,
+        Math.round(a.result?.total || 0),
+      ];
+    });
+    rows.push([
+      'Team (excl. Pre Sales, except incentive)', '', '', '',
+      Math.round(totalRevenue), teamOrders, teamAov === null ? '' : Math.round(teamAov),
+      Number(averageAgentAchievement.toFixed(1)), '', '', '',
+      teamConnectsPerDay === null ? '' : Number(teamConnectsPerDay.toFixed(1)),
+      teamTalkPerDay === null ? '' : Number((teamTalkPerDay / 60).toFixed(1)),
+      totalVisits, Math.round(totalIncentive),
+    ]);
+    return [header, ...rows];
   };
 
   // Team row: shown at the top and the bottom of the table
@@ -700,14 +689,12 @@ export function TeamView({
             </div>
           </div>
 
-          <button
-            onClick={exportXlsx}
-            disabled={exporting || sortedAgents.length === 0}
-            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-60 shrink-0"
-            title="Download the table (with the current filters and sort) as an Excel file"
-          >
-            <Download className="w-3.5 h-3.5" /> {exporting ? 'Exporting...' : 'Export .xlsx'}
-          </button>
+          <ExportCsvButton
+            filename={csvName('team', activeCycleId, csvStamp())}
+            disabled={sortedAgents.length === 0}
+            title="Download the table (with the current filters and sort) as a CSV file"
+            getRows={teamCsvRows}
+          />
           <span className="text-xs text-slate-500 dark:text-slate-400 font-mono shrink-0">
             Showing <strong className="text-slate-800 dark:text-slate-200">{sortedAgents.length}</strong> of <strong className="text-slate-800 dark:text-slate-200">{visibleAgents.length}</strong> agents
           </span>

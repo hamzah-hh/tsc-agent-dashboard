@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { AppConfig, LoginTrackerConfig } from '../shared/types';
 import { soundFx } from '../utils/audio';
+import { ExportCsvButton } from './ExportCsvButton';
+import { csvName, csvStamp } from '../utils/csv';
 
 interface LoginTrackerSettingsProps {
   appConfig?: AppConfig;
@@ -293,15 +295,25 @@ export function LoginTrackerSettings({
             </span>
           </div>
 
-          <button
-            onClick={fetchActivities}
-            disabled={loadingActivity}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 text-slate-600 hover:text-slate-900 text-xs font-semibold rounded transition"
-            title="Refresh active callers"
-          >
-            <RotateCcw className={`w-3.5 h-3.5 ${loadingActivity ? 'animate-spin text-indigo-600' : ''}`} />
-            Refresh
-          </button>
+          <div className="flex items-center gap-2">
+            <ExportCsvButton
+              filename={csvName('login_activity', csvStamp())}
+              disabled={activities.length === 0}
+              getRows={() => [
+                ['Caller Email', 'AM Used (min)', 'AM Limit (min)', 'PM Used (min)', 'PM Limit (min)', 'Last Heartbeat'],
+                ...activities.map((a) => [a.agentEmail, Math.round((a.amSecondsUsed || 0) / 60), amMinutes, Math.round((a.pmSecondsUsed || 0) / 60), pmMinutes, a.updatedAt || '']),
+              ]}
+            />
+            <button
+              onClick={fetchActivities}
+              disabled={loadingActivity}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-slate-600 hover:text-slate-900 text-xs font-semibold rounded transition"
+              title="Refresh active callers"
+            >
+              <RotateCcw className={`w-3.5 h-3.5 ${loadingActivity ? 'animate-spin text-indigo-600' : ''}`} />
+              Refresh
+            </button>
+          </div>
         </div>
 
         {activities.length === 0 ? (

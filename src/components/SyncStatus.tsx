@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { SyncLogRecord } from '../shared/types';
 import { formatNumberINR } from '../shared/incentive';
+import { ExportCsvButton } from './ExportCsvButton';
+import { csvName, csvStamp } from '../utils/csv';
 import { RefreshCw, CheckCircle, AlertTriangle, XCircle, Database, AlertCircle, ExternalLink, FileSpreadsheet } from 'lucide-react';
 
 interface SyncStatusProps {
@@ -100,14 +102,36 @@ export function SyncStatus({ getIdToken }: SyncStatusProps) {
           </p>
         </div>
 
-        <button
-          onClick={() => fetchLogs(true)}
-          disabled={refreshing}
-          className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xs transition shrink-0"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-amber-500' : ''}`} />
-          Refresh Status
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <ExportCsvButton
+            filename={csvName('sync_log', csvStamp())}
+            disabled={logs.length === 0}
+            getRows={() => [
+              ['Time (IST)', 'Source', 'Result', 'Rows', 'Agents', 'Last Data Date', 'AI OK', 'AI Failed', 'Error', 'Warnings'],
+              ...logs.map((l) => [
+                new Date(l.time).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' }),
+                l.source === 'apps-script' ? 'Apps Script (Daily)' : l.source === 'import' ? 'Excel Manual Import' : 'Test Suite',
+                l.result === 'ok' ? 'OK' : 'Error',
+                l.rows,
+                l.agents,
+                l.lastDataDate || '',
+                l.aiOk,
+                l.aiFailed,
+                l.error || '',
+                (l.warnings || []).join(' | '),
+              ]),
+            ]}
+            className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xs transition disabled:opacity-50"
+          />
+          <button
+            onClick={() => fetchLogs(true)}
+            disabled={refreshing}
+            className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xs transition"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-amber-500' : ''}`} />
+            Refresh Status
+          </button>
+        </div>
       </div>
 
       {/* Linked Google Sheet Source Banner */}

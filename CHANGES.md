@@ -4,6 +4,20 @@ Newest first. How to demo and go live: [docs/GUIDELINE.md](docs/GUIDELINE.md).
 
 ---
 
+## v8.7, 22 Oct 2026: Export CSV on every table
+
+A simple **Export CSV** button (one header row, then the rows as shown, filters and sort applied; opens in Excel and Google Sheets) now sits next to every table:
+
+- **Team:** the whole agent table with every column and the team row (replaces the .xlsx button).
+- **Leaderboards** (location boards and the agent leaderboard, including the revenue table structure).
+- **Team Summary:** Average Productivity and Breaks (one row per agent, with a daily CSV in each agent drill-down), Period Targets, and the Business Overview (a flat CSV next to the Business Review .xlsx).
+- **Cohort Report:** the cohort tables (and the April Onwards Attribution tables), Company Revenue, Attributed Revenue and the Diwali Projection.
+- **Agent pages:** "my daily data" on the Actual tab and the Pre Sales tab, and the class slabs table.
+- **Admin:** the sync log and the login activity.
+
+Day-on-Day, Raw Data and Team Revenue already had a CSV button. All exports share one helper (`src/utils/csv.ts`): quoting, text that starts with = + @ is kept as text, a byte order mark so accents open correctly.
+
+---
 ## v8.6, 21 Oct 2026: Choose the sheets to sync, and the April onwards attribution report
 
 1. **Sync Now** (Incentive App menu) now asks which sheets to sync: a picker with a tick box per sheet group. The incentive data (Agents, Orders, Visits, Dialer, PreSales, Quality, Breaks, Targets) is one unit; Anirban_Ref, Anirban_Cohort_Reportv2, Company_DOD, Diwali_Projection and Business_Overview can each be chosen alone. Report tabs only: the server saves just those (`partial` payload), writes no sync log and leaves everything else as it was. **Sync all sheets (no questions)** in the menu, and the daily trigger, sync everything as before. A report tab missing from the spreadsheet is no longer sent as empty, so it can never blank saved data.

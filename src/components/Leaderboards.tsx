@@ -6,6 +6,8 @@ import { soundFx } from '../utils/audio';
 import { fireGoldenCelebration, fireMilestoneBurst } from '../utils/confetti';
 import { AnimatedCounter } from './AnimatedCounter';
 import { StaleBanner } from './StaleBanner';
+import { ExportCsvButton } from './ExportCsvButton';
+import { csvName, csvStamp } from '../utils/csv';
 
 interface LeaderboardsProps {
   userRole: 'superAdmin' | 'manager' | 'tl';
@@ -261,6 +263,22 @@ export function Leaderboards({ userRole, userLocation, activeCycleId, cycleName,
                 className="pl-8 pr-3 py-1.5 text-xs border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500 w-48 sm:w-56 font-sans"
               />
             </div>
+
+            <ExportCsvButton
+              filename={csvName('leaderboard', activeLocation, csvStamp())}
+              disabled={filteredRows.length === 0}
+              getRows={() =>
+                isPreSales
+                  ? [
+                      ['Rank', 'Caller', 'Official Email', 'Avg Calls / Day', 'Calls Tier', 'Avg Talk Time (sec)', 'Talk Tier', 'Quality Score %', 'Total Incentive'],
+                      ...filteredRows.map((r) => [r.rank, r.name, r.officialEmail, r.avgCalls ?? 0, r.callsTier ?? 0, Math.round(r.avgTalkSeconds || 0), r.talkTier ?? 0, r.qualityScore ?? '', Math.round(r.totalIncentive)]),
+                    ]
+                  : [
+                      ['Rank', 'Caller', 'Official Email', 'Revenue', 'Target %', 'Class', 'Total Incentive'],
+                      ...filteredRows.map((r) => [r.rank, r.name, r.officialEmail, Math.round(r.sales), Number((r.achievementPct || 0).toFixed(1)), r.className, Math.round(r.totalIncentive)]),
+                    ]
+              }
+            />
 
             <div className="text-[11px] text-slate-400 dark:text-slate-500 font-mono hidden md:block">
               {currentBoard?.updatedAt ? (

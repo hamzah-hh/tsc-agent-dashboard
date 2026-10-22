@@ -25,6 +25,8 @@ import {
   Building2,
 } from 'lucide-react';
 import { soundFx } from '../utils/audio';
+import { ExportCsvButton } from './ExportCsvButton';
+import { csvName, csvStamp } from '../utils/csv';
 
 interface AgentLeaderboardTabProps {
   getIdToken: () => Promise<string>;
@@ -202,6 +204,22 @@ export function AgentLeaderboardTab({
               <RotateCcw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-amber-400' : ''}`} />
               <span className="hidden sm:inline">Refresh</span>
             </button>
+            <ExportCsvButton
+              filename={csvName('leaderboard', categoryTitle, csvStamp())}
+              disabled={filteredList.length === 0}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition disabled:opacity-50"
+              getRows={() =>
+                activeTab === 'preSales'
+                  ? [
+                      ['Rank', 'Caller', 'Official Email', 'Location', 'Worked Days', 'Inbound Calls / Day', 'Average Talk Time (sec)', 'Quality Score %', 'Quality Gate (>=85) Met'],
+                      ...filteredList.map((r) => [r.rank, r.name, r.officialEmail, r.location, r.activeDays, r.avgCalls ?? 0, Math.round(r.avgTalkSeconds || 0), r.qualityScore ?? '', (r.qualityScore ?? 0) >= 85 ? 'Yes' : 'No']),
+                    ]
+                  : [
+                      ['Rank', 'Caller', 'Official Email', 'Location', 'Orders', 'Net Revenue', 'Target Achieved %', 'Class', 'AOV', 'Worked Days', 'Daily Connects', 'Daily Talk Time (min)', 'Quality Score %', 'Store Footfalls'],
+                      ...filteredList.map((r) => [r.rank, r.name, r.officialEmail, r.location, r.orders, Math.round(r.sales), Number((r.achievementPct || 0).toFixed(1)), r.className, Math.round(r.aov || 0), r.activeDays, r.avgConnects, r.avgTalkMinutes, r.qualityScore ?? '', r.visitsAttributed]),
+                    ]
+              }
+            />
           </div>
         </div>
 
@@ -526,8 +544,16 @@ export function AgentLeaderboardTab({
                 <h4 className="text-xs font-mono uppercase tracking-wider font-bold text-slate-700">
                   Revenue Table Structure ({locationRevenue.location})
                 </h4>
-                <span className="text-[11px] text-slate-400 font-mono">
-                  Reflecting spreadsheet Revenue_Table_Structure
+                <span className="flex items-center gap-2">
+                  <span className="text-[11px] text-slate-400 font-mono">Reflecting spreadsheet Revenue_Table_Structure</span>
+                  <ExportCsvButton
+                    filename={csvName('revenue_table', locationRevenue.location, csvStamp())}
+                    getRows={() => [
+                      ['Agent', 'Shopify Orders', 'Shopify Revenue', 'Alt No. Orders', 'Alt No. Revenue', 'Marketplace Orders', 'Marketplace Revenue', 'POS OC Orders', 'POS OC Revenue', 'Total Orders', 'Total Revenue', 'AOV'],
+                      ...locationRevenue.rows.map((r) => [r.agentEmail, r.shopifyOrders, Math.round(r.shopifyRevenue), r.altOrders, Math.round(r.altRevenue), r.mpOrders, Math.round(r.mpRevenue), r.posOrders, Math.round(r.posRevenue), r.totalOrders, Math.round(r.totalRevenue), Math.round(r.aov)]),
+                      ['Total (' + locationRevenue.location + ')', locationRevenue.categories.shopify.orders, Math.round(locationRevenue.categories.shopify.sales), locationRevenue.categories.bfan.orders, Math.round(locationRevenue.categories.bfan.sales), locationRevenue.categories.bfmp.orders, Math.round(locationRevenue.categories.bfmp.sales), locationRevenue.categories.posoc.orders, Math.round(locationRevenue.categories.posoc.sales), locationRevenue.totalOrders, Math.round(locationRevenue.totalRevenue), Math.round(locationRevenue.aov)],
+                    ]}
+                  />
                 </span>
               </div>
               <table className="w-full text-left border-collapse text-xs">

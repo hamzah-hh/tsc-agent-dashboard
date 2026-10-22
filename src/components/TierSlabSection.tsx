@@ -1,3 +1,5 @@
+import { ExportCsvButton } from './ExportCsvButton';
+import { csvName, csvStamp } from '../utils/csv';
 import React, { useState } from 'react';
 import {
   Award,
@@ -139,9 +141,28 @@ export const TierSlabSection: React.FC<TierSlabSectionProps> = ({
                 1. Revenue Class Slabs & Commission Rates
               </h4>
             </div>
-            <span className="text-[11px] text-slate-400 dark:text-slate-500 font-mono hidden sm:inline">
-              Base Target: {formatCurrencyINR(plan.target)}
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-[11px] text-slate-400 dark:text-slate-500 font-mono hidden sm:inline">
+                Base Target: {formatCurrencyINR(plan.target)}
+              </span>
+              <ExportCsvButton
+                filename={csvName('class_slabs', tierDisplayName, csvStamp())}
+                getRows={() => [
+                  ['Class', 'Achievement Threshold', 'Min Sales Required', 'Commission Rate %', 'Min Gross Incentive', 'Your Status'],
+                  ...displayClasses.map((cls) => {
+                    const minSales = minSalesForClass(plan, cls.name);
+                    return [
+                      cls.name,
+                      cls.abovePct === 0 ? 'Up to ' + firstQualifyingPct + '% (Not Qualified)' : '>' + cls.abovePct + '% Target',
+                      cls.abovePct === 0 ? 0 : Math.round(minSales),
+                      Number((cls.rate * 100).toFixed(2)),
+                      Math.floor(minSales * cls.rate),
+                      currentClass === cls.name ? 'Current class' : totals.sales >= minSales ? 'Achieved' : 'Not yet',
+                    ];
+                  }),
+                ]}
+              />
+            </div>
           </div>
 
           <div className="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-950/60 shadow-xs">
