@@ -217,7 +217,16 @@ export function createApiApp(options: ApiOptions = {}): express.Express {
       }
       if (data?.role === 'tl' || data?.role === 'agent') return { role: data.role, access: { ...data } };
     } catch (_err) {
-      // Access document lookup failed (e.g. unseeded or network)
+      // Access document lookup failed (e.g. unseeded, network or quota); fall through to the agent list
+    }
+    // No access record (never written, or the read failed): the agent list carries the same login email
+    try {
+      const agent = (await loadAgents(appConfig.activeCycleId)).find((x) => normalizeEmail(x.personalEmail) === normalized);
+      if (agent && agent.officialEmail) {
+        return { role: 'agent', access: { role: 'agent', officialEmail: agent.officialEmail, name: agent.name, location: agent.location } };
+      }
+    } catch (_err) {
+      // agent list unavailable too
     }
     return null;
   }
