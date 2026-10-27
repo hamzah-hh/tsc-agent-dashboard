@@ -376,9 +376,9 @@ const PRE_SALES_HEADERS = ['Inbound_Calls', 'Avg_TT_per_day'];
 const DEFAULT_SUPER_ADMIN = 'agha.h489@gmail.com';
 
 /** No new AI call is started after this long in a sync, so Gemini can never hold up a sync. */
-const DEFAULT_AI_SYNC_BUDGET_MS = 35000;
+const DEFAULT_AI_SYNC_BUDGET_MS = 20000;
 /** Latest moment, from the start of a sync request, to start an AI call (see the AI step in processImport). */
-const AI_START_DEADLINE_MS = 32000;
+const AI_START_DEADLINE_MS = 18000;
 
 function envEmails(name: string): string[] {
   loadEnv();
@@ -1254,6 +1254,8 @@ export async function processImport(
 
     await batch.commit();
 
+    console.log(`[Sync] data saved after ${Date.now() - startedAt} ms`);
+
     // 7. AI text, best effort, within a time budget. The data above is already saved.
     const ai = { ok: 0, failed: 0, skipped: 0, pending: 0 };
     if (appConfig.aiEnabled && updatedAgents.length > 0) {
@@ -1303,6 +1305,7 @@ export async function processImport(
       }
     }
 
+    console.log(`[Sync] finished after ${Date.now() - startedAt} ms`);
     return {
       result: 'ok',
       rows: validRowCount,
