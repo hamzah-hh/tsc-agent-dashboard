@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { adminDb } from './server-firebase-admin';
 import { normalizeEmail } from './src/shared/incentive';
 import {
@@ -314,15 +315,30 @@ export async function saveRawRecords(cycleId: string, orders: RawOrderRecord[], 
   const orderChunks = chunk(orders);
   const visitChunks = chunk(visits);
 
+  // A chunk that is byte-for-byte what is already saved is not sent again: a sync used to upload every chunk
+  // (several MB) in one request, which could take the whole 60 s on a slow day. Older saves have no hashes,
+  // so their first save after this change writes every chunk once.
+  const hashOf = (rows: unknown[]) => createHash('sha256').update(JSON.stringify(rows)).digest('hex');
+  const orderHashes = orderChunks.map(hashOf);
+  const visitHashes = visitChunks.map(hashOf);
+  const prevOrderHashes: string[] = Array.isArray(prevData?.orderHashes) ? prevData.orderHashes : [];
+  const prevVisitHashes: string[] = Array.isArray(prevData?.visitHashes) ? prevData.visitHashes : [];
+
   // One atomic commit when it fits (400 writes = 400,000 rows): readers never see half a save
   const batch = adminDb.batch();
-  orderChunks.forEach((rows, i) => batch.set(rawChunksCol(cycleId).doc(`orders-${i}`), { rows }));
-  visitChunks.forEach((rows, i) => batch.set(rawChunksCol(cycleId).doc(`visits-${i}`), { rows }));
+  orderChunks.forEach((rows, i) => {
+    if (prevOrderHashes[i] !== orderHashes[i]) batch.set(rawChunksCol(cycleId).doc(`orders-${i}`), { rows });
+  });
+  visitChunks.forEach((rows, i) => {
+    if (prevVisitHashes[i] !== visitHashes[i]) batch.set(rawChunksCol(cycleId).doc(`visits-${i}`), { rows });
+  });
   for (let i = orderChunks.length; i < (prevData?.orderChunks || 0); i++) batch.delete(rawChunksCol(cycleId).doc(`orders-${i}`));
   for (let i = visitChunks.length; i < (prevData?.visitChunks || 0); i++) batch.delete(rawChunksCol(cycleId).doc(`visits-${i}`));
   batch.set(rawRecordsRef(cycleId), {
     orderChunks: orderChunks.length,
     visitChunks: visitChunks.length,
+    orderHashes,
+    visitHashes,
     ordersCount: orders.length,
     visitsCount: visits.length,
     locationSummaries,
