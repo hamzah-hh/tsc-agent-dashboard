@@ -420,6 +420,7 @@ export function AgentView({ officialEmail, getIdToken, onBack }: AgentViewProps)
         )
       ) : activeTab === 'actual' ? (
         <ActualTab
+          getIdToken={getIdToken}
           agentRecord={agentRecord}
           plan={plan}
           cycle={activeCycle}

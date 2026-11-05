@@ -16,6 +16,7 @@ import {
   requiredPerDay,
 } from '../shared/planning';
 import { ExportCsvButton } from './ExportCsvButton';
+import { AgentBreaksSection } from './AgentBreaksSection';
 import { PRODUCTIVITY_RULES, hms } from '../shared/teamOps';
 import { csvName, csvStamp } from '../utils/csv';
 import { buildSuggestions } from '../shared/suggestions';
@@ -44,6 +45,7 @@ import { fireGoldenCelebration, fireMilestoneBurst } from '../utils/confetti';
 import { soundFx } from '../utils/audio';
 
 interface ActualTabProps {
+  getIdToken?: () => Promise<string>;
   agentRecord: AgentRecord | null;
   plan: Plan;
   cycle: Cycle;
@@ -51,7 +53,7 @@ interface ActualTabProps {
   onNavigateToTarget?: () => void;
 }
 
-export function ActualTab({ agentRecord, plan, cycle, onNavigateToSimulator, onNavigateToTarget }: ActualTabProps) {
+export function ActualTab({ getIdToken, agentRecord, plan, cycle, onNavigateToSimulator, onNavigateToTarget }: ActualTabProps) {
   // Hooks stay above every early return: when the first sync arrives and the agent taps Refresh, this
   // component goes from "No data yet" to the full screen, and a hook after the return would crash it.
   const [completedItems, setCompletedItems] = React.useState<Record<string, boolean>>({});
@@ -1165,6 +1167,14 @@ export function ActualTab({ agentRecord, plan, cycle, onNavigateToSimulator, onN
           <span className="text-xs uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 font-mono">
             11. Day on Day: Connects & Talk Time
           </span>
+          <ExportCsvButton
+            filename={csvName('call-metrics', agentRecord.name, csvStamp())}
+            disabled={dodDays.length === 0}
+            getRows={() => [
+              ['Date', 'Day', 'Unique Connects', 'Talk Time'],
+              ...dodDays.map((d) => [d.date, d.day === 0.5 ? 'Half Day' : 'Full Day', d.connects, hms(d.talkSeconds)]),
+            ]}
+          />
         </div>
         <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-4">
           Daily target: {PRODUCTIVITY_RULES.minUniqueConnectsPerDay} unique connects and {hms(PRODUCTIVITY_RULES.minTalkSecondsPerDay)} talk time (half for a half day). Red means below target.
@@ -1201,6 +1211,9 @@ export function ActualTab({ agentRecord, plan, cycle, onNavigateToSimulator, onN
           </div>
         )}
       </div>
+
+      {/* 12. Day on day: breaks */}
+      {getIdToken && <AgentBreaksSection getIdToken={getIdToken} agentName={agentRecord.name || 'agent'} />}
     </div>
   );
 }

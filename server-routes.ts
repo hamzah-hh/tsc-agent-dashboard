@@ -393,6 +393,24 @@ export function createApiApp(options: ApiOptions = {}): express.Express {
     })
   );
 
+  /** An agent's own Breaks days (the Breaks tab). Only the signed-in agent's rows are returned. */
+  api.get(
+    '/api/my-breaks',
+    route(async (req, res) => {
+      const user = await authenticate(req);
+      const { appConfig } = await ensureSeedData();
+      const identity = await identify(user.email, appConfig);
+      if (!identity || identity.role !== 'agent' || !identity.access) throw new HttpError(403, 'Agents only.');
+      const mine = normalizeEmail(identity.access.officialEmail);
+      const ops = await loadTeamOps(appConfig.activeCycleId);
+      res.set('Cache-Control', 'private, no-store');
+      return res.json({
+        breaks: ops.breaks.filter((b) => normalizeEmail(b.agentEmail) === mine),
+        updatedAt: ops.updatedAt,
+      });
+    })
+  );
+
   // ------------------------------------------------------------------ monitor (read-only, scheduled checks)
 
   /**
