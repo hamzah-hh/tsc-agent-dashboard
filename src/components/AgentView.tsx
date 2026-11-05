@@ -17,6 +17,7 @@ import { AgentLeaderboardTab } from './AgentLeaderboardTab';
 import { TeamRevenueTab } from './TeamRevenueTab';
 import { RawDataView } from './RawDataView';
 import { DayOnDayView } from './DayOnDayView';
+import { CallMetricsTab } from './CallMetricsTab';
 import { StaleBanner } from './StaleBanner';
 import { calculateProjection, calculateRemainingWorkingDays } from '../shared/planning';
 import {
@@ -33,6 +34,7 @@ import {
   TrendingUp,
   FileSpreadsheet,
   CalendarDays,
+  PhoneCall,
 } from 'lucide-react';
 import { soundFx } from '../utils/audio';
 
@@ -43,7 +45,7 @@ interface AgentViewProps {
 }
 
 export function AgentView({ officialEmail, getIdToken, onBack }: AgentViewProps) {
-  const [activeTab, setActiveTab] = useState<'actual' | 'target' | 'simulator' | 'leaderboard' | 'revenue' | 'rawData' | 'dod'>('actual');
+  const [activeTab, setActiveTab] = useState<'actual' | 'target' | 'simulator' | 'leaderboard' | 'revenue' | 'rawData' | 'dod' | 'metrics'>('actual');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -338,6 +340,21 @@ export function AgentView({ officialEmail, getIdToken, onBack }: AgentViewProps)
             <button
               onClick={() => {
                 soundFx.playPop();
+                setActiveTab('metrics');
+              }}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition shrink-0 ${
+                activeTab === 'metrics'
+                  ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs font-bold'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <PhoneCall className="w-3.5 h-3.5" />
+              <span className="sm:hidden">Calls</span>
+              <span className="hidden sm:inline">Call Metrics & Breaks</span>
+            </button>
+            <button
+              onClick={() => {
+                soundFx.playPop();
                 setActiveTab('rawData');
               }}
               className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition shrink-0 ${
@@ -378,6 +395,8 @@ export function AgentView({ officialEmail, getIdToken, onBack }: AgentViewProps)
           userLocation={agentRecord?.location}
           getIdToken={getIdToken}
         />
+      ) : activeTab === 'metrics' ? (
+        <CallMetricsTab agentRecord={agentRecord} getIdToken={getIdToken} showCallMetrics={!isPreSales} />
       ) : activeTab === 'dod' && !isPreSales ? (
         <DayOnDayView
           userRole="agent"
@@ -420,7 +439,6 @@ export function AgentView({ officialEmail, getIdToken, onBack }: AgentViewProps)
         )
       ) : activeTab === 'actual' ? (
         <ActualTab
-          getIdToken={getIdToken}
           agentRecord={agentRecord}
           plan={plan}
           cycle={activeCycle}
