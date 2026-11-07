@@ -5,6 +5,7 @@ import fs from 'fs';
 import path from 'path';
 import { AsyncLocalStorage } from 'async_hooks';
 import { firebaseConfig } from './src/shared/firebase-config';
+import { createPgBackend } from './server-pg';
 import { Backend, createDb, createFirestoreBackend, createLocalBackend } from './server-db';
 import { loadEnv } from './server-env';
 import { fallbackServiceAccount } from './server-service-account';
@@ -223,8 +224,13 @@ function buildBackend(): Backend {
     console.warn('[db] DB_MODE=local: using a local store, NOT Firestore. Never use this for the live app.');
     return createLocalBackend(file === 'none' ? null : file || 'local-db.json');
   }
+  if (mode === 'postgres') {
+    const url = process.env.DATABASE_URL;
+    if (!url) throw new Error('DB_MODE=postgres needs DATABASE_URL.');
+    return createPgBackend(url);
+  }
   if (mode !== 'firestore') {
-    throw new Error(`Unknown DB_MODE "${mode}". Use "firestore" (default) or "local".`);
+    throw new Error(`Unknown DB_MODE "${mode}". Use "firestore" (default), "postgres" or "local".`);
   }
 
   return createFirestoreBackend({

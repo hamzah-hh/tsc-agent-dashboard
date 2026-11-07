@@ -88,7 +88,7 @@ export interface StoredDoc {
 }
 
 export interface Backend {
-  readonly kind: 'firestore' | 'local';
+  readonly kind: 'firestore' | 'local' | 'postgres';
   /** The document's data, or null when it does not exist. Throws when the database cannot be read. */
   getDoc(path: string): Promise<any | null>;
   listDocs(collectionPath: string, query?: QueryOpts): Promise<StoredDoc[]>;
@@ -560,7 +560,7 @@ export class Db {
     return this.getBackend();
   }
 
-  get kind(): 'firestore' | 'local' {
+  get kind(): 'firestore' | 'local' | 'postgres' {
     return this.getBackend().kind;
   }
 

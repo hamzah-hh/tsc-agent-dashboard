@@ -14,3 +14,4 @@ local-db.json
 # locally or through the host's secret settings instead.
 service-account.json
 monitor-report.md
+.neon

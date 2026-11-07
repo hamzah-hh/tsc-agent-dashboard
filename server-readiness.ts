@@ -15,7 +15,7 @@ export interface ReadinessCheck {
 export interface Readiness {
   checks: ReadinessCheck[];
   facts: {
-    storage: 'firestore' | 'local';
+    storage: 'firestore' | 'local' | 'postgres';
     testMode: boolean;
     cycle: { id: string; name: string; startDate: string; endDate: string; status: string };
     realAgents: number;
@@ -57,7 +57,7 @@ export async function buildReadiness(): Promise<Readiness> {
   } else {
     try {
       await adminDb.healthCheck();
-      add('database', 'Database', 'ok', 'The server can write to and read from Firestore.');
+      add('database', 'Database', 'ok', `The server can write to and read from ${adminDb.kind === 'postgres' ? 'Postgres (Neon)' : 'Firestore'}.`);
     } catch (err: any) {
       add('database', 'Database', 'fail', err?.message || String(err));
     }
