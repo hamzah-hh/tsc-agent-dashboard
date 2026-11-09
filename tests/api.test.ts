@@ -953,6 +953,10 @@ export async function runApiTests() {
     check('breaks: seconds read ("1,784"), one row per agent-day, people not in Agents left out',
       r.status === 200 && ts.breaks.length === 2 && ciaBreak?.lunch === 1784 && ciaBreak?.total === 4511 && ciaBreak?.idleAcw === 10285 && ciaBreak?.staffed === 35024 &&
       ts.breaks.find((b: any) => b.agentEmail === 'cal@co.in')?.dayType === 0.5, JSON.stringify(ts?.breaks));
+    r = await call('GET', '/api/my-breaks', { token: tok('cia.login@gmail.com') });
+    check('an agent sees only their own breaks', r.status === 200 && r.json?.breaks?.length === 1 && r.json.breaks[0].agentEmail === 'cia@co.in' && r.json.breaks[0].total === 4511, r.text.slice(0, 300));
+    r = await call('GET', '/api/my-breaks', { token: tok(L.admin) });
+    check('staff cannot use the agent breaks route', r.status === 403, r.text);
     check('productivity: worked Dialer days only, with connects and talk seconds',
       ts.productivity.filter((d: any) => d.agentEmail === 'cia@co.in').map((d: any) => `${d.date}:${d.day}:${d.connects}:${d.talkSeconds}`).join() === '2026-10-02:1:100:6000,2026-10-03:0.5:40:1200' &&
       !ts.productivity.some((d: any) => d.agentEmail === 'cps@co.in'), JSON.stringify(ts.productivity));
