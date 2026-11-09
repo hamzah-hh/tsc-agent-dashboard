@@ -495,3 +495,11 @@ Apps Script adds `checksums: {Orders:{rows, sumOrderValue}, Dialer:{rows, sumCon
 7. **Owner:** supply the May-August files (and the answer to Q3); run the backfill dry-run, then the real run.
 8. Cron (`CRON_SECRET` in Vercel), with a first purge rehearsal on a Neon branch before 1 Dec.
 9. Retirement: `firestore.rules` deny-all (**owner** deploys the rules in the Firebase console), remove the Firestore code.
+
+---
+
+## 9. Owner answers (2026-11-09)
+- Q2: every TL and Manager may **export** CSVs; only the Super Admin (owner) may **purge**. No second approver.
+- Q3: May-August will be agent-wise incentive **summaries** supplied by the owner (no cycle dates or plans to recompute). They go into `agent_month_summary`, not through the incentive calculation.
+- Q1 (MainSheet): asked again in plain words; pending.
+- Q6 (Vercel function region): pending.
