@@ -1,9 +1,11 @@
-import confetti from 'canvas-confetti';
+// canvas-confetti loads on first use so it is not part of the first page load
+const loadConfetti = () => import('canvas-confetti').then((m) => m.default);
 import { soundFx } from './audio';
 
 export function fireGoldenCelebration() {
   soundFx.playLevelUp();
 
+  loadConfetti().then((confetti) => {
   // Burst 1: Gold & Warm Amber Diwali Sparkles
   confetti({
     particleCount: 80,
@@ -32,11 +34,12 @@ export function fireGoldenCelebration() {
       colors: ['#F59E0B', '#FBBF24', '#60A5FA'],
     });
   }, 180);
+  });
 }
 
 export function fireMilestoneBurst(originX = 0.5, originY = 0.5) {
   soundFx.playMilestone();
-  confetti({
+  loadConfetti().then((confetti) => confetti({
     particleCount: 35,
     spread: 60,
     origin: { x: originX, y: originY },
@@ -44,5 +47,5 @@ export function fireMilestoneBurst(originX = 0.5, originY = 0.5) {
     ticks: 120,
     gravity: 1.1,
     scalar: 0.9,
-  });
+  }));
 }

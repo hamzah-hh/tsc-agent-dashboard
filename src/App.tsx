@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { lazyView } from './utils/lazyView';
 import {
   onAuthStateChanged,
   signInWithPopup,
@@ -7,9 +8,9 @@ import {
 } from 'firebase/auth';
 import { auth, googleProvider } from './shared/firebase-client';
 import { setCachedSheetsToken } from './shared/sheets-auth';
-import { AgentView } from './components/AgentView';
-import { StaffPortal } from './components/StaffPortal';
-import { CohortReportView } from './components/CohortReportView';
+const AgentView = lazyView<React.ComponentProps<typeof import('./components/AgentView')['AgentView']>>(() => import('./components/AgentView'), 'AgentView');
+const StaffPortal = lazyView<React.ComponentProps<typeof import('./components/StaffPortal')['StaffPortal']>>(() => import('./components/StaffPortal'), 'StaffPortal');
+const CohortReportView = lazyView<React.ComponentProps<typeof import('./components/CohortReportView')['CohortReportView']>>(() => import('./components/CohortReportView'), 'CohortReportView');
 import { DataStatusProvider } from './components/DataStatusBar';
 import { LogIn, LogOut, ShieldAlert, Layers, AlertCircle, RefreshCw, Volume2, VolumeX, Clock, Timer } from 'lucide-react';
 import { soundFx } from './utils/audio';

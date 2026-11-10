@@ -1,12 +1,13 @@
 import React, { lazy, Suspense, useState } from 'react';
-import { TeamView } from './TeamView';
-import { Leaderboards } from './Leaderboards';
-import { SyncStatus } from './SyncStatus';
-import { AgentView } from './AgentView';
-import { RawDataView } from './RawDataView';
-import { DayOnDayView } from './DayOnDayView';
-import { TeamSummaryView } from './TeamSummaryView';
-import { CohortReportView } from './CohortReportView';
+import { lazyView } from '../utils/lazyView';
+const TeamView = lazyView<React.ComponentProps<typeof import('./TeamView')['TeamView']>>(() => import('./TeamView'), 'TeamView');
+const Leaderboards = lazyView<React.ComponentProps<typeof import('./Leaderboards')['Leaderboards']>>(() => import('./Leaderboards'), 'Leaderboards');
+const SyncStatus = lazyView<React.ComponentProps<typeof import('./SyncStatus')['SyncStatus']>>(() => import('./SyncStatus'), 'SyncStatus');
+const AgentView = lazyView<React.ComponentProps<typeof import('./AgentView')['AgentView']>>(() => import('./AgentView'), 'AgentView');
+const RawDataView = lazyView<React.ComponentProps<typeof import('./RawDataView')['RawDataView']>>(() => import('./RawDataView'), 'RawDataView');
+const DayOnDayView = lazyView<React.ComponentProps<typeof import('./DayOnDayView')['DayOnDayView']>>(() => import('./DayOnDayView'), 'DayOnDayView');
+const TeamSummaryView = lazyView<React.ComponentProps<typeof import('./TeamSummaryView')['TeamSummaryView']>>(() => import('./TeamSummaryView'), 'TeamSummaryView');
+const CohortReportView = lazyView<React.ComponentProps<typeof import('./CohortReportView')['CohortReportView']>>(() => import('./CohortReportView'), 'CohortReportView');
 
 // The Admin console (with the Excel reader) is only for the Super Admin, so it is loaded on demand and
 // never slows down the phones of agents, TLs and managers.

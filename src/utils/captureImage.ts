@@ -8,6 +8,7 @@ import { toBlob } from 'html-to-image';
  * also gets) cannot appear, and rounded cards do not clip their tables. The page itself is not touched.
  */
 export async function elementToPng(node: HTMLElement, options: { background: string; pixelRatio?: number }): Promise<Blob> {
+  const { toBlob } = await import('html-to-image');
   // The widest content inside, including what is only reachable by side scrolling on screen
   const width = Math.ceil(
     Math.max(node.scrollWidth, ...Array.from(node.querySelectorAll('table')).map((t) => t.scrollWidth + 16))

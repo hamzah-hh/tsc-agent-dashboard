@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { lazyView } from '../utils/lazyView';
 import { AgentRecord, AgentType, Cycle, Plan, PreSalesPlan } from '../shared/types';
 import {
   defaultHOPlan,
@@ -8,16 +9,16 @@ import {
   getRevenuePlan,
 } from '../shared/plans';
 import { metricsFromTotals, preSalesMetricsFromTotals } from '../shared/incentive';
-import { ActualTab } from './ActualTab';
-import { TargetTab } from './TargetTab';
-import { SimulatorTab } from './SimulatorTab';
-import { PreSalesActualTab } from './PreSalesActualTab';
-import { PreSalesSimulatorTab } from './PreSalesSimulatorTab';
-import { AgentLeaderboardTab } from './AgentLeaderboardTab';
-import { TeamRevenueTab } from './TeamRevenueTab';
-import { RawDataView } from './RawDataView';
-import { DayOnDayView } from './DayOnDayView';
-import { CallMetricsTab } from './CallMetricsTab';
+const ActualTab = lazyView<React.ComponentProps<typeof import('./ActualTab')['ActualTab']>>(() => import('./ActualTab'), 'ActualTab');
+const TargetTab = lazyView<React.ComponentProps<typeof import('./TargetTab')['TargetTab']>>(() => import('./TargetTab'), 'TargetTab');
+const SimulatorTab = lazyView<React.ComponentProps<typeof import('./SimulatorTab')['SimulatorTab']>>(() => import('./SimulatorTab'), 'SimulatorTab');
+const PreSalesActualTab = lazyView<React.ComponentProps<typeof import('./PreSalesActualTab')['PreSalesActualTab']>>(() => import('./PreSalesActualTab'), 'PreSalesActualTab');
+const PreSalesSimulatorTab = lazyView<React.ComponentProps<typeof import('./PreSalesSimulatorTab')['PreSalesSimulatorTab']>>(() => import('./PreSalesSimulatorTab'), 'PreSalesSimulatorTab');
+const AgentLeaderboardTab = lazyView<React.ComponentProps<typeof import('./AgentLeaderboardTab')['AgentLeaderboardTab']>>(() => import('./AgentLeaderboardTab'), 'AgentLeaderboardTab');
+const TeamRevenueTab = lazyView<React.ComponentProps<typeof import('./TeamRevenueTab')['TeamRevenueTab']>>(() => import('./TeamRevenueTab'), 'TeamRevenueTab');
+const RawDataView = lazyView<React.ComponentProps<typeof import('./RawDataView')['RawDataView']>>(() => import('./RawDataView'), 'RawDataView');
+const DayOnDayView = lazyView<React.ComponentProps<typeof import('./DayOnDayView')['DayOnDayView']>>(() => import('./DayOnDayView'), 'DayOnDayView');
+const CallMetricsTab = lazyView<React.ComponentProps<typeof import('./CallMetricsTab')['CallMetricsTab']>>(() => import('./CallMetricsTab'), 'CallMetricsTab');
 import { StaleBanner } from './StaleBanner';
 import { calculateProjection, calculateRemainingWorkingDays } from '../shared/planning';
 import {
