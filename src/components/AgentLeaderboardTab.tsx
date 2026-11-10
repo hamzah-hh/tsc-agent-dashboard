@@ -245,7 +245,7 @@ export function AgentLeaderboardTab({
                 HO Callers
                 <span
                   className={`ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                    activeTab === 'ho' ? 'bg-slate-950/20 text-slate-950' : 'bg-slate-800 text-slate-300'
+                    activeTab === 'ho' ? 'bg-slate-950/20 text-slate-950 dark:text-fg' : 'bg-slate-800 text-slate-300'
                   }`}
                 >
                   {data.ho.length}
@@ -267,7 +267,7 @@ export function AgentLeaderboardTab({
                 Store Callers
                 <span
                   className={`ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                    activeTab === 'store' ? 'bg-slate-950/20 text-slate-950' : 'bg-slate-800 text-slate-300'
+                    activeTab === 'store' ? 'bg-slate-950/20 text-slate-950 dark:text-fg' : 'bg-slate-800 text-slate-300'
                   }`}
                 >
                   {data.store.length}
@@ -289,7 +289,7 @@ export function AgentLeaderboardTab({
                 Pre Sales
                 <span
                   className={`ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                    activeTab === 'preSales' ? 'bg-slate-950/20 text-slate-950' : 'bg-slate-800 text-slate-300'
+                    activeTab === 'preSales' ? 'bg-slate-950/20 text-slate-950 dark:text-fg' : 'bg-slate-800 text-slate-300'
                   }`}
                 >
                   {data.preSales.length}
@@ -319,66 +319,66 @@ export function AgentLeaderboardTab({
 
       {/* Current User Quick-Rank Callout Banner */}
       {currentUserRow && (
-        <div className="bg-gradient-to-r from-amber-500/15 via-amber-500/5 to-transparent border-2 border-amber-500/40 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="bg-amber-500/10 border-2 border-amber-500/40 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
             <div className="w-12 h-12 rounded-2xl bg-amber-500 text-slate-950 font-black text-lg flex items-center justify-center font-mono shadow-md shadow-amber-500/20 shrink-0">
               #{currentUserRow.rank}
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-sm font-bold text-slate-900">Your Standing</span>
+                <span className="text-sm font-bold text-slate-900 dark:text-fg">Your Standing</span>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500 text-slate-950">
                   YOU
                 </span>
               </div>
-              <p className="text-xs text-slate-600 mt-0.5">
+              <p className="text-xs text-slate-600 dark:text-fg-2 mt-0.5">
                 {currentUserRow.name} · {currentUserRow.location} ({categoryTitle})
               </p>
             </div>
           </div>
 
           {activeTab === 'preSales' ? (
-            <div className="flex flex-wrap items-center gap-3 sm:gap-6 text-xs border-t sm:border-t-0 pt-2 sm:pt-0 border-amber-200">
+            <div className="flex flex-wrap items-center gap-3 sm:gap-6 text-xs border-t sm:border-t-0 pt-2 sm:pt-0 border-amber-200 dark:border-amber-500/30">
               <div>
-                <span className="text-[10px] uppercase font-mono text-slate-500 block">Worked Days</span>
-                <span className="font-mono font-bold text-slate-900">{currentUserRow.activeDays}</span>
+                <span className="text-[10px] uppercase font-mono text-slate-500 dark:text-slate-400 block">Worked Days</span>
+                <span className="font-mono font-bold text-slate-900 dark:text-fg">{currentUserRow.activeDays}</span>
               </div>
               <div>
-                <span className="text-[10px] uppercase font-mono text-slate-500 block">Daily Calls</span>
-                <span className="font-mono font-bold text-slate-900">{currentUserRow.avgCalls ?? 0}</span>
+                <span className="text-[10px] uppercase font-mono text-slate-500 dark:text-slate-400 block">Daily Calls</span>
+                <span className="font-mono font-bold text-slate-900 dark:text-fg">{currentUserRow.avgCalls ?? 0}</span>
               </div>
               <div>
-                <span className="text-[10px] uppercase font-mono text-slate-500 block">Daily Talk Time</span>
-                <span className="font-mono font-bold text-slate-900">
+                <span className="text-[10px] uppercase font-mono text-slate-500 dark:text-slate-400 block">Daily Talk Time</span>
+                <span className="font-mono font-bold text-slate-900 dark:text-fg">
                   {currentUserRow.avgTalkSeconds ?? 0}s ({Math.floor((currentUserRow.avgTalkSeconds ?? 0) / 60)}m {(currentUserRow.avgTalkSeconds ?? 0) % 60}s)
                 </span>
               </div>
               <div>
-                <span className="text-[10px] uppercase font-mono text-slate-500 block">Quality</span>
-                <span className="font-mono font-bold text-emerald-700">
+                <span className="text-[10px] uppercase font-mono text-slate-500 dark:text-slate-400 block">Quality</span>
+                <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">
                   {currentUserRow.qualityScore !== null ? `${round2(currentUserRow.qualityScore)}%` : '-'}
                 </span>
               </div>
             </div>
           ) : (
-            <div className="flex flex-wrap items-center gap-3 sm:gap-6 text-xs border-t sm:border-t-0 pt-2 sm:pt-0 border-amber-200">
+            <div className="flex flex-wrap items-center gap-3 sm:gap-6 text-xs border-t sm:border-t-0 pt-2 sm:pt-0 border-amber-200 dark:border-amber-500/30">
               <div>
-                <span className="text-[10px] uppercase font-mono text-slate-500 block">Orders</span>
-                <span className="font-mono font-bold text-slate-900">{currentUserRow.orders}</span>
+                <span className="text-[10px] uppercase font-mono text-slate-500 dark:text-slate-400 block">Orders</span>
+                <span className="font-mono font-bold text-slate-900 dark:text-fg">{currentUserRow.orders}</span>
               </div>
               <div>
-                <span className="text-[10px] uppercase font-mono text-slate-500 block">Revenue</span>
-                <span className="font-mono font-bold text-slate-900">{formatCurrencyINR(currentUserRow.sales)}</span>
+                <span className="text-[10px] uppercase font-mono text-slate-500 dark:text-slate-400 block">Revenue</span>
+                <span className="font-mono font-bold text-slate-900 dark:text-fg">{formatCurrencyINR(currentUserRow.sales)}</span>
               </div>
               <div>
-                <span className="text-[10px] uppercase font-mono text-slate-500 block">Achievement</span>
-                <span className="font-mono font-bold text-amber-700">
+                <span className="text-[10px] uppercase font-mono text-slate-500 dark:text-slate-400 block">Achievement</span>
+                <span className="font-mono font-bold text-amber-700 dark:text-amber-400">
                   {formatNumberINR(currentUserRow.achievementPct, 1)}%
                 </span>
               </div>
               <div>
-                <span className="text-[10px] uppercase font-mono text-slate-500 block">Class</span>
-                <span className="font-mono font-bold text-indigo-700">Class {currentUserRow.className}</span>
+                <span className="text-[10px] uppercase font-mono text-slate-500 dark:text-slate-400 block">Class</span>
+                <span className="font-mono font-bold text-indigo-700 dark:text-indigo-400">Class {currentUserRow.className}</span>
               </div>
             </div>
           )}
@@ -387,22 +387,22 @@ export function AgentLeaderboardTab({
 
       {/* Location Revenue Overview as shown in the sheet */}
       {locationRevenue && activeTab !== 'preSales' && (
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+        <div className="bg-white dark:bg-panel border border-slate-200 dark:border-line rounded-2xl p-5 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-line">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center font-bold">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold">
                 <Building2 className="w-5 h-5" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h3 className="text-base font-black text-slate-900">
+                  <h3 className="text-base font-black text-slate-900 dark:text-fg">
                     Location Revenue — {locationRevenue.location}
                   </h3>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-100 dark:bg-hover text-slate-700 dark:text-fg-2 border border-slate-200 dark:border-line">
                     Master Sheet Sync
                   </span>
                 </div>
-                <p className="text-xs text-slate-500 mt-0.5">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                   Official revenue performance and channel attribution for {locationRevenue.location}
                 </p>
               </div>
@@ -411,16 +411,16 @@ export function AgentLeaderboardTab({
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setShowFullStructure(!showFullStructure)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold border border-slate-200 transition"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-raised hover:bg-slate-100 text-slate-700 dark:text-fg-2 text-xs font-bold border border-slate-200 dark:border-line transition"
               >
                 {showFullStructure ? (
                   <>
-                    <ChevronUp className="w-4 h-4 text-slate-500" />
+                    <ChevronUp className="w-4 h-4 text-slate-500 dark:text-slate-400" />
                     Hide Structure Table
                   </>
                 ) : (
                   <>
-                    <ChevronDown className="w-4 h-4 text-slate-500" />
+                    <ChevronDown className="w-4 h-4 text-slate-500 dark:text-slate-400" />
                     View Channel Breakdown Table
                   </>
                 )}
@@ -430,38 +430,38 @@ export function AgentLeaderboardTab({
 
           {/* Metric KPI Chips */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100">
-              <span className="text-[11px] font-mono font-bold text-slate-500 uppercase block mb-1">
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-raised border border-slate-100 dark:border-line">
+              <span className="text-[11px] font-mono font-bold text-slate-500 dark:text-slate-400 uppercase block mb-1">
                 Total Revenue
               </span>
-              <span className="text-lg font-black text-slate-900 font-mono">
+              <span className="text-lg font-black text-slate-900 dark:text-fg font-mono">
                 {formatCurrencyINR(locationRevenue.totalRevenue)}
               </span>
             </div>
 
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100">
-              <span className="text-[11px] font-mono font-bold text-slate-500 uppercase block mb-1">
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-raised border border-slate-100 dark:border-line">
+              <span className="text-[11px] font-mono font-bold text-slate-500 dark:text-slate-400 uppercase block mb-1">
                 Total Orders
               </span>
-              <span className="text-lg font-black text-slate-900 font-mono">
+              <span className="text-lg font-black text-slate-900 dark:text-fg font-mono">
                 {locationRevenue.totalOrders}
               </span>
             </div>
 
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100">
-              <span className="text-[11px] font-mono font-bold text-slate-500 uppercase block mb-1">
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-raised border border-slate-100 dark:border-line">
+              <span className="text-[11px] font-mono font-bold text-slate-500 dark:text-slate-400 uppercase block mb-1">
                 Location AOV
               </span>
-              <span className="text-lg font-black text-slate-900 font-mono">
+              <span className="text-lg font-black text-slate-900 dark:text-fg font-mono">
                 {formatCurrencyINR(locationRevenue.aov)}
               </span>
             </div>
 
-            <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200/60">
-              <span className="text-[11px] font-mono font-bold text-amber-800 uppercase block mb-1">
+            <div className="p-3.5 rounded-xl bg-amber-50/70 dark:bg-amber-500/10 border border-amber-200/60 dark:border-amber-500/30">
+              <span className="text-[11px] font-mono font-bold text-amber-800 dark:text-amber-400 uppercase block mb-1">
                 Active Callers
               </span>
-              <span className="text-lg font-black text-amber-900 font-mono">
+              <span className="text-lg font-black text-amber-900 dark:text-amber-400 font-mono">
                 {locationRevenue.rows.length} Callers
               </span>
             </div>
@@ -469,70 +469,70 @@ export function AgentLeaderboardTab({
 
           {/* Channel Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
-            <div className="p-3 rounded-xl bg-indigo-50/60 border border-indigo-100 flex items-center justify-between">
+            <div className="p-3 rounded-xl bg-indigo-50/60 dark:bg-indigo-500/10 border border-indigo-100 dark:border-indigo-500/30 flex items-center justify-between">
               <div>
-                <span className="text-[10px] font-mono uppercase font-bold text-indigo-700 block">
+                <span className="text-[10px] font-mono uppercase font-bold text-indigo-700 dark:text-indigo-400 block">
                   1. Shopify
                 </span>
-                <span className="text-sm font-black text-slate-900 font-mono block mt-0.5">
+                <span className="text-sm font-black text-slate-900 dark:text-fg font-mono block mt-0.5">
                   {formatCurrencyINR(locationRevenue.categories.shopify.sales)}
                 </span>
-                <span className="text-[10px] text-slate-500 font-mono">
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
                   {locationRevenue.categories.shopify.orders} Orders
                 </span>
               </div>
-              <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center">
+              <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-500/15 text-indigo-700 dark:text-indigo-400 flex items-center justify-center">
                 <ShoppingBag className="w-4 h-4" />
               </div>
             </div>
 
-            <div className="p-3 rounded-xl bg-emerald-50/60 border border-emerald-100 flex items-center justify-between">
+            <div className="p-3 rounded-xl bg-emerald-50/60 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/30 flex items-center justify-between">
               <div>
-                <span className="text-[10px] font-mono uppercase font-bold text-emerald-700 block">
+                <span className="text-[10px] font-mono uppercase font-bold text-emerald-700 dark:text-emerald-400 block">
                   2. Alt Number
                 </span>
-                <span className="text-sm font-black text-slate-900 font-mono block mt-0.5">
+                <span className="text-sm font-black text-slate-900 dark:text-fg font-mono block mt-0.5">
                   {formatCurrencyINR(locationRevenue.categories.bfan.sales)}
                 </span>
-                <span className="text-[10px] text-slate-500 font-mono">
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
                   {locationRevenue.categories.bfan.orders} Orders
                 </span>
               </div>
-              <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
+              <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 flex items-center justify-center">
                 <Smartphone className="w-4 h-4" />
               </div>
             </div>
 
-            <div className="p-3 rounded-xl bg-purple-50/60 border border-purple-100 flex items-center justify-between">
+            <div className="p-3 rounded-xl bg-purple-50/60 dark:bg-purple-500/10 border border-purple-100 dark:border-purple-500/30 flex items-center justify-between">
               <div>
-                <span className="text-[10px] font-mono uppercase font-bold text-purple-700 block">
+                <span className="text-[10px] font-mono uppercase font-bold text-purple-700 dark:text-purple-400 block">
                   3. Marketplace
                 </span>
-                <span className="text-sm font-black text-slate-900 font-mono block mt-0.5">
+                <span className="text-sm font-black text-slate-900 dark:text-fg font-mono block mt-0.5">
                   {formatCurrencyINR(locationRevenue.categories.bfmp.sales)}
                 </span>
-                <span className="text-[10px] text-slate-500 font-mono">
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
                   {locationRevenue.categories.bfmp.orders} Orders
                 </span>
               </div>
-              <div className="w-8 h-8 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center">
+              <div className="w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-500/15 text-purple-700 dark:text-purple-400 flex items-center justify-center">
                 <Layers className="w-4 h-4" />
               </div>
             </div>
 
-            <div className="p-3 rounded-xl bg-amber-50/60 border border-amber-100 flex items-center justify-between">
+            <div className="p-3 rounded-xl bg-amber-50/60 dark:bg-amber-500/10 border border-amber-100 dark:border-amber-500/30 flex items-center justify-between">
               <div>
-                <span className="text-[10px] font-mono uppercase font-bold text-amber-700 block">
+                <span className="text-[10px] font-mono uppercase font-bold text-amber-700 dark:text-amber-400 block">
                   4. POS OC ALT
                 </span>
-                <span className="text-sm font-black text-slate-900 font-mono block mt-0.5">
+                <span className="text-sm font-black text-slate-900 dark:text-fg font-mono block mt-0.5">
                   {formatCurrencyINR(locationRevenue.categories.posoc.sales)}
                 </span>
-                <span className="text-[10px] text-slate-500 font-mono">
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
                   {locationRevenue.categories.posoc.orders} Orders
                 </span>
               </div>
-              <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center">
+              <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400 flex items-center justify-center">
                 <Store className="w-4 h-4" />
               </div>
             </div>
@@ -540,9 +540,9 @@ export function AgentLeaderboardTab({
 
           {/* Expandable Revenue Table Structure */}
           {showFullStructure && (
-            <div className="mt-4 pt-4 border-t border-slate-100 overflow-x-auto">
+            <div className="mt-4 pt-4 border-t border-slate-100 dark:border-line overflow-x-auto">
               <div className="flex items-center justify-between mb-2">
-                <h4 className="text-xs font-mono uppercase tracking-wider font-bold text-slate-700">
+                <h4 className="text-xs font-mono uppercase tracking-wider font-bold text-slate-700 dark:text-fg-2">
                   Revenue Table Structure ({locationRevenue.location})
                 </h4>
                 <span className="flex items-center gap-2">
@@ -559,7 +559,7 @@ export function AgentLeaderboardTab({
               </div>
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-mono uppercase tracking-wider text-slate-500 font-bold">
+                  <tr className="bg-slate-50 dark:bg-raised border-b border-slate-200 dark:border-line text-[10px] font-mono uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold">
                     <th className="py-2.5 px-3">Agent</th>
                     <th className="py-2.5 px-3 text-right">Shopify Orders</th>
                     <th className="py-2.5 px-3 text-right">Shopify Revenue</th>
@@ -574,13 +574,13 @@ export function AgentLeaderboardTab({
                     <th className="py-2.5 px-3 text-right">AOV</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 font-mono">
+                <tbody className="divide-y divide-slate-100 dark:divide-line font-mono">
                   {locationRevenue.rows.map((r) => {
                     const isCurrent = r.agentEmail.toLowerCase() === currentAgentEmail.toLowerCase();
                     return (
                       <tr
                         key={r.agentEmail}
-                        className={isCurrent ? 'bg-amber-50 font-bold border-l-4 border-l-amber-500' : 'hover:bg-slate-50'}
+                        className={isCurrent ? 'bg-amber-50 dark:bg-amber-500/10 font-bold border-l-4 border-l-amber-500' : 'hover:bg-slate-50'}
                       >
                         <td className="py-2 px-3 whitespace-nowrap">
                           <span>{r.agentEmail}</span>
@@ -598,14 +598,14 @@ export function AgentLeaderboardTab({
                         <td className="py-2 px-3 text-right">{formatCurrencyINR(r.mpRevenue)}</td>
                         <td className="py-2 px-3 text-right">{r.posOrders}</td>
                         <td className="py-2 px-3 text-right">{formatCurrencyINR(r.posRevenue)}</td>
-                        <td className="py-2 px-3 text-right font-black text-slate-900">{r.totalOrders}</td>
-                        <td className="py-2 px-3 text-right font-black text-slate-900">{formatCurrencyINR(r.totalRevenue)}</td>
+                        <td className="py-2 px-3 text-right font-black text-slate-900 dark:text-fg">{r.totalOrders}</td>
+                        <td className="py-2 px-3 text-right font-black text-slate-900 dark:text-fg">{formatCurrencyINR(r.totalRevenue)}</td>
                         <td className="py-2 px-3 text-right">{formatCurrencyINR(r.aov)}</td>
                       </tr>
                     );
                   })}
                   {/* Total Row */}
-                  <tr className="bg-slate-100/80 font-black border-t-2 border-slate-300 text-slate-900">
+                  <tr className="bg-slate-100/80 dark:bg-hover/80 font-black border-t-2 border-slate-300 dark:border-line-strong text-slate-900 dark:text-fg">
                     <td className="py-2.5 px-3">Total ({locationRevenue.location})</td>
                     <td className="py-2.5 px-3 text-right">{locationRevenue.categories.shopify.orders}</td>
                     <td className="py-2.5 px-3 text-right">{formatCurrencyINR(locationRevenue.categories.shopify.sales)}</td>
@@ -615,8 +615,8 @@ export function AgentLeaderboardTab({
                     <td className="py-2.5 px-3 text-right">{formatCurrencyINR(locationRevenue.categories.bfmp.sales)}</td>
                     <td className="py-2.5 px-3 text-right">{locationRevenue.categories.posoc.orders}</td>
                     <td className="py-2.5 px-3 text-right">{formatCurrencyINR(locationRevenue.categories.posoc.sales)}</td>
-                    <td className="py-2.5 px-3 text-right text-amber-900">{locationRevenue.totalOrders}</td>
-                    <td className="py-2.5 px-3 text-right text-amber-900">{formatCurrencyINR(locationRevenue.totalRevenue)}</td>
+                    <td className="py-2.5 px-3 text-right text-amber-900 dark:text-amber-400">{locationRevenue.totalOrders}</td>
+                    <td className="py-2.5 px-3 text-right text-amber-900 dark:text-amber-400">{formatCurrencyINR(locationRevenue.totalRevenue)}</td>
                     <td className="py-2.5 px-3 text-right">{formatCurrencyINR(locationRevenue.aov)}</td>
                   </tr>
                 </tbody>
@@ -627,15 +627,15 @@ export function AgentLeaderboardTab({
       )}
 
       {/* Main Leaderboard Table */}
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
+      <div className="bg-white dark:bg-panel border border-slate-200 dark:border-line rounded-2xl shadow-xs overflow-hidden">
         {loading ? (
           <div className="py-20 text-center">
             <div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-            <p className="text-xs font-semibold text-slate-500">Loading standings...</p>
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Loading standings...</p>
           </div>
         ) : error ? (
           <div className="p-8 text-center">
-            <p className="text-xs text-rose-600 font-semibold mb-3">{error}</p>
+            <p className="text-xs text-rose-600 dark:text-rose-400 font-semibold mb-3">{error}</p>
             <button
               onClick={() => fetchLeaderboards()}
               className="px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-bold"
@@ -644,10 +644,10 @@ export function AgentLeaderboardTab({
             </button>
           </div>
         ) : filteredList.length === 0 ? (
-          <div className="py-16 text-center text-slate-500">
+          <div className="py-16 text-center text-slate-500 dark:text-slate-400">
             <Trophy className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-            <p className="text-sm font-bold text-slate-700">No callers found</p>
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="text-sm font-bold text-slate-700 dark:text-fg-2">No callers found</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
               {search ? 'Try clearing your search query.' : 'No data recorded yet for this category.'}
             </p>
           </div>
@@ -656,7 +656,7 @@ export function AgentLeaderboardTab({
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-mono uppercase tracking-wider text-slate-500 font-semibold">
+                <tr className="bg-slate-50 dark:bg-raised border-b border-slate-200 dark:border-line text-[11px] font-mono uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
                   <th className="py-3 px-4 w-14 text-center">Rank</th>
                   <th className="py-3 px-4">Caller</th>
                   <th className="py-3 px-3">Location</th>
@@ -667,7 +667,7 @@ export function AgentLeaderboardTab({
                   <th className="py-3 px-4 text-center">Quality Gate (≥85)</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-xs">
+              <tbody className="divide-y divide-slate-100 dark:divide-line text-xs">
                 {filteredList.map((row) => {
                   const isCurrent =
                     row.isCurrentAgent || row.officialEmail.toLowerCase() === currentAgentEmail.toLowerCase();
@@ -681,7 +681,7 @@ export function AgentLeaderboardTab({
                       key={row.officialEmail}
                       className={`transition-colors ${
                         isCurrent
-                          ? 'bg-amber-50/80 font-medium hover:bg-amber-100/70 border-l-4 border-l-amber-500'
+                          ? 'bg-amber-50/80 dark:bg-amber-500/10 font-medium hover:bg-amber-100/70 border-l-4 border-l-amber-500'
                           : 'hover:bg-slate-50/80'
                       }`}
                     >
@@ -692,7 +692,7 @@ export function AgentLeaderboardTab({
                             <Crown className="w-4 h-4" />
                           </div>
                         ) : isTop2 ? (
-                          <div className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-slate-300 text-slate-900 font-bold shadow-xs">
+                          <div className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-slate-300 text-slate-900 dark:text-fg font-bold shadow-xs">
                             2
                           </div>
                         ) : isTop3 ? (
@@ -700,14 +700,14 @@ export function AgentLeaderboardTab({
                             3
                           </div>
                         ) : (
-                          <span className="text-slate-500 font-bold">#{row.rank}</span>
+                          <span className="text-slate-500 dark:text-slate-400 font-bold">#{row.rank}</span>
                         )}
                       </td>
 
                       {/* Name */}
                       <td className="py-3.5 px-4">
                         <div className="flex items-center gap-2">
-                          <span className={`font-bold ${isCurrent ? 'text-amber-900' : 'text-slate-900'}`}>
+                          <span className={`font-bold ${isCurrent ? 'text-amber-900 dark:text-amber-400' : 'text-slate-900 dark:text-fg'}`}>
                             {row.name}
                           </span>
                           {isCurrent && (
@@ -720,7 +720,7 @@ export function AgentLeaderboardTab({
                       </td>
 
                       {/* Location */}
-                      <td className="py-3.5 px-3 font-medium text-slate-600 whitespace-nowrap">
+                      <td className="py-3.5 px-3 font-medium text-slate-600 dark:text-fg-2 whitespace-nowrap">
                         <span className="inline-flex items-center gap-1">
                           <MapPin className="w-3 h-3 text-slate-400" />
                           {row.location}
@@ -728,22 +728,22 @@ export function AgentLeaderboardTab({
                       </td>
 
                       {/* Worked Days */}
-                      <td className="py-3.5 px-3 text-center font-mono text-slate-600">
+                      <td className="py-3.5 px-3 text-center font-mono text-slate-600 dark:text-fg-2">
                         {row.activeDays}
                       </td>
 
                       {/* Calls */}
                       <td className="py-3.5 px-4 text-right font-mono whitespace-nowrap">
                         <div className="inline-flex items-center gap-1.5">
-                          <span className="font-bold text-slate-900">{row.avgCalls ?? 0}</span>
+                          <span className="font-bold text-slate-900 dark:text-fg">{row.avgCalls ?? 0}</span>
                           {(row.callsTier ?? 0) > 0 ? (
                             <span
                               className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
                                 (row.callsTier ?? 0) >= 3
-                                  ? 'bg-emerald-100 text-emerald-800'
+                                  ? 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-800 dark:text-emerald-400'
                                   : (row.callsTier ?? 0) === 2
-                                  ? 'bg-blue-100 text-blue-800'
-                                  : 'bg-indigo-100 text-indigo-800'
+                                  ? 'bg-blue-100 dark:bg-blue-500/15 text-blue-800 dark:text-blue-400'
+                                  : 'bg-indigo-100 dark:bg-indigo-500/15 text-indigo-800 dark:text-indigo-400'
                               }`}
                             >
                               Tier {row.callsTier}
@@ -757,17 +757,17 @@ export function AgentLeaderboardTab({
                       {/* Talk Time */}
                       <td className="py-3.5 px-4 text-right font-mono whitespace-nowrap">
                         <div className="inline-flex items-center gap-1.5">
-                          <span className="font-bold text-slate-900">
+                          <span className="font-bold text-slate-900 dark:text-fg">
                             {row.avgTalkSeconds ?? 0}s ({Math.floor((row.avgTalkSeconds ?? 0) / 60)}m {(row.avgTalkSeconds ?? 0) % 60}s)
                           </span>
                           {(row.talkTier ?? 0) > 0 ? (
                             <span
                               className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
                                 (row.talkTier ?? 0) >= 3
-                                  ? 'bg-emerald-100 text-emerald-800'
+                                  ? 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-800 dark:text-emerald-400'
                                   : (row.talkTier ?? 0) === 2
-                                  ? 'bg-blue-100 text-blue-800'
-                                  : 'bg-indigo-100 text-indigo-800'
+                                  ? 'bg-blue-100 dark:bg-blue-500/15 text-blue-800 dark:text-blue-400'
+                                  : 'bg-indigo-100 dark:bg-indigo-500/15 text-indigo-800 dark:text-indigo-400'
                               }`}
                             >
                               Tier {row.talkTier}
@@ -783,7 +783,7 @@ export function AgentLeaderboardTab({
                         {row.qualityScore !== null ? (
                           <span
                             className={`font-semibold ${
-                              row.qualityScore >= 85 ? 'text-emerald-700' : 'text-rose-600'
+                              row.qualityScore >= 85 ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
                             }`}
                           >
                             {round2(row.qualityScore)}%
@@ -796,12 +796,12 @@ export function AgentLeaderboardTab({
                       {/* Quality Gate */}
                       <td className="py-3.5 px-4 text-center whitespace-nowrap font-mono text-[11px]">
                         {gateMet ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold border border-emerald-200">
-                            <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-500/15 text-emerald-800 dark:text-emerald-400 font-bold border border-emerald-200 dark:border-emerald-500/30">
+                            <ShieldCheck className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
                             Gate Met
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-semibold border border-slate-200">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 dark:bg-hover text-slate-600 dark:text-fg-2 font-semibold border border-slate-200 dark:border-line">
                             Locked (&lt;85%)
                           </span>
                         )}
@@ -817,7 +817,7 @@ export function AgentLeaderboardTab({
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-mono uppercase tracking-wider text-slate-500 font-semibold">
+                <tr className="bg-slate-50 dark:bg-raised border-b border-slate-200 dark:border-line text-[11px] font-mono uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
                   <th className="py-3 px-4 w-14 text-center">Rank</th>
                   <th className="py-3 px-4">Caller</th>
                   <th className="py-3 px-3">Location</th>
@@ -833,7 +833,7 @@ export function AgentLeaderboardTab({
                   <th className="py-3 px-4 text-right">Store Footfalls</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-xs">
+              <tbody className="divide-y divide-slate-100 dark:divide-line text-xs">
                 {filteredList.map((row) => {
                   const isCurrent =
                     row.isCurrentAgent || row.officialEmail.toLowerCase() === currentAgentEmail.toLowerCase();
@@ -846,7 +846,7 @@ export function AgentLeaderboardTab({
                       key={row.officialEmail}
                       className={`transition-colors ${
                         isCurrent
-                          ? 'bg-amber-50/80 font-medium hover:bg-amber-100/70 border-l-4 border-l-amber-500'
+                          ? 'bg-amber-50/80 dark:bg-amber-500/10 font-medium hover:bg-amber-100/70 border-l-4 border-l-amber-500'
                           : 'hover:bg-slate-50/80'
                       }`}
                     >
@@ -857,7 +857,7 @@ export function AgentLeaderboardTab({
                             <Crown className="w-4 h-4" />
                           </div>
                         ) : isTop2 ? (
-                          <div className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-slate-300 text-slate-900 font-bold shadow-xs">
+                          <div className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-slate-300 text-slate-900 dark:text-fg font-bold shadow-xs">
                             2
                           </div>
                         ) : isTop3 ? (
@@ -865,14 +865,14 @@ export function AgentLeaderboardTab({
                             3
                           </div>
                         ) : (
-                          <span className="text-slate-500 font-bold">#{row.rank}</span>
+                          <span className="text-slate-500 dark:text-slate-400 font-bold">#{row.rank}</span>
                         )}
                       </td>
 
                       {/* Name */}
                       <td className="py-3.5 px-4">
                         <div className="flex items-center gap-2">
-                          <span className={`font-bold ${isCurrent ? 'text-amber-900' : 'text-slate-900'}`}>
+                          <span className={`font-bold ${isCurrent ? 'text-amber-900 dark:text-amber-400' : 'text-slate-900 dark:text-fg'}`}>
                             {row.name}
                           </span>
                           {isCurrent && (
@@ -885,7 +885,7 @@ export function AgentLeaderboardTab({
                       </td>
 
                       {/* Location */}
-                      <td className="py-3.5 px-3 font-medium text-slate-600 whitespace-nowrap">
+                      <td className="py-3.5 px-3 font-medium text-slate-600 dark:text-fg-2 whitespace-nowrap">
                         <span className="inline-flex items-center gap-1">
                           <MapPin className="w-3 h-3 text-slate-400" />
                           {row.location}
@@ -893,19 +893,19 @@ export function AgentLeaderboardTab({
                       </td>
 
                       {/* Orders */}
-                      <td className="py-3.5 px-3 text-right font-mono font-bold text-slate-800">
+                      <td className="py-3.5 px-3 text-right font-mono font-bold text-slate-800 dark:text-fg">
                         {row.orders}
                       </td>
 
                       {/* Net Revenue */}
-                      <td className="py-3.5 px-4 text-right font-mono font-bold text-slate-900 whitespace-nowrap">
+                      <td className="py-3.5 px-4 text-right font-mono font-bold text-slate-900 dark:text-fg whitespace-nowrap">
                         {formatCurrencyINR(row.sales)}
                       </td>
 
                       {/* Target Achieved */}
                       <td className="py-3.5 px-3 text-right font-mono font-semibold whitespace-nowrap">
                         <div className="inline-flex flex-col items-end">
-                          <span className={row.achievementPct >= 100 ? 'text-emerald-600 font-bold' : 'text-slate-700'}>
+                          <span className={row.achievementPct >= 100 ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-700 dark:text-fg-2'}>
                             {formatNumberINR(row.achievementPct, 1)}%
                           </span>
                         </div>
@@ -916,14 +916,14 @@ export function AgentLeaderboardTab({
                         <span
                           className={`inline-block px-2 py-0.5 rounded text-[11px] font-bold ${
                             row.className === 'D'
-                              ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                              ? 'bg-amber-100 dark:bg-amber-500/15 text-amber-900 dark:text-amber-400 border border-amber-300 dark:border-amber-500/30'
                               : row.className === 'C'
-                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                              ? 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-800 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-500/30'
                               : row.className === 'B'
-                              ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                              ? 'bg-blue-100 dark:bg-blue-500/15 text-blue-800 dark:text-blue-400 border border-blue-300 dark:border-blue-500/30'
                               : row.className === 'A'
-                              ? 'bg-slate-100 text-slate-800 border border-slate-300'
-                              : 'bg-rose-50 text-rose-700 border border-rose-200'
+                              ? 'bg-slate-100 dark:bg-hover text-slate-800 dark:text-fg border border-slate-300 dark:border-line-strong'
+                              : 'bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-500/30'
                           }`}
                         >
                           Class {row.className}
@@ -931,22 +931,22 @@ export function AgentLeaderboardTab({
                       </td>
 
                       {/* AOV */}
-                      <td className="py-3.5 px-3 text-right font-mono text-slate-600 whitespace-nowrap">
+                      <td className="py-3.5 px-3 text-right font-mono text-slate-600 dark:text-fg-2 whitespace-nowrap">
                         {formatCurrencyINR(row.aov)}
                       </td>
 
                       {/* Worked Days */}
-                      <td className="py-3.5 px-3 text-center font-mono text-slate-600">
+                      <td className="py-3.5 px-3 text-center font-mono text-slate-600 dark:text-fg-2">
                         {row.activeDays}
                       </td>
 
                       {/* Connects */}
-                      <td className="py-3.5 px-3 text-right font-mono text-slate-700">
+                      <td className="py-3.5 px-3 text-right font-mono text-slate-700 dark:text-fg-2">
                         {row.avgConnects}/day
                       </td>
 
                       {/* Talk Time */}
-                      <td className="py-3.5 px-3 text-right font-mono text-slate-700">
+                      <td className="py-3.5 px-3 text-right font-mono text-slate-700 dark:text-fg-2">
                         {row.avgTalkMinutes}m/day
                       </td>
 
@@ -955,7 +955,7 @@ export function AgentLeaderboardTab({
                         {row.qualityScore !== null ? (
                           <span
                             className={`font-semibold ${
-                              row.qualityScore >= 85 ? 'text-emerald-700' : 'text-slate-600'
+                              row.qualityScore >= 85 ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-600 dark:text-fg-2'
                             }`}
                           >
                             {round2(row.qualityScore)}%
@@ -966,7 +966,7 @@ export function AgentLeaderboardTab({
                       </td>
 
                       {/* Store Visits Attributed */}
-                      <td className="py-3.5 px-4 text-right font-mono font-semibold text-slate-700">
+                      <td className="py-3.5 px-4 text-right font-mono font-semibold text-slate-700 dark:text-fg-2">
                         {row.visitsAttributed}
                       </td>
                     </tr>
@@ -977,9 +977,9 @@ export function AgentLeaderboardTab({
           </div>
         )}
 
-        <div className="bg-slate-50 border-t border-slate-200 px-4 py-3 flex items-center justify-between text-[11px] text-slate-500 font-mono">
+        <div className="bg-slate-50 dark:bg-raised border-t border-slate-200 dark:border-line px-4 py-3 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 font-mono">
           <span>Ranked by Overall Incentive Payout descending</span>
-          <span className="flex items-center gap-1.5 text-emerald-700 font-semibold">
+          <span className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-semibold">
             <CheckCircle className="w-3.5 h-3.5" /> Exact Payout Figures Confidential
           </span>
         </div>

@@ -46,7 +46,7 @@ export const TierSlabSection: React.FC<TierSlabSectionProps> = ({
   const firstQualifyingPct = displayClasses.find((c) => c.abovePct > 0)?.abovePct ?? 0;
 
   return (
-    <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200/90 dark:border-slate-800 rounded-3xl p-6 sm:p-7 shadow-xs space-y-6 relative overflow-hidden transition-colors duration-200">
+    <div className="bg-white/95 dark:bg-slate-900/95 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-6 sm:p-7 shadow-xs space-y-6 relative overflow-hidden transition-colors duration-200">
       {/* Ambient background decoration */}
       <div className="absolute top-0 right-0 w-80 h-80 bg-amber-500/5 dark:bg-amber-400/5 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute -bottom-10 -left-10 w-60 h-60 bg-indigo-500/5 dark:bg-indigo-400/5 rounded-full blur-3xl pointer-events-none" />

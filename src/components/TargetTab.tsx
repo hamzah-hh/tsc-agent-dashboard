@@ -110,9 +110,9 @@ export const TargetTab: React.FC<TargetTabProps> = ({
   return (
     <div className="space-y-6">
       {/* 1. Master Target Overview Banner (Executive Fintech Finish) */}
-      <div className="bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 text-white rounded-3xl p-6 sm:p-8 border border-amber-500/30 shadow-[0_15px_45px_rgba(0,0,0,0.35)] relative overflow-hidden">
+      <div className="bg-slate-900 dark:bg-raised text-white rounded-3xl p-6 sm:p-8 border border-amber-500/30 relative overflow-hidden">
         {/* Ambient Corner Lighting */}
-        <div className="absolute top-0 right-0 w-80 h-80 bg-gradient-to-bl from-amber-400/20 via-amber-500/5 to-transparent rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute top-0 right-0 w-80 h-80 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute -bottom-10 -left-10 w-60 h-60 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
 
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
@@ -123,14 +123,14 @@ export const TargetTab: React.FC<TargetTabProps> = ({
                 <Target className="w-4 h-4" />
                 Cycle Target Console · {activeCycleTitle(cycle.name)}
               </span>
-              <span className="text-xs font-mono font-bold px-2.5 py-0.5 rounded-full bg-white/10 text-slate-200 border border-white/15">
+              <span className="text-xs font-mono font-bold px-2.5 py-0.5 rounded-full bg-white/10 dark:bg-panel/10 text-slate-200 border border-white/15">
                 {tierDisplayName}
               </span>
             </div>
 
             <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight text-white flex items-baseline gap-3 flex-wrap">
               <span>Target:</span>
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-yellow-100 to-amber-300 font-mono filter drop-shadow-[0_2px_10px_rgba(245,158,11,0.3)]">
+              <span className="text-amber-300 dark:text-amber-300 font-mono filter">
                 {formatCurrencyINR(targetSales)}
               </span>
             </h2>
@@ -201,7 +201,7 @@ export const TargetTab: React.FC<TargetTabProps> = ({
           <div className="relative pt-6 pb-7">
             <div className="w-full h-3.5 bg-slate-800/90 rounded-full overflow-visible p-0.5 border border-white/10">
               <div
-                className="h-full bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-300 rounded-full transition-all duration-700 shadow-[0_0_12px_rgba(251,191,36,0.5)]"
+                className="h-full bg-amber-500 rounded-full transition-all duration-700"
                 style={{ width: `${Math.min(100, (targetAchievedPct / scaleMax) * 100)}%` }}
               />
 
@@ -237,7 +237,7 @@ export const TargetTab: React.FC<TargetTabProps> = ({
 
         {/* Quick Trajectory Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6 pt-6 border-t border-white/10">
-          <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10">
+          <div className="p-3.5 rounded-2xl bg-white/5 dark:bg-panel/5 border border-white/10">
             <span className="text-[11px] font-mono text-slate-400 block mb-1">Current Daily Average</span>
             <div className="text-lg font-black font-mono text-white">
               {formatCurrencyINR(Math.round(currentDailyAvg))}
@@ -248,7 +248,7 @@ export const TargetTab: React.FC<TargetTabProps> = ({
             </span>
           </div>
 
-          <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10">
+          <div className="p-3.5 rounded-2xl bg-white/5 dark:bg-panel/5 border border-white/10">
             <span className="text-[11px] font-mono text-slate-400 block mb-1">Required for 100% Target</span>
             <div className="text-lg font-black font-mono text-amber-300">
               {isTargetMet ? (
@@ -267,7 +267,7 @@ export const TargetTab: React.FC<TargetTabProps> = ({
             </span>
           </div>
 
-          <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10">
+          <div className="p-3.5 rounded-2xl bg-white/5 dark:bg-panel/5 border border-white/10">
             <span className="text-[11px] font-mono text-slate-400 block mb-1">
               Required for {nextClass ? `Class ${nextClass.name} Target` : 'the top class'}
             </span>
@@ -291,7 +291,7 @@ export const TargetTab: React.FC<TargetTabProps> = ({
       </div>
 
       {/* 2. Target Slabs Matrix: Class-by-Class Milestones */}
-      <div className="bg-white/95 dark:bg-slate-900/90 backdrop-blur-md border border-slate-200/90 dark:border-slate-800 rounded-3xl p-6 sm:p-7 shadow-xs space-y-5">
+      <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-6 sm:p-7 shadow-xs space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
           <div>
             <div className="flex items-center gap-2">
@@ -443,7 +443,7 @@ export const TargetTab: React.FC<TargetTabProps> = ({
       </div>
 
       {/* 3. Operational & KPI Targets Matrix */}
-      <div className="bg-white/95 dark:bg-slate-900/90 backdrop-blur-sm border border-slate-200/90 dark:border-slate-800 rounded-3xl p-6 sm:p-7 shadow-xs space-y-5">
+      <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-6 sm:p-7 shadow-xs space-y-5">
         <div className="border-b border-slate-100 dark:border-slate-800 pb-3">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
@@ -565,7 +565,7 @@ export const TargetTab: React.FC<TargetTabProps> = ({
       </div>
 
       {/* 4. Interactive Target Scenario Calculator */}
-      <div className="bg-white/95 dark:bg-slate-900/90 backdrop-blur-md border border-slate-200/90 dark:border-slate-800 rounded-3xl p-6 sm:p-7 shadow-xs space-y-5">
+      <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-6 sm:p-7 shadow-xs space-y-5">
         <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />

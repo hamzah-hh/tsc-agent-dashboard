@@ -21,7 +21,7 @@ export function CallMetricsTab({ agentRecord, getIdToken, showCallMetrics }: Cal
   return (
     <div className="space-y-6">
       {showCallMetrics && (
-        <div className="bg-white/95 dark:bg-slate-900/90 backdrop-blur-sm border border-slate-200/90 dark:border-slate-800 rounded-2xl p-6 shadow-xs">
+        <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-6 shadow-xs">
           <div className="flex items-center justify-between mb-1 gap-2">
             <span className="text-xs uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 font-mono">
               Day on Day: Connects & Talk Time

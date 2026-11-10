@@ -133,7 +133,7 @@ export function SimulatorTab({
         <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={handleReset}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-300 bg-white/10 hover:bg-white/15 border border-white/10 rounded-lg shadow-xs transition"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-300 bg-white/10 dark:bg-panel/10 hover:bg-white/15 border border-white/10 rounded-lg shadow-xs transition"
           >
             <RotateCcw className="w-3.5 h-3.5" />
             Reset
@@ -144,7 +144,7 @@ export function SimulatorTab({
       {/* Quick Target Preset Chips */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
         <span className="text-xs font-mono font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider shrink-0 flex items-center gap-1.5">
-          <Zap className="w-3.5 h-3.5 text-amber-500 animate-subtle-sparkle" /> Presets:
+          <Zap className="w-3.5 h-3.5 text-amber-500" /> Presets:
         </span>
         {steps.map((s, i) => (
           <button
@@ -172,9 +172,9 @@ export function SimulatorTab({
         </button>
         <button
           onClick={() => applyPreset('superJackpot')}
-          className="group relative px-4 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 text-slate-950 font-black shadow-[0_0_15px_rgba(245,158,11,0.35)] whitespace-nowrap transition active:scale-95 flex items-center gap-1.5 overflow-hidden"
+          className="group relative px-4 py-1.5 rounded-xl bg-amber-500 text-slate-950 font-black whitespace-nowrap transition active:scale-95 flex items-center gap-1.5 overflow-hidden"
         >
-          <div className="absolute inset-0 w-1/2 h-full bg-white/30 transform -skew-x-12 -translate-x-full group-hover:translate-x-[300%] transition-transform duration-700" />
+          <div className="absolute inset-0 w-1/2 h-full bg-white/30 dark:bg-panel/30 transform -skew-x-12 -translate-x-full group-hover:translate-x-[300%] transition-transform duration-700" />
           <span>🚀</span>
           <span>Pinnacle Jackpot (All-Out)</span>
         </button>
@@ -182,7 +182,7 @@ export function SimulatorTab({
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left Side: Inputs */}
-        <div className="lg:col-span-7 bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm border border-slate-200/90 dark:border-slate-800 rounded-2xl p-6 shadow-xs space-y-5">
+        <div className="lg:col-span-7 bg-white/90 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-6 shadow-xs space-y-5">
           <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
             <h4 className="text-xs uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 font-mono">
               Adjust Simulation Parameters
@@ -393,15 +393,15 @@ export function SimulatorTab({
         </div>
 
         {/* Right Side: Output Card */}
-        <div className="lg:col-span-5 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 text-white rounded-3xl p-6 sm:p-7 border border-amber-500/30 shadow-[0_15px_45px_rgba(0,0,0,0.4)] space-y-5 sticky top-20 relative overflow-hidden group">
+        <div className="lg:col-span-5 bg-slate-900 dark:bg-raised text-white rounded-3xl p-6 sm:p-7 border border-amber-500/30 space-y-5 sticky top-20 relative overflow-hidden group">
           {/* Ambient Lighting */}
-          <div className="absolute top-0 right-0 w-44 h-44 bg-gradient-to-bl from-amber-400/20 via-amber-500/5 to-transparent rounded-full blur-2xl pointer-events-none group-hover:scale-110 transition-transform duration-700" />
+          <div className="absolute top-0 right-0 w-44 h-44 bg-amber-500/10 rounded-full blur-2xl pointer-events-none group-hover:scale-110 transition-transform duration-700" />
           <div className="absolute -bottom-10 -left-10 w-36 h-36 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
 
           <div className="relative z-10">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[11px] uppercase tracking-wider font-extrabold text-amber-400 font-mono flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-subtle-sparkle" />
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
                 Simulated Total Payout
               </span>
               <span className={`text-xs font-mono font-bold px-2.5 py-0.5 rounded-full ${
@@ -409,13 +409,13 @@ export function SimulatorTab({
                   ? 'bg-amber-400 text-slate-950 font-black shadow-[0_0_12px_rgba(251,191,36,0.6)]'
                   : simRank > 0
                   ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                  : 'bg-white/10 text-slate-300 border border-white/10'
+                  : 'bg-white/10 dark:bg-panel/10 text-slate-300 border border-white/10'
               }`}>
                 Class {simResult.className} · {formatNumberINR(simResult.achievementPct, 1)}%
               </span>
             </div>
 
-            <div className="text-3xl sm:text-4xl lg:text-[40px] font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-yellow-100 to-amber-300 tracking-tight font-mono filter drop-shadow-[0_2px_8px_rgba(245,158,11,0.3)] mt-2">
+            <div className="text-3xl sm:text-4xl lg:text-[40px] font-black text-amber-300 dark:text-amber-300 tracking-tight font-mono filter mt-2">
               <AnimatedCounter value={simResult.total} />
             </div>
 
@@ -458,7 +458,7 @@ export function SimulatorTab({
                 <span className="font-semibold text-slate-300">Quality Bonus</span>
                 <span className={`text-[10px] px-1.5 py-0.2 rounded font-mono font-bold ${
                   simResult.quality.band === 'High' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' :
-                  simResult.quality.band === 'Mid' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-white/10 text-slate-400'
+                  simResult.quality.band === 'Mid' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-white/10 dark:bg-panel/10 text-slate-400'
                 }`}>
                   {simResult.quality.band}
                 </span>
@@ -474,7 +474,7 @@ export function SimulatorTab({
                 <span className="font-semibold text-slate-300">Unique Connects</span>
                 <span className={`text-[10px] px-1.5 py-0.2 rounded font-mono font-bold ${
                   simResult.connects.band === 'High' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' :
-                  simResult.connects.band === 'Mid' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-white/10 text-slate-400'
+                  simResult.connects.band === 'Mid' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-white/10 dark:bg-panel/10 text-slate-400'
                 }`}>
                   {simResult.connects.band}
                 </span>
@@ -490,7 +490,7 @@ export function SimulatorTab({
                 <span className="font-semibold text-slate-300">Talk Time Bonus</span>
                 <span className={`text-[10px] px-1.5 py-0.2 rounded font-mono font-bold ${
                   simResult.talk.band === 'High' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' :
-                  simResult.talk.band === 'Mid' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-white/10 text-slate-400'
+                  simResult.talk.band === 'Mid' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-white/10 dark:bg-panel/10 text-slate-400'
                 }`}>
                   {simResult.talk.band}
                 </span>
@@ -504,7 +504,7 @@ export function SimulatorTab({
             <div className="flex items-center justify-between py-1">
               <div className="flex items-center gap-1.5">
                 <span className="font-semibold text-slate-300">Store Visit Rider</span>
-                <span className="text-[10px] px-1.5 py-0.2 rounded font-mono font-bold bg-white/10 text-slate-300 border border-white/10">
+                <span className="text-[10px] px-1.5 py-0.2 rounded font-mono font-bold bg-white/10 dark:bg-panel/10 text-slate-300 border border-white/10">
                   {simResult.rider.tier > 0 ? `Tier ${simResult.rider.tier}` : 'None'}
                 </span>
               </div>

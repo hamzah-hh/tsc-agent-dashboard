@@ -185,11 +185,11 @@ export function TeamRevenueTab({ getIdToken, agentLocation, agentType }: TeamRev
       {loading ? (
         <div className="py-20 text-center">
           <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-          <p className="text-xs font-semibold text-slate-500">Loading {agentLocation} team revenue...</p>
+          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Loading {agentLocation} team revenue...</p>
         </div>
       ) : error ? (
-        <div className="bg-white border border-rose-200 rounded-2xl p-8 text-center">
-          <p className="text-xs text-rose-600 font-semibold mb-3">{error}</p>
+        <div className="bg-white dark:bg-panel border border-rose-200 dark:border-rose-500/30 rounded-2xl p-8 text-center">
+          <p className="text-xs text-rose-600 dark:text-rose-400 font-semibold mb-3">{error}</p>
           <button
             onClick={() => fetchRevenue()}
             className="px-3.5 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-bold"
@@ -198,48 +198,48 @@ export function TeamRevenueTab({ getIdToken, agentLocation, agentType }: TeamRev
           </button>
         </div>
       ) : !data ? (
-        <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center text-slate-500">
+        <div className="bg-white dark:bg-panel border border-slate-200 dark:border-line rounded-2xl p-12 text-center text-slate-500 dark:text-slate-400">
           No revenue recorded yet for {agentLocation}.
         </div>
       ) : (
         <>
           {/* 4 Summary Metric Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs">
-              <span className="text-[11px] font-mono uppercase tracking-wider text-slate-500 font-semibold block">
+            <div className="bg-white dark:bg-panel border border-slate-200 dark:border-line rounded-2xl p-5 shadow-xs">
+              <span className="text-[11px] font-mono uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block">
                 Total Team Revenue
               </span>
-              <div className="text-2xl font-black text-slate-900 font-mono mt-1">
+              <div className="text-2xl font-black text-slate-900 dark:text-fg font-mono mt-1">
                 {formatCurrencyINR(data.totalSales)}
               </div>
               <span className="text-[11px] text-slate-400 mt-1 block">Full cycle accumulated sales</span>
             </div>
 
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs">
-              <span className="text-[11px] font-mono uppercase tracking-wider text-slate-500 font-semibold block">
+            <div className="bg-white dark:bg-panel border border-slate-200 dark:border-line rounded-2xl p-5 shadow-xs">
+              <span className="text-[11px] font-mono uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block">
                 Total Orders Closed
               </span>
-              <div className="text-2xl font-black text-slate-900 font-mono mt-1">
+              <div className="text-2xl font-black text-slate-900 dark:text-fg font-mono mt-1">
                 {data.totalOrders}
               </div>
               <span className="text-[11px] text-slate-400 mt-1 block">Combined orders across 4 channels</span>
             </div>
 
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs">
-              <span className="text-[11px] font-mono uppercase tracking-wider text-slate-500 font-semibold block">
+            <div className="bg-white dark:bg-panel border border-slate-200 dark:border-line rounded-2xl p-5 shadow-xs">
+              <span className="text-[11px] font-mono uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block">
                 Average Order Value (AOV)
               </span>
-              <div className="text-2xl font-black text-slate-900 font-mono mt-1">
+              <div className="text-2xl font-black text-slate-900 dark:text-fg font-mono mt-1">
                 {formatCurrencyINR(data.aov)}
               </div>
               <span className="text-[11px] text-slate-400 mt-1 block">Per closed order average</span>
             </div>
 
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs">
-              <span className="text-[11px] font-mono uppercase tracking-wider text-slate-500 font-semibold block">
+            <div className="bg-white dark:bg-panel border border-slate-200 dark:border-line rounded-2xl p-5 shadow-xs">
+              <span className="text-[11px] font-mono uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block">
                 Active Days Logged
               </span>
-              <div className="text-2xl font-black text-slate-900 font-mono mt-1">
+              <div className="text-2xl font-black text-slate-900 dark:text-fg font-mono mt-1">
                 {dailyList.length} days
               </div>
               <span className="text-[11px] text-slate-400 mt-1 block">Verified sheet entries</span>
@@ -248,9 +248,9 @@ export function TeamRevenueTab({ getIdToken, agentLocation, agentType }: TeamRev
 
           {/* Notice when channel-wise split was not provided in DoD sheet */}
           {!data.hasDoDSplit && data.totalSales > 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-              <div className="text-xs text-amber-900 leading-relaxed">
+            <div className="bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-2xl p-4 flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <div className="text-xs text-amber-900 dark:text-amber-400 leading-relaxed">
                 <span className="font-bold">No Channel Split in DoD Sheet:</span> Team revenue ({formatCurrencyINR(data.totalSales)}) and total orders ({data.totalOrders}) are recorded from your Main Sheet. Individual channel columns below show ₹0 because no channel-wise split (Shopify, BFAN, BFMP, POSOC) was provided in the DoD sheet. Values are never fabricated.
               </div>
             </div>
@@ -259,20 +259,20 @@ export function TeamRevenueTab({ getIdToken, agentLocation, agentType }: TeamRev
           {/* 4 Category Revenue Breakdown Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Shopify */}
-            <div className="bg-white border border-emerald-200 rounded-2xl p-5 shadow-xs relative overflow-hidden">
+            <div className="bg-white dark:bg-panel border border-emerald-200 dark:border-emerald-500/30 rounded-2xl p-5 shadow-xs relative overflow-hidden">
               <div className="flex items-center justify-between mb-3">
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                  <ShoppingBag className="w-3.5 h-3.5 text-emerald-600" />
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-50 dark:bg-emerald-500/10 text-emerald-800 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30">
+                  <ShoppingBag className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                   Shopify
                 </span>
-                <span className="text-xs font-mono font-bold text-emerald-700">
+                <span className="text-xs font-mono font-bold text-emerald-700 dark:text-emerald-400">
                   {categories.shopify.pctOfSales || 0}%
                 </span>
               </div>
-              <div className="text-xl font-black text-slate-900 font-mono">
+              <div className="text-xl font-black text-slate-900 dark:text-fg font-mono">
                 {formatCurrencyINR(categories.shopify.sales)}
               </div>
-              <div className="flex items-center justify-between text-xs text-slate-500 mt-2 font-mono">
+              <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mt-2 font-mono">
                 <span>{categories.shopify.orders} orders</span>
                 <span>
                   AOV:{' '}
@@ -281,7 +281,7 @@ export function TeamRevenueTab({ getIdToken, agentLocation, agentType }: TeamRev
                     : '₹0'}
                 </span>
               </div>
-              <div className="w-full bg-slate-100 rounded-full h-1.5 mt-3 overflow-hidden">
+              <div className="w-full bg-slate-100 dark:bg-hover rounded-full h-1.5 mt-3 overflow-hidden">
                 <div
                   className="bg-emerald-500 h-1.5 rounded-full"
                   style={{ width: `${Math.min(100, categories.shopify.pctOfSales || 0)}%` }}
@@ -290,20 +290,20 @@ export function TeamRevenueTab({ getIdToken, agentLocation, agentType }: TeamRev
             </div>
 
             {/* BFAN */}
-            <div className="bg-white border border-indigo-200 rounded-2xl p-5 shadow-xs relative overflow-hidden">
+            <div className="bg-white dark:bg-panel border border-indigo-200 dark:border-indigo-500/30 rounded-2xl p-5 shadow-xs relative overflow-hidden">
               <div className="flex items-center justify-between mb-3">
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-indigo-50 text-indigo-800 border border-indigo-200">
-                  <Smartphone className="w-3.5 h-3.5 text-indigo-600" />
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-indigo-50 dark:bg-indigo-500/10 text-indigo-800 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/30">
+                  <Smartphone className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
                   BFAN
                 </span>
-                <span className="text-xs font-mono font-bold text-indigo-700">
+                <span className="text-xs font-mono font-bold text-indigo-700 dark:text-indigo-400">
                   {categories.bfan.pctOfSales || 0}%
                 </span>
               </div>
-              <div className="text-xl font-black text-slate-900 font-mono">
+              <div className="text-xl font-black text-slate-900 dark:text-fg font-mono">
                 {formatCurrencyINR(categories.bfan.sales)}
               </div>
-              <div className="flex items-center justify-between text-xs text-slate-500 mt-2 font-mono">
+              <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mt-2 font-mono">
                 <span>{categories.bfan.orders} orders</span>
                 <span>
                   AOV:{' '}
@@ -312,7 +312,7 @@ export function TeamRevenueTab({ getIdToken, agentLocation, agentType }: TeamRev
                     : '₹0'}
                 </span>
               </div>
-              <div className="w-full bg-slate-100 rounded-full h-1.5 mt-3 overflow-hidden">
+              <div className="w-full bg-slate-100 dark:bg-hover rounded-full h-1.5 mt-3 overflow-hidden">
                 <div
                   className="bg-indigo-500 h-1.5 rounded-full"
                   style={{ width: `${Math.min(100, categories.bfan.pctOfSales || 0)}%` }}
@@ -321,20 +321,20 @@ export function TeamRevenueTab({ getIdToken, agentLocation, agentType }: TeamRev
             </div>
 
             {/* BFMP */}
-            <div className="bg-white border border-purple-200 rounded-2xl p-5 shadow-xs relative overflow-hidden">
+            <div className="bg-white dark:bg-panel border border-purple-200 dark:border-purple-500/30 rounded-2xl p-5 shadow-xs relative overflow-hidden">
               <div className="flex items-center justify-between mb-3">
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-purple-50 text-purple-800 border border-purple-200">
-                  <Layers className="w-3.5 h-3.5 text-purple-600" />
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-purple-50 dark:bg-purple-500/10 text-purple-800 dark:text-purple-400 border border-purple-200 dark:border-purple-500/30">
+                  <Layers className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
                   BFMP
                 </span>
-                <span className="text-xs font-mono font-bold text-purple-700">
+                <span className="text-xs font-mono font-bold text-purple-700 dark:text-purple-400">
                   {categories.bfmp.pctOfSales || 0}%
                 </span>
               </div>
-              <div className="text-xl font-black text-slate-900 font-mono">
+              <div className="text-xl font-black text-slate-900 dark:text-fg font-mono">
                 {formatCurrencyINR(categories.bfmp.sales)}
               </div>
-              <div className="flex items-center justify-between text-xs text-slate-500 mt-2 font-mono">
+              <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mt-2 font-mono">
                 <span>{categories.bfmp.orders} orders</span>
                 <span>
                   AOV:{' '}
@@ -343,7 +343,7 @@ export function TeamRevenueTab({ getIdToken, agentLocation, agentType }: TeamRev
                     : '₹0'}
                 </span>
               </div>
-              <div className="w-full bg-slate-100 rounded-full h-1.5 mt-3 overflow-hidden">
+              <div className="w-full bg-slate-100 dark:bg-hover rounded-full h-1.5 mt-3 overflow-hidden">
                 <div
                   className="bg-purple-500 h-1.5 rounded-full"
                   style={{ width: `${Math.min(100, categories.bfmp.pctOfSales || 0)}%` }}
@@ -352,20 +352,20 @@ export function TeamRevenueTab({ getIdToken, agentLocation, agentType }: TeamRev
             </div>
 
             {/* POSOC */}
-            <div className="bg-white border border-amber-200 rounded-2xl p-5 shadow-xs relative overflow-hidden">
+            <div className="bg-white dark:bg-panel border border-amber-200 dark:border-amber-500/30 rounded-2xl p-5 shadow-xs relative overflow-hidden">
               <div className="flex items-center justify-between mb-3">
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200">
-                  <Store className="w-3.5 h-3.5 text-amber-600" />
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-50 dark:bg-amber-500/10 text-amber-800 dark:text-amber-400 border border-amber-200 dark:border-amber-500/30">
+                  <Store className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
                   POSOC
                 </span>
-                <span className="text-xs font-mono font-bold text-amber-700">
+                <span className="text-xs font-mono font-bold text-amber-700 dark:text-amber-400">
                   {categories.posoc.pctOfSales || 0}%
                 </span>
               </div>
-              <div className="text-xl font-black text-slate-900 font-mono">
+              <div className="text-xl font-black text-slate-900 dark:text-fg font-mono">
                 {formatCurrencyINR(categories.posoc.sales)}
               </div>
-              <div className="flex items-center justify-between text-xs text-slate-500 mt-2 font-mono">
+              <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mt-2 font-mono">
                 <span>{categories.posoc.orders} orders</span>
                 <span>
                   AOV:{' '}
@@ -374,7 +374,7 @@ export function TeamRevenueTab({ getIdToken, agentLocation, agentType }: TeamRev
                     : '₹0'}
                 </span>
               </div>
-              <div className="w-full bg-slate-100 rounded-full h-1.5 mt-3 overflow-hidden">
+              <div className="w-full bg-slate-100 dark:bg-hover rounded-full h-1.5 mt-3 overflow-hidden">
                 <div
                   className="bg-amber-500 h-1.5 rounded-full"
                   style={{ width: `${Math.min(100, categories.posoc.pctOfSales || 0)}%` }}
@@ -384,11 +384,11 @@ export function TeamRevenueTab({ getIdToken, agentLocation, agentType }: TeamRev
           </div>
 
           {/* Daily Breakdown Table */}
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
-            <div className="p-4 sm:p-5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50">
+          <div className="bg-white dark:bg-panel border border-slate-200 dark:border-line rounded-2xl shadow-xs overflow-hidden">
+            <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-line flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50 dark:bg-raised/50">
               <div>
-                <h3 className="text-sm font-bold text-slate-900">Daily Channel Revenue Log</h3>
-                <p className="text-xs text-slate-500 mt-0.5">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-fg">Daily Channel Revenue Log</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                   Orders and revenue across all 4 categories for each day of the cycle.
                 </p>
               </div>
@@ -400,7 +400,7 @@ export function TeamRevenueTab({ getIdToken, agentLocation, agentType }: TeamRev
                   value={searchDate}
                   onChange={(e) => setSearchDate(e.target.value)}
                   placeholder="Filter by date (YYYY-MM-DD)..."
-                  className="w-full bg-white border border-slate-300 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-white dark:bg-panel border border-slate-300 dark:border-line-strong rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-900 dark:text-fg placeholder-slate-400 focus:outline-none focus:border-indigo-500"
                 />
               </div>
             </div>
@@ -408,7 +408,7 @@ export function TeamRevenueTab({ getIdToken, agentLocation, agentType }: TeamRev
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-mono uppercase tracking-wider text-slate-500 font-semibold">
+                  <tr className="bg-slate-50 dark:bg-raised border-b border-slate-200 dark:border-line text-[11px] font-mono uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
                     <th className="py-3 px-4">Date</th>
                     <th className="py-3 px-3 text-center">Day</th>
                     <th className="py-3 px-3 text-right">Shopify (Ord · Rev)</th>
@@ -416,53 +416,53 @@ export function TeamRevenueTab({ getIdToken, agentLocation, agentType }: TeamRev
                     <th className="py-3 px-3 text-right">BFMP (Ord · Rev)</th>
                     <th className="py-3 px-3 text-right">POSOC (Ord · Rev)</th>
                     <th className="py-3 px-3 text-right">Total Orders</th>
-                    <th className="py-3 px-4 text-right bg-slate-100/60">Total Daily Revenue</th>
+                    <th className="py-3 px-4 text-right bg-slate-100/60 dark:bg-hover/60">Total Daily Revenue</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 text-xs">
+                <tbody className="divide-y divide-slate-100 dark:divide-line text-xs">
                   {filteredDaily.map((row) => (
                     <tr key={row.date} className="hover:bg-slate-50/70 transition-colors">
                       {/* Date */}
-                      <td className="py-3 px-4 font-mono font-bold text-slate-900 whitespace-nowrap">
+                      <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-fg whitespace-nowrap">
                         {row.date}
                       </td>
 
                       {/* Day */}
-                      <td className="py-3 px-3 text-center font-mono text-slate-500">
+                      <td className="py-3 px-3 text-center font-mono text-slate-500 dark:text-slate-400">
                         {row.day}
                       </td>
 
                       {/* Shopify */}
                       <td className="py-3 px-3 text-right font-mono whitespace-nowrap">
-                        <span className="text-slate-500 font-medium mr-1.5">{row.shopify.orders} ord</span>
-                        <span className="text-emerald-700 font-bold">{formatCurrencyINR(row.shopify.sales)}</span>
+                        <span className="text-slate-500 dark:text-slate-400 font-medium mr-1.5">{row.shopify.orders} ord</span>
+                        <span className="text-emerald-700 dark:text-emerald-400 font-bold">{formatCurrencyINR(row.shopify.sales)}</span>
                       </td>
 
                       {/* BFAN */}
                       <td className="py-3 px-3 text-right font-mono whitespace-nowrap">
-                        <span className="text-slate-500 font-medium mr-1.5">{row.bfan.orders} ord</span>
-                        <span className="text-indigo-700 font-bold">{formatCurrencyINR(row.bfan.sales)}</span>
+                        <span className="text-slate-500 dark:text-slate-400 font-medium mr-1.5">{row.bfan.orders} ord</span>
+                        <span className="text-indigo-700 dark:text-indigo-400 font-bold">{formatCurrencyINR(row.bfan.sales)}</span>
                       </td>
 
                       {/* BFMP */}
                       <td className="py-3 px-3 text-right font-mono whitespace-nowrap">
-                        <span className="text-slate-500 font-medium mr-1.5">{row.bfmp.orders} ord</span>
-                        <span className="text-purple-700 font-bold">{formatCurrencyINR(row.bfmp.sales)}</span>
+                        <span className="text-slate-500 dark:text-slate-400 font-medium mr-1.5">{row.bfmp.orders} ord</span>
+                        <span className="text-purple-700 dark:text-purple-400 font-bold">{formatCurrencyINR(row.bfmp.sales)}</span>
                       </td>
 
                       {/* POSOC */}
                       <td className="py-3 px-3 text-right font-mono whitespace-nowrap">
-                        <span className="text-slate-500 font-medium mr-1.5">{row.posoc.orders} ord</span>
-                        <span className="text-amber-700 font-bold">{formatCurrencyINR(row.posoc.sales)}</span>
+                        <span className="text-slate-500 dark:text-slate-400 font-medium mr-1.5">{row.posoc.orders} ord</span>
+                        <span className="text-amber-700 dark:text-amber-400 font-bold">{formatCurrencyINR(row.posoc.sales)}</span>
                       </td>
 
                       {/* Total Orders */}
-                      <td className="py-3 px-3 text-right font-mono font-bold text-slate-800">
+                      <td className="py-3 px-3 text-right font-mono font-bold text-slate-800 dark:text-fg">
                         {row.totalOrders}
                       </td>
 
                       {/* Total Revenue */}
-                      <td className="py-3 px-4 text-right font-mono font-black text-slate-950 bg-slate-50/80 whitespace-nowrap">
+                      <td className="py-3 px-4 text-right font-mono font-black text-slate-950 dark:text-fg bg-slate-50/80 dark:bg-raised/80 whitespace-nowrap">
                         {formatCurrencyINR(row.totalSales)}
                       </td>
                     </tr>
@@ -471,11 +471,11 @@ export function TeamRevenueTab({ getIdToken, agentLocation, agentType }: TeamRev
               </table>
             </div>
 
-            <div className="bg-slate-50 border-t border-slate-200 px-4 py-3 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500 font-mono">
+            <div className="bg-slate-50 dark:bg-raised border-t border-slate-200 dark:border-line px-4 py-3 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500 dark:text-slate-400 font-mono">
               <span>
                 Verified Rule: Shopify + BFAN + BFMP + POSOC = Daily Orders and Revenue from Main Sheet
               </span>
-              <span className="text-indigo-700 font-bold">
+              <span className="text-indigo-700 dark:text-indigo-400 font-bold">
                 {agentLocation} Team View
               </span>
             </div>

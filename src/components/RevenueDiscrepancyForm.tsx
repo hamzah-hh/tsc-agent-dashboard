@@ -21,7 +21,7 @@ export function RevenueDiscrepancyForm({
       className={`bg-white dark:bg-slate-900 border border-amber-200/90 dark:border-amber-900/60 rounded-2xl shadow-xs overflow-hidden transition-all ${className}`}
     >
       {/* Header Bar */}
-      <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent dark:from-amber-950/40 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-amber-100 dark:border-amber-900/40">
+      <div className="bg-amber-500/10 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-amber-100 dark:border-amber-900/40">
         <div className="flex items-start gap-3">
           <div className="p-2.5 rounded-xl bg-amber-500/15 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5 sm:mt-0">
             <AlertCircle className="w-5 h-5" />

@@ -93,10 +93,10 @@ export function Leaderboards({ userRole, userLocation, activeCycleId, cycleName,
       {rows.length > 0 && <StaleBanner date={currentBoard?.updatedAt} label="Leaderboard last updated on" />}
 
       {/* Header with Title & Location Tabs */}
-      <div className="bg-white/95 dark:bg-slate-900/90 backdrop-blur-sm border border-slate-200/90 dark:border-slate-800 rounded-2xl p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <Trophy className="w-5 h-5 text-amber-500 animate-subtle-sparkle" />
+            <Trophy className="w-5 h-5 text-amber-500" />
             <h1 className="text-xl font-bold text-slate-950 dark:text-white tracking-tight">
               {cycleName ? `${cycleName} Leaderboards` : 'Sales Leaderboards'}
             </h1>
@@ -147,11 +147,11 @@ export function Leaderboards({ userRole, userLocation, activeCycleId, cycleName,
 
       {/* Top 3 Podium Showcase (if at least 1 agent exists) */}
       {rows.length > 0 && (
-        <div className="relative overflow-hidden bg-gradient-to-b from-slate-900 via-slate-950 to-slate-900 border border-amber-500/20 rounded-2xl p-6 shadow-xl text-white">
+        <div className="relative overflow-hidden bg-slate-900 dark:bg-raised border border-amber-500/20 rounded-2xl p-6 shadow-xl text-white">
           <div className="absolute top-0 right-1/4 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
           <div className="flex items-center justify-between mb-6 relative z-10">
             <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-amber-400 animate-subtle-sparkle" />
+              <Sparkles className="w-4 h-4 text-amber-400" />
               <span className="text-xs font-mono font-bold uppercase tracking-wider text-amber-400">
                 {activeLocation} Podium Showcase
               </span>
@@ -161,8 +161,8 @@ export function Leaderboards({ userRole, userLocation, activeCycleId, cycleName,
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end relative z-10 pt-4">
             {/* Rank 2 (Silver) */}
             {top2 ? (
-              <div className="order-2 md:order-1 bg-white/5 border border-white/10 rounded-xl p-4 text-center backdrop-blur-sm relative hover:border-slate-300 transition">
-                <div className="w-10 h-10 rounded-full bg-slate-300 text-slate-900 font-extrabold text-sm flex items-center justify-center mx-auto mb-2 shadow-md font-mono">
+              <div className="order-2 md:order-1 bg-white/5 dark:bg-panel/5 border border-white/10 rounded-xl p-4 text-center relative hover:border-slate-300 transition">
+                <div className="w-10 h-10 rounded-full bg-slate-300 text-slate-900 dark:text-fg font-extrabold text-sm flex items-center justify-center mx-auto mb-2 shadow-md font-mono">
                   2
                 </div>
                 <div className="font-bold text-sm text-white truncate">{top2.name}</div>
@@ -186,16 +186,16 @@ export function Leaderboards({ userRole, userLocation, activeCycleId, cycleName,
             {/* Rank 1 (Gold - Elevated Champion) */}
             {top1 ? (
               <div
-                className="group order-1 md:order-2 bg-gradient-to-b from-amber-500/25 via-amber-950/50 to-slate-950 border-2 border-amber-400 rounded-3xl p-5 sm:p-6 text-center shadow-[0_0_40px_rgba(245,158,11,0.35)] relative -translate-y-3 transition-all duration-300 overflow-hidden"
+                className="group order-1 md:order-2 bg-amber-500/10 border-2 border-amber-400 rounded-3xl p-5 sm:p-6 text-center relative -translate-y-3 transition-all duration-300 overflow-hidden"
               >
                 {/* Shimmer sweep */}
-                <div className="absolute inset-0 w-1/2 h-full bg-white/20 transform -skew-x-12 -translate-x-full group-hover:translate-x-[300%] transition-transform duration-1000 pointer-events-none" />
+                <div className="absolute inset-0 w-1/2 h-full bg-white/20 dark:bg-panel/20 transform -skew-x-12 -translate-x-full group-hover:translate-x-[300%] transition-transform duration-1000 pointer-events-none" />
 
-                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-amber-400 to-yellow-400 text-slate-950 px-3 py-0.5 rounded-full text-[10px] font-black font-mono tracking-wider flex items-center gap-1.5 shadow-[0_0_15px_rgba(251,191,36,0.8)] border border-amber-200">
-                  <Crown className="w-3.5 h-3.5 text-slate-950" />
+                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-amber-500 text-slate-950 px-3 py-0.5 rounded-full text-[10px] font-black font-mono tracking-wider flex items-center gap-1.5 border border-amber-200 dark:border-amber-500/30">
+                  <Crown className="w-3.5 h-3.5 text-slate-950 dark:text-fg" />
                   CHAMPION
                 </div>
-                <div className="w-13 h-13 rounded-2xl bg-gradient-to-tr from-amber-400 to-yellow-300 text-slate-950 font-black text-lg flex items-center justify-center mx-auto mb-2.5 shadow-[0_0_20px_rgba(245,158,11,0.6)] font-mono border-2 border-white/60">
+                <div className="w-13 h-13 rounded-2xl bg-amber-500 text-slate-950 font-black text-lg flex items-center justify-center mx-auto mb-2.5 font-mono border-2 border-white/60">
                   1
                 </div>
                 <div className="font-black text-base text-white tracking-tight truncate drop-shadow-sm">{top1.name}</div>
@@ -210,7 +210,7 @@ export function Leaderboards({ userRole, userLocation, activeCycleId, cycleName,
                     <div className="text-xs text-slate-300 font-mono">Revenue: {formatCurrencyINR(top1.sales)}</div>
                   </>
                 )}
-                <div className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-200 to-yellow-100 font-mono mt-2 tracking-tight">
+                <div className="text-2xl font-black text-amber-300 dark:text-amber-300 font-mono mt-2 tracking-tight">
                   <AnimatedCounter value={top1.totalIncentive} />
                 </div>
               </div>
@@ -218,7 +218,7 @@ export function Leaderboards({ userRole, userLocation, activeCycleId, cycleName,
 
             {/* Rank 3 (Bronze) */}
             {top3 ? (
-              <div className="order-3 bg-white/5 border border-white/10 rounded-xl p-4 text-center backdrop-blur-sm relative hover:border-amber-700/60 transition">
+              <div className="order-3 bg-white/5 dark:bg-panel/5 border border-white/10 rounded-xl p-4 text-center relative hover:border-amber-700/60 transition">
                 <div className="w-10 h-10 rounded-full bg-amber-700 text-white font-extrabold text-sm flex items-center justify-center mx-auto mb-2 shadow-md font-mono">
                   3
                 </div>
@@ -244,7 +244,7 @@ export function Leaderboards({ userRole, userLocation, activeCycleId, cycleName,
       )}
 
       {/* Leaderboard Table Card */}
-      <div className="bg-white/95 dark:bg-slate-900/90 backdrop-blur-sm border border-slate-200/90 dark:border-slate-800 rounded-2xl shadow-xs overflow-hidden">
+      <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl shadow-xs overflow-hidden">
         <div className="p-4 border-b border-slate-200/90 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <MapPin className="w-4 h-4 text-amber-500" />
@@ -366,7 +366,7 @@ export function Leaderboards({ userRole, userLocation, activeCycleId, cycleName,
                             1
                           </div>
                         ) : isTop2 ? (
-                          <div className="w-6 h-6 rounded-md bg-slate-300 text-slate-900 font-extrabold text-xs flex items-center justify-center mx-auto shadow-xs font-mono">
+                          <div className="w-6 h-6 rounded-md bg-slate-300 text-slate-900 dark:text-fg font-extrabold text-xs flex items-center justify-center mx-auto shadow-xs font-mono">
                             2
                           </div>
                         ) : isTop3 ? (

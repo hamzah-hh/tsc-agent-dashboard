@@ -103,7 +103,7 @@ export function AgentView({ officialEmail, getIdToken, onBack }: AgentViewProps)
 
   if (error) {
     return (
-      <div className="max-w-md mx-auto my-12 bg-white/95 dark:bg-slate-900/90 backdrop-blur-md border border-rose-200 dark:border-rose-900/50 rounded-2xl p-6 text-center shadow-xs">
+      <div className="max-w-md mx-auto my-12 bg-white/95 dark:bg-slate-900/90 border border-rose-200 dark:border-rose-900/50 rounded-2xl p-6 text-center shadow-xs">
         <div className="w-10 h-10 bg-rose-50 dark:bg-rose-950/40 border border-rose-100 dark:border-rose-900/50 rounded-xl flex items-center justify-center text-rose-600 dark:text-rose-400 mx-auto mb-3">
           <AlertCircle className="w-5 h-5" />
         </div>
@@ -120,7 +120,7 @@ export function AgentView({ officialEmail, getIdToken, onBack }: AgentViewProps)
           )}
           <button
             onClick={() => fetchData(true)}
-            className="px-3.5 py-1.5 text-xs font-semibold text-slate-950 bg-amber-500 hover:bg-amber-400 rounded-lg transition shadow-xs font-bold"
+            className="px-3.5 py-1.5 text-xs font-semibold text-white dark:text-on-accent bg-brand-900 dark:bg-accent hover:bg-brand-800 dark:hover:bg-accent-hover rounded-lg transition shadow-xs font-bold"
           >
             Try Again
           </button>
@@ -212,7 +212,7 @@ export function AgentView({ officialEmail, getIdToken, onBack }: AgentViewProps)
       <StaleBanner date={lastDataDate} />
 
       {/* HEADER (both tabs) */}
-      <div className="bg-white/95 dark:bg-slate-900/90 backdrop-blur-sm border border-slate-200/90 dark:border-slate-800 rounded-2xl p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1.5 flex-wrap">
             {onBack && (

@@ -201,12 +201,12 @@ export function TeamSummaryView({ userRole, getIdToken }: TeamSummaryViewProps) 
   const breaks = useMemo(() => (data?.breaks || []).filter((b) => inRange(b.date)), [data, from, to]);
 
   if (loading) {
-    return <div className={`${card} p-10 text-center text-xs text-slate-500`}>Loading the team summary...</div>;
+    return <div className={`${card} p-10 text-center text-xs text-slate-500 dark:text-slate-400`}>Loading the team summary...</div>;
   }
   if (error || !data) {
     return (
       <div className={`${card} p-10 text-center`}>
-        <p className="text-xs text-rose-600 font-semibold mb-3">{error}</p>
+        <p className="text-xs text-rose-600 dark:text-rose-400 font-semibold mb-3">{error}</p>
         <button onClick={load} className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold">
           Retry
         </button>
@@ -554,7 +554,7 @@ export function BreaksSection({
         }
       />
       {!hasData ? (
-        <p className="px-5 pb-5 text-xs text-slate-500">
+        <p className="px-5 pb-5 text-xs text-slate-500 dark:text-slate-400">
           No Breaks data yet. It arrives with the next sync after the updated Apps Script is pasted into the sheet.
         </p>
       ) : (
@@ -748,7 +748,7 @@ export function TargetsSection({
         }
       />
       {targets.length === 0 ? (
-        <p className="px-5 pb-5 text-xs text-slate-500">No target found for you in the Targets tab yet.</p>
+        <p className="px-5 pb-5 text-xs text-slate-500 dark:text-slate-400">No target found for you in the Targets tab yet.</p>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 px-5 pb-5">
           {targets.map((t) => {
@@ -772,13 +772,13 @@ export function TargetsSection({
                   <div className="absolute top-0 h-full w-0.5 bg-slate-900/60 dark:bg-white/70" style={{ left: `${Math.min(100, expectedPct)}%` }} />
                 </div>
                 <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 mt-3 text-[11px]">
-                  <dt className="text-slate-500">Sales</dt>
+                  <dt className="text-slate-500 dark:text-slate-400">Sales</dt>
                   <dd className="text-right font-mono font-semibold text-slate-900 dark:text-white">{formatCurrencyINR(t.sales)}</dd>
-                  <dt className="text-slate-500">Target</dt>
+                  <dt className="text-slate-500 dark:text-slate-400">Target</dt>
                   <dd className="text-right font-mono text-slate-700 dark:text-slate-300">{formatCurrencyINR(t.target)}</dd>
-                  <dt className="text-slate-500">Remaining</dt>
+                  <dt className="text-slate-500 dark:text-slate-400">Remaining</dt>
                   <dd className="text-right font-mono text-slate-700 dark:text-slate-300">{formatCurrencyINR(remaining)}</dd>
-                  <dt className="text-slate-500">Needed per day</dt>
+                  <dt className="text-slate-500 dark:text-slate-400">Needed per day</dt>
                   <dd className="text-right font-mono text-slate-700 dark:text-slate-300">{daysLeft > 0 ? formatCurrencyINR(remaining / daysLeft) : '-'}</dd>
                 </dl>
               </div>
@@ -810,7 +810,7 @@ function SectionHeader({ icon, title, note, action }: { icon: React.ReactNode; t
 function EmptyRow({ cols, text }: { cols: number; text: string }) {
   return (
     <tr>
-      <td colSpan={cols} className="py-8 text-center text-xs text-slate-500">
+      <td colSpan={cols} className="py-8 text-center text-xs text-slate-500 dark:text-slate-400">
         {text}
       </td>
     </tr>
@@ -834,7 +834,7 @@ function DrillDown({ title, subtitle, onClose, children }: { title: string; subt
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800">
           <div>
             <p className="text-sm font-bold text-slate-900 dark:text-white">{title}</p>
-            <p className="text-[11px] text-slate-500">{subtitle}</p>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">{subtitle}</p>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Close">
             <X className="w-4 h-4" />

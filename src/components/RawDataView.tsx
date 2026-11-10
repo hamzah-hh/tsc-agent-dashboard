@@ -247,7 +247,7 @@ export function RawDataView({
           <div className="flex items-center gap-3">
             <button
               onClick={exportCSV}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold shadow-md shadow-amber-500/20 transition"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-900 dark:bg-accent hover:bg-brand-800 dark:hover:bg-accent-hover text-white dark:text-on-accent text-xs font-bold shadow-md shadow-amber-500/20 transition"
               title="Download filtered dataset as CSV"
             >
               <Download className="w-4 h-4" />
@@ -285,7 +285,7 @@ export function RawDataView({
               Raw Orders
               <span
                 className={`ml-1.5 px-2 py-0.5 rounded-full text-[10px] font-mono ${
-                  activeTab === 'orders' ? 'bg-slate-950/20 text-slate-950' : 'bg-slate-800 text-slate-300'
+                  activeTab === 'orders' ? 'bg-slate-950/20 text-slate-950 dark:text-fg' : 'bg-slate-800 text-slate-300'
                 }`}
               >
                 {summary.totalOrders}
@@ -307,7 +307,7 @@ export function RawDataView({
               Attributed Visits
               <span
                 className={`ml-1.5 px-2 py-0.5 rounded-full text-[10px] font-mono ${
-                  activeTab === 'visits' ? 'bg-slate-950/20 text-slate-950' : 'bg-slate-800 text-slate-300'
+                  activeTab === 'visits' ? 'bg-slate-950/20 text-slate-950 dark:text-fg' : 'bg-slate-800 text-slate-300'
                 }`}
               >
                 {summary.totalVisits}
@@ -390,45 +390,45 @@ export function RawDataView({
 
       {/* Metric Stat Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs">
-          <div className="flex items-center justify-between text-slate-500 mb-1">
+        <div className="p-4 rounded-2xl bg-white dark:bg-panel border border-slate-200 dark:border-line shadow-xs">
+          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 mb-1">
             <span className="text-[11px] font-mono uppercase font-bold">Total Orders</span>
             <ShoppingBag className="w-4 h-4 text-amber-500" />
           </div>
-          <span className="text-2xl font-black text-slate-900 font-mono">
+          <span className="text-2xl font-black text-slate-900 dark:text-fg font-mono">
             {summary.totalOrders}
           </span>
           <span className="text-[11px] text-slate-400 block mt-0.5">Matching current view</span>
         </div>
 
-        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs">
-          <div className="flex items-center justify-between text-slate-500 mb-1">
+        <div className="p-4 rounded-2xl bg-white dark:bg-panel border border-slate-200 dark:border-line shadow-xs">
+          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 mb-1">
             <span className="text-[11px] font-mono uppercase font-bold">Total Order Value</span>
             <FileSpreadsheet className="w-4 h-4 text-indigo-500" />
           </div>
-          <span className="text-2xl font-black text-slate-900 font-mono">
+          <span className="text-2xl font-black text-slate-900 dark:text-fg font-mono">
             {formatCurrencyINR(summary.totalRevenue)}
           </span>
           <span className="text-[11px] text-slate-400 block mt-0.5">Gross revenue sum</span>
         </div>
 
-        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs">
-          <div className="flex items-center justify-between text-slate-500 mb-1">
+        <div className="p-4 rounded-2xl bg-white dark:bg-panel border border-slate-200 dark:border-line shadow-xs">
+          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 mb-1">
             <span className="text-[11px] font-mono uppercase font-bold">Average Order Value</span>
             <CheckCircle2 className="w-4 h-4 text-emerald-500" />
           </div>
-          <span className="text-2xl font-black text-slate-900 font-mono">
+          <span className="text-2xl font-black text-slate-900 dark:text-fg font-mono">
             {formatCurrencyINR(summary.aov)}
           </span>
           <span className="text-[11px] text-slate-400 block mt-0.5">Avg across orders</span>
         </div>
 
-        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs">
-          <div className="flex items-center justify-between text-slate-500 mb-1">
+        <div className="p-4 rounded-2xl bg-white dark:bg-panel border border-slate-200 dark:border-line shadow-xs">
+          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 mb-1">
             <span className="text-[11px] font-mono uppercase font-bold">Attributed Visits</span>
             <Store className="w-4 h-4 text-purple-500" />
           </div>
-          <span className="text-2xl font-black text-slate-900 font-mono">
+          <span className="text-2xl font-black text-slate-900 dark:text-fg font-mono">
             {summary.totalVisits}
           </span>
           <span className="text-[11px] text-slate-400 block mt-0.5">Store footfalls credited</span>
@@ -437,7 +437,7 @@ export function RawDataView({
 
       {/* The last raw-data fill failed: say so instead of showing zeros as if there were no orders. */}
       {syncStatus && !syncStatus.ok && (
-        <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">
+        <div className="mb-4 rounded-2xl border border-rose-200 dark:border-rose-500/30 bg-rose-50 dark:bg-rose-500/10 px-4 py-3 text-xs text-rose-700 dark:text-rose-400">
           <p className="font-bold">Raw orders and visits could not be loaded from the Google Sheet.</p>
           <p className="mt-1 break-words">
             {syncStatus.error || 'Ask the Super Admin to check the Raw_Revenue and Raw_Visit sync.'}
@@ -449,15 +449,15 @@ export function RawDataView({
       )}
 
       {/* Main Table Card */}
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
+      <div className="bg-white dark:bg-panel border border-slate-200 dark:border-line rounded-2xl shadow-xs overflow-hidden">
         {loading ? (
           <div className="py-24 text-center">
             <div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-            <p className="text-xs font-semibold text-slate-500 font-mono">Loading transaction master...</p>
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 font-mono">Loading transaction master...</p>
           </div>
         ) : error ? (
           <div className="p-10 text-center">
-            <p className="text-xs text-rose-600 font-semibold mb-3">{error}</p>
+            <p className="text-xs text-rose-600 dark:text-rose-400 font-semibold mb-3">{error}</p>
             <button
               onClick={() => fetchData()}
               className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold"
@@ -468,16 +468,16 @@ export function RawDataView({
         ) : activeTab === 'orders' ? (
           /* ORDERS TABLE */
           orders.length === 0 ? (
-            <div className="py-16 text-center text-slate-500">
+            <div className="py-16 text-center text-slate-500 dark:text-slate-400">
               <ShoppingBag className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-              <p className="text-sm font-bold text-slate-700">No orders found</p>
-              <p className="text-xs text-slate-500 mt-1">Try resetting your filters or search keywords.</p>
+              <p className="text-sm font-bold text-slate-700 dark:text-fg-2">No orders found</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Try resetting your filters or search keywords.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-mono uppercase tracking-wider text-slate-500 font-bold">
+                  <tr className="bg-slate-50 dark:bg-raised border-b border-slate-200 dark:border-line text-[11px] font-mono uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold">
                     <th className="py-3 px-4">Order ID</th>
                     <th className="py-3 px-3">Date</th>
                     <th className="py-3 px-4">Caller</th>
@@ -489,14 +489,14 @@ export function RawDataView({
                     <th className="py-3 px-4 text-right font-black">Order Value</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-slate-100 dark:divide-line">
                   {orders.map((o, i) => (
                     // One order can be credited to several agents, so the Order ID alone is not a unique key
                     <tr key={`${o.orderId}|${o.agentEmail}|${i}`} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-4 font-mono font-bold text-slate-900 whitespace-nowrap">
+                      <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-fg whitespace-nowrap">
                         {o.orderId}
                       </td>
-                      <td className="py-3 px-3 text-slate-600 font-mono whitespace-nowrap">
+                      <td className="py-3 px-3 text-slate-600 dark:text-fg-2 font-mono whitespace-nowrap">
                         {o.date}
                         {o.orderTime && o.orderTime !== o.date && (
                           <span className="text-[10px] text-slate-400 block font-mono">
@@ -505,11 +505,11 @@ export function RawDataView({
                         )}
                       </td>
                       <td className="py-3 px-4 whitespace-nowrap">
-                        <span className="font-semibold text-slate-900 block">{o.agentName || o.agentEmail}</span>
+                        <span className="font-semibold text-slate-900 dark:text-fg block">{o.agentName || o.agentEmail}</span>
                         <span className="text-[10px] text-slate-400 block">{o.agentName ? o.agentEmail : o.agentCategory}</span>
                       </td>
                       <td className="py-3 px-3 whitespace-nowrap">
-                        <span className="inline-flex items-center gap-1 font-medium text-slate-700">
+                        <span className="inline-flex items-center gap-1 font-medium text-slate-700 dark:text-fg-2">
                           <MapPin className="w-3 h-3 text-slate-400" />
                           {o.location}
                         </span>
@@ -518,25 +518,25 @@ export function RawDataView({
                         <span
                           className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
                             o.category.includes('Shopify')
-                              ? 'bg-indigo-100 text-indigo-800'
+                              ? 'bg-indigo-100 dark:bg-indigo-500/15 text-indigo-800 dark:text-indigo-400'
                               : o.category.includes('Another Number') || o.category.includes('Alt')
-                              ? 'bg-emerald-100 text-emerald-800'
+                              ? 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-800 dark:text-emerald-400'
                               : o.category.includes('Marketplace')
-                              ? 'bg-purple-100 text-purple-800'
-                              : 'bg-amber-100 text-amber-800'
+                              ? 'bg-purple-100 dark:bg-purple-500/15 text-purple-800 dark:text-purple-400'
+                              : 'bg-amber-100 dark:bg-amber-500/15 text-amber-800 dark:text-amber-400'
                           }`}
                         >
                           {o.category}
                         </span>
                       </td>
-                      <td className="py-3 px-3 text-slate-600 whitespace-nowrap">{o.channel}</td>
-                      <td className="py-3 px-3 font-mono text-slate-600 whitespace-nowrap">
+                      <td className="py-3 px-3 text-slate-600 dark:text-fg-2 whitespace-nowrap">{o.channel}</td>
+                      <td className="py-3 px-3 font-mono text-slate-600 dark:text-fg-2 whitespace-nowrap">
                         {o.orderPhone}
                       </td>
-                      <td className="py-3 px-3 text-[11px] text-slate-500 whitespace-nowrap">
+                      <td className="py-3 px-3 text-[11px] text-slate-500 dark:text-slate-400 whitespace-nowrap">
                         {o.talkTimeCohort}
                       </td>
-                      <td className="py-3 px-4 text-right font-mono font-black text-slate-900 whitespace-nowrap">
+                      <td className="py-3 px-4 text-right font-mono font-black text-slate-900 dark:text-fg whitespace-nowrap">
                         {formatCurrencyINR(o.orderValue)}
                       </td>
                     </tr>
@@ -548,16 +548,16 @@ export function RawDataView({
         ) : (
           /* VISITS TABLE */
           visits.length === 0 ? (
-            <div className="py-16 text-center text-slate-500">
+            <div className="py-16 text-center text-slate-500 dark:text-slate-400">
               <Store className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-              <p className="text-sm font-bold text-slate-700">No attributed visits found</p>
-              <p className="text-xs text-slate-500 mt-1">Try resetting your filters or search keywords.</p>
+              <p className="text-sm font-bold text-slate-700 dark:text-fg-2">No attributed visits found</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Try resetting your filters or search keywords.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-mono uppercase tracking-wider text-slate-500 font-bold">
+                  <tr className="bg-slate-50 dark:bg-raised border-b border-slate-200 dark:border-line text-[11px] font-mono uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold">
                     <th className="py-3 px-4">Date & Time</th>
                     <th className="py-3 px-4">Caller</th>
                     <th className="py-3 px-3">Type</th>
@@ -567,41 +567,41 @@ export function RawDataView({
                     <th className="py-3 px-3">Source</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-slate-100 dark:divide-line">
                   {visits.map((v, i) => {
                     const [visitDay, visitTime] = (v.visitDateTime || v.date).split(' ');
                     return (
                       <tr key={`${v.id}|${i}`} className="hover:bg-slate-50/80 transition-colors">
                         <td className="py-3 px-4 font-mono whitespace-nowrap">
-                          <span className="font-bold text-slate-900 block">{visitDay}</span>
+                          <span className="font-bold text-slate-900 dark:text-fg block">{visitDay}</span>
                           {visitTime && <span className="text-[10px] text-slate-400 block">{visitTime}</span>}
                         </td>
                         <td className="py-3 px-4 whitespace-nowrap">
-                          <span className="font-semibold text-slate-900 block">{v.agentName || v.agentEmail}</span>
+                          <span className="font-semibold text-slate-900 dark:text-fg block">{v.agentName || v.agentEmail}</span>
                           {v.agentName && <span className="text-[10px] text-slate-400 block">{v.agentEmail}</span>}
                         </td>
                         <td className="py-3 px-3 whitespace-nowrap">
                           <span
                             className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
-                              v.type === 'HO' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
+                              v.type === 'HO' ? 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-800 dark:text-emerald-400' : 'bg-blue-100 dark:bg-blue-500/15 text-blue-800 dark:text-blue-400'
                             }`}
                           >
                             {v.type === 'HO' ? 'HO Caller' : 'Store Caller'}
                           </span>
                         </td>
                         <td className="py-3 px-3 whitespace-nowrap">
-                          <span className="inline-flex items-center gap-1 font-medium text-slate-700">
+                          <span className="inline-flex items-center gap-1 font-medium text-slate-700 dark:text-fg-2">
                             <MapPin className="w-3 h-3 text-slate-400" />
                             {v.location}
                           </span>
                         </td>
-                        <td className="py-3 px-3 font-mono text-slate-600 whitespace-nowrap">{v.phoneNumber}</td>
+                        <td className="py-3 px-3 font-mono text-slate-600 dark:text-fg-2 whitespace-nowrap">{v.phoneNumber}</td>
                         <td className="py-3 px-3 text-right font-mono whitespace-nowrap">
-                          <span className="font-bold text-slate-900">
+                          <span className="font-bold text-slate-900 dark:text-fg">
                             {Math.floor(v.talkTimeSeconds / 60)}m {v.talkTimeSeconds % 60}s
                           </span>
                         </td>
-                        <td className="py-3 px-3 text-slate-600 whitespace-nowrap">{v.visitSource}</td>
+                        <td className="py-3 px-3 text-slate-600 dark:text-fg-2 whitespace-nowrap">{v.visitSource}</td>
                       </tr>
                     );
                   })}

@@ -12,9 +12,8 @@ const AgentView = lazyView<React.ComponentProps<typeof import('./components/Agen
 const StaffPortal = lazyView<React.ComponentProps<typeof import('./components/StaffPortal')['StaffPortal']>>(() => import('./components/StaffPortal'), 'StaffPortal');
 const CohortReportView = lazyView<React.ComponentProps<typeof import('./components/CohortReportView')['CohortReportView']>>(() => import('./components/CohortReportView'), 'CohortReportView');
 import { DataStatusProvider } from './components/DataStatusBar';
-import { LogIn, LogOut, ShieldAlert, Layers, AlertCircle, RefreshCw, Volume2, VolumeX, Clock, Timer } from 'lucide-react';
+import { LogIn, LogOut, ShieldAlert, Sun, Moon, Layers, AlertCircle, RefreshCw, Volume2, VolumeX, Clock, Timer } from 'lucide-react';
 import { soundFx } from './utils/audio';
-import { FestiveAura } from './components/FestiveAura';
 import { useTheme } from './utils/theme';
 import { AgentLoginSessionState } from './shared/types';
 
@@ -33,7 +32,7 @@ interface SessionData {
 }
 
 export default function App() {
-  useTheme();
+  const { isDark, toggleTheme } = useTheme();
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [session, setSession] = useState<SessionData | null>(null);
@@ -238,33 +237,32 @@ export default function App() {
 
   if (authLoading || checkLoading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-slate-50 dark:bg-canvas flex items-center justify-center p-4">
         <div className="text-center">
-          <div className="w-10 h-10 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-          <p className="text-xs font-semibold text-slate-600">Loading TSC Agent Dashboard...</p>
+          <div className="w-10 h-10 border-4 border-accent border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+          <p className="text-xs font-semibold text-slate-600 dark:text-fg-2">Loading TSC Agent Dashboard...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans relative selection:bg-amber-500/20 selection:text-amber-900">
-      <FestiveAura />
+    <div className="min-h-screen bg-slate-50 dark:bg-canvas text-slate-900 dark:text-fg flex flex-col font-sans relative ">
 
       {/* Top Navigation */}
-      <header className="bg-white/95 backdrop-blur-md border-b border-slate-200 sticky top-0 z-30 shadow-xs">
+      <header className="bg-white dark:bg-panel border-b border-slate-200 dark:border-line sticky top-0 z-30">
         <div className="max-w-[1920px] mx-auto px-3 sm:px-5 lg:px-6 min-h-16 py-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-center text-white font-mono font-bold text-xs tracking-wider shadow-xs ring-1 ring-amber-500/30">
+            <div className="w-8 h-8 rounded-lg bg-slate-950 dark:bg-raised border border-slate-800 dark:border-line flex items-center justify-center text-white font-mono font-bold text-xs tracking-wider">
               TSC
             </div>
             <div className="flex items-center gap-2">
-              <span className="font-bold text-sm tracking-tight text-slate-950">
+              <span className="font-bold text-sm tracking-tight text-slate-950 dark:text-fg">
                 Agent Dashboard
               </span>
               <span className="text-slate-300 text-xs" aria-hidden="true">·</span>
               {session?.activeCycleName && (
-                <span className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-full font-mono">
+                <span className="text-xs font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200/80 dark:border-amber-500/30 px-2 py-0.5 rounded-full font-mono">
                   {session.activeCycleName}
                 </span>
               )}
@@ -273,17 +271,25 @@ export default function App() {
 
           <div className="flex items-center gap-3 sm:gap-4">
             {/* Audio Toggle (Accessible only when logged in) */}
-            <div className="flex items-center gap-1.5 border-r border-slate-200 pr-3">
+            <div className="flex items-center gap-1.5 border-r border-slate-200 dark:border-line pr-3">
+              <button
+                onClick={toggleTheme}
+                title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+                aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+                className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:hover:text-fg dark:hover:bg-hover transition"
+              >
+                {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              </button>
               <button
                 onClick={() => {
                   const next = soundFx.toggle();
                   setSoundEnabled(next);
                 }}
                 title={soundEnabled ? 'Mute Sound FX' : 'Enable Sound FX'}
-                className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition"
+                className="p-1.5 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition"
               >
                 {soundEnabled ? (
-                  <Volume2 className="w-4 h-4 text-emerald-600" />
+                  <Volume2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                 ) : (
                   <VolumeX className="w-4 h-4 text-slate-400" />
                 )}
@@ -296,10 +302,10 @@ export default function App() {
                   <div
                     className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-mono font-bold border transition duration-300 shadow-xs shrink-0 ${
                       trackerState.remainingSeconds < 180
-                        ? 'bg-rose-50 text-rose-700 border-rose-300 animate-pulse'
+                        ? 'bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-300 dark:border-rose-500/30 animate-pulse'
                         : trackerState.remainingSeconds < 600
-                        ? 'bg-amber-50 text-amber-700 border-amber-300'
-                        : 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                        ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-500/30'
+                        : 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-500/30'
                     }`}
                     title={`Your remaining login time in this ${trackerState.windowId} window. Next access window opens at ${trackerState.nextWindowOpensAt || ''}`}
                   >
@@ -311,10 +317,10 @@ export default function App() {
                 )}
 
                 <div className="hidden sm:flex flex-col text-right">
-                  <span className="text-xs font-semibold text-slate-900 leading-tight">
+                  <span className="text-xs font-semibold text-slate-900 dark:text-fg leading-tight">
                     {session?.name || user.email}
                   </span>
-                  <span className="text-[11px] text-slate-500 font-medium leading-tight mt-0.5">
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium leading-tight mt-0.5">
                     {session?.role === 'superAdmin'
                       ? 'Super Admin'
                       : session?.role === 'manager'
@@ -330,9 +336,9 @@ export default function App() {
                 </div>
                 <button
                   onClick={handleLogout}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200/80 rounded-lg transition"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-fg-2 hover:text-slate-900 bg-slate-100 dark:bg-hover hover:bg-slate-200/80 rounded-lg transition"
                 >
-                  <LogOut className="w-3.5 h-3.5 text-slate-500" />
+                  <LogOut className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
                   Sign Out
                 </button>
               </div>
@@ -357,11 +363,11 @@ export default function App() {
             )}
 
             {/* Official The Sleep Company Logo in Top Right */}
-            <div className="flex items-center pl-3 border-l border-slate-200">
+            <div className="flex items-center pl-3 border-l border-slate-200 dark:border-line">
               <img
                 src="https://thesleepcompany.in/cdn/shop/files/new_logo.webp?v=1706780127&width=600"
                 alt="The Sleep Company"
-                className="h-8 sm:h-9 w-auto object-contain max-w-[150px] sm:max-w-[170px]"
+                className="brand-logo h-8 sm:h-9 w-auto object-contain max-w-[150px] sm:max-w-[170px]"
                 loading="eager"
               />
             </div>
@@ -374,35 +380,35 @@ export default function App() {
         <DataStatusProvider enabled={Boolean(user) && ['agent', 'tl', 'manager', 'superAdmin', 'reportViewer'].includes(session?.role as string)} getIdToken={getIdToken}>
         {!user ? (
           // Logged Out Minimal Landing
-          <div className="max-w-md mx-auto my-12 bg-white/95 backdrop-blur-md border border-slate-200 rounded-2xl p-8 shadow-xl text-center">
+          <div className="max-w-md mx-auto my-12 bg-white/95 dark:bg-panel/95 border border-slate-200 dark:border-line rounded-2xl p-8 shadow-xl text-center">
             <img
               src="https://thesleepcompany.in/cdn/shop/files/new_logo.webp?v=1706780127&width=600"
               alt="The Sleep Company"
-              className="h-10 w-auto object-contain mx-auto mb-4"
+              className="brand-logo h-10 w-auto object-contain mx-auto mb-4"
             />
-            <h2 className="text-lg font-bold text-slate-900 mb-1 tracking-tight">
+            <h2 className="text-lg font-bold text-slate-900 dark:text-fg mb-1 tracking-tight">
               Agent Dashboard
             </h2>
-            <p className="text-xs text-slate-600 mb-6 leading-relaxed">
+            <p className="text-xs text-slate-600 dark:text-fg-2 mb-6 leading-relaxed">
               Sign in with your authorized Google Account to view your actual incentive progress, unlock higher classes, or simulate targets.
             </p>
 
             {timeExhaustedNotice ? (
-              <div className="mb-6 p-4 rounded-xl bg-rose-50 border border-rose-200 text-left flex items-start gap-3 shadow-xs">
-                <Timer className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+              <div className="mb-6 p-4 rounded-xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 text-left flex items-start gap-3 shadow-xs">
+                <Timer className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
                 <div>
-                  <h4 className="text-xs font-bold text-rose-900 mb-0.5 uppercase tracking-wide">
+                  <h4 className="text-xs font-bold text-rose-900 dark:text-rose-400 mb-0.5 uppercase tracking-wide">
                     ⏱️ Session Time Limit Reached ({timeExhaustedNotice.windowId} Window)
                   </h4>
-                  <p className="text-xs text-rose-800 leading-relaxed font-medium">
+                  <p className="text-xs text-rose-800 dark:text-rose-400 leading-relaxed font-medium">
                     {timeExhaustedNotice.message}
                   </p>
                 </div>
               </div>
             ) : loginError ? (
-              <div className="mb-5 p-3 rounded-lg bg-amber-50 border border-amber-200 text-left flex items-start gap-2.5">
-                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                <div className="text-xs text-amber-800 leading-relaxed font-medium">
+              <div className="mb-5 p-3 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 text-left flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <div className="text-xs text-amber-800 dark:text-amber-400 leading-relaxed font-medium">
                   {loginError}
                 </div>
               </div>
@@ -411,7 +417,7 @@ export default function App() {
             <button
               onClick={handleLogin}
               disabled={isLoggingIn}
-              className="w-full inline-flex items-center justify-center gap-2.5 px-4 py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs rounded-xl shadow-lg shadow-amber-500/20 disabled:opacity-60 transition active:scale-95"
+              className="w-full inline-flex items-center justify-center gap-2.5 px-4 py-3 bg-brand-900 hover:bg-brand-800 dark:bg-accent dark:hover:bg-accent-hover text-white dark:text-on-accent font-semibold text-xs rounded-lg disabled:opacity-60 transition"
             >
               {isLoggingIn ? (
                 <>
@@ -451,19 +457,19 @@ export default function App() {
           />
         ) : sessionProblem ? (
           // The server could not check the access (not the same as "no access"): say so and let the user retry
-          <div className="max-w-md mx-auto my-12 bg-white/95 backdrop-blur-md border border-amber-200 rounded-2xl p-8 shadow-xl text-center">
-            <div className="w-12 h-12 bg-amber-50 border border-amber-100 rounded-xl flex items-center justify-center text-amber-600 mx-auto mb-4">
+          <div className="max-w-md mx-auto my-12 bg-white/95 dark:bg-panel/95 border border-amber-200 dark:border-amber-500/30 rounded-2xl p-8 shadow-xl text-center">
+            <div className="w-12 h-12 bg-amber-50 dark:bg-amber-500/10 border border-amber-100 dark:border-amber-500/30 rounded-xl flex items-center justify-center text-amber-600 dark:text-amber-400 mx-auto mb-4">
               <AlertCircle className="w-6 h-6" />
             </div>
-            <h2 className="text-base font-bold text-slate-900 mb-1">The portal could not check your access</h2>
-            <p className="text-xs text-slate-600 mb-3">
+            <h2 className="text-base font-bold text-slate-900 dark:text-fg mb-1">The portal could not check your access</h2>
+            <p className="text-xs text-slate-600 dark:text-fg-2 mb-3">
               This is a problem on our side, not with your account. Please try again in a minute.
             </p>
-            <p className="text-[11px] text-slate-500 font-mono break-words mb-6">{sessionProblem}</p>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono break-words mb-6">{sessionProblem}</p>
             <div className="flex items-center justify-center gap-3">
               <button
                 onClick={() => user && loadSession(user)}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-xl shadow transition"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-brand-900 dark:bg-accent hover:bg-brand-800 dark:hover:bg-accent-hover text-white dark:text-on-accent text-xs font-bold rounded-xl shadow transition"
               >
                 <RefreshCw className="w-4 h-4" />
                 Try again
@@ -479,16 +485,16 @@ export default function App() {
           </div>
         ) : (
           // 5. No match -> show "Access denied. Contact your TL." and a Sign out button.
-          <div className="max-w-md mx-auto my-12 bg-white/95 backdrop-blur-md border border-rose-200 rounded-2xl p-8 shadow-xl text-center">
-            <div className="w-12 h-12 bg-rose-50 border border-rose-100 rounded-xl flex items-center justify-center text-rose-600 mx-auto mb-4">
+          <div className="max-w-md mx-auto my-12 bg-white/95 dark:bg-panel/95 border border-rose-200 dark:border-rose-500/30 rounded-2xl p-8 shadow-xl text-center">
+            <div className="w-12 h-12 bg-rose-50 dark:bg-rose-500/10 border border-rose-100 dark:border-rose-500/30 rounded-xl flex items-center justify-center text-rose-600 dark:text-rose-400 mx-auto mb-4">
               <ShieldAlert className="w-6 h-6" />
             </div>
-            <h2 className="text-base font-bold text-slate-900 mb-1">Access denied</h2>
-            <p className="text-xs text-slate-600 mb-5">
+            <h2 className="text-base font-bold text-slate-900 dark:text-fg mb-1">Access denied</h2>
+            <p className="text-xs text-slate-600 dark:text-fg-2 mb-5">
               Access denied. Contact your TL.
             </p>
             <p className="text-[11px] text-slate-400 mb-6">
-              Logged in as <span className="font-mono text-slate-700">{user.email}</span>. Your account is not mapped in the incentive access database.
+              Logged in as <span className="font-mono text-slate-700 dark:text-fg-2">{user.email}</span>. Your account is not mapped in the incentive access database.
             </p>
             <button
               onClick={handleLogout}
@@ -503,7 +509,7 @@ export default function App() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-slate-200 bg-white/80 backdrop-blur-sm py-4 text-center text-[11px] text-slate-400 font-mono">
+      <footer className="border-t border-slate-200 dark:border-line bg-white/80 dark:bg-panel/80 py-4 text-center text-[11px] text-slate-400 font-mono">
         The Sleep Company &bull; Agent Dashboard{session?.activeCycleName ? <> &bull; {session.activeCycleName} Cycle</> : null}
       </footer>
     </div>

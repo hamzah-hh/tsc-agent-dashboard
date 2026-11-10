@@ -145,11 +145,11 @@ export function CohortReportView({ getIdToken }: CohortReportViewProps) {
 
   const tables = useMemo(() => periods.map((p) => cohortTableForPeriod(rows, p)), [rows, periods]);
 
-  if (loading) return <div className={`${card} p-10 text-center text-xs text-slate-500`}>Loading the report...</div>;
+  if (loading) return <div className={`${card} p-10 text-center text-xs text-slate-500 dark:text-slate-400`}>Loading the report...</div>;
   if (error) {
     return (
       <div className={`${card} p-10 text-center`}>
-        <p className="text-xs text-rose-600 font-semibold mb-3">{error}</p>
+        <p className="text-xs text-rose-600 dark:text-rose-400 font-semibold mb-3">{error}</p>
         <button onClick={load} className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold">
           Retry
         </button>
@@ -157,7 +157,7 @@ export function CohortReportView({ getIdToken }: CohortReportViewProps) {
     );
   }
   if (!rows.length || periods.length === 0) {
-    return <div className={`${card} p-10 text-center text-xs text-slate-500`}>No data yet. It arrives with the next sync of the Anirban_Ref tab.</div>;
+    return <div className={`${card} p-10 text-center text-xs text-slate-500 dark:text-slate-400`}>No data yet. It arrives with the next sync of the Anirban_Ref tab.</div>;
   }
 
   const base = periods[0];
@@ -180,7 +180,7 @@ export function CohortReportView({ getIdToken }: CohortReportViewProps) {
     try {
       const dark = document.documentElement.classList.contains('dark');
       // An off-screen full-width copy without scroll boxes: no scrollbars, nothing cut off
-      const blob = await elementToPng(tablesRef.current, { background: dark ? '#020617' : '#f8fafc' });
+      const blob = await elementToPng(tablesRef.current, { background: dark ? '#0c0e13' : '#f6f7fa' });
       try {
         await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
         setCopyState('copied');
@@ -302,7 +302,7 @@ export function CohortReportView({ getIdToken }: CohortReportViewProps) {
                     ))}
                   </select>
                   {periodTag(base, p) && <span className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400">{periodTag(base, p)}</span>}
-                  <button onClick={() => setPeriods((ps) => ps.filter((_, j) => j !== i))} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500" aria-label={`Remove comparison ${i}`}>
+                  <button onClick={() => setPeriods((ps) => ps.filter((_, j) => j !== i))} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400" aria-label={`Remove comparison ${i}`}>
                     <X className="w-3.5 h-3.5" />
                   </button>
                 </>
@@ -415,7 +415,7 @@ function AprilAttributionSection({
     setCopyState('busy');
     try {
       const dark = document.documentElement.classList.contains('dark');
-      const blob = await elementToPng(ref.current, { background: dark ? '#020617' : '#f8fafc' });
+      const blob = await elementToPng(ref.current, { background: dark ? '#0c0e13' : '#f6f7fa' });
       try {
         await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
         setCopyState('copied');
@@ -468,16 +468,16 @@ function AprilAttributionSection({
       </div>
 
       {loading && rows === null ? (
-        <div className={`${card} p-10 text-center text-xs text-slate-500`}>Loading the report...</div>
+        <div className={`${card} p-10 text-center text-xs text-slate-500 dark:text-slate-400`}>Loading the report...</div>
       ) : error ? (
         <div className={`${card} p-10 text-center`}>
-          <p className="text-xs text-rose-600 font-semibold mb-3">{error}</p>
+          <p className="text-xs text-rose-600 dark:text-rose-400 font-semibold mb-3">{error}</p>
           <button onClick={load} className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold">
             Retry
           </button>
         </div>
       ) : !rows?.length ? (
-        <div className={`${card} p-10 text-center text-xs text-slate-500`}>No data yet. It arrives with the next sync of the Anirban_Cohort_Reportv2 tab.</div>
+        <div className={`${card} p-10 text-center text-xs text-slate-500 dark:text-slate-400`}>No data yet. It arrives with the next sync of the Anirban_Cohort_Reportv2 tab.</div>
       ) : (
         <div ref={ref} className="space-y-4 p-1">
           <CohortTable
@@ -642,7 +642,7 @@ function CompanySection({
 }) {
   if (company.length === 0) {
     return (
-      <section className={`${card} p-5 text-xs text-slate-500`}>
+      <section className={`${card} p-5 text-xs text-slate-500 dark:text-slate-400`}>
         No company revenue yet. It arrives with the next sync of the Company_DOD tab (paste the updated Code.gs first).
       </section>
     );
@@ -675,7 +675,7 @@ function CompanySection({
         <h3 className="px-4 py-2.5 text-sm font-bold text-slate-950 dark:text-white border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
           <span>
             Company Revenue
-            <span className="ml-2 text-[11px] font-normal text-slate-500">
+            <span className="ml-2 text-[11px] font-normal text-slate-500 dark:text-slate-400">
               Company_DOD tab, {fmtDay(first)} to {fmtDay(last)}
               {outside ? '; a period reaching outside these dates is partly empty' : ''}
             </span>
@@ -736,7 +736,7 @@ function CompanySection({
         <h3 className="px-4 py-2.5 text-sm font-bold text-slate-950 dark:text-white border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
           <span>
             Attributed Revenue
-            <span className="ml-2 text-[11px] font-normal text-slate-500">
+            <span className="ml-2 text-[11px] font-normal text-slate-500 dark:text-slate-400">
               cumulative revenue of orders with 10 seconds or more of talk time, against the Company_DOD revenue
             </span>
           </span>
@@ -844,7 +844,7 @@ function DiwaliSection({ days }: { days: DiwaliDay[] }) {
   const [showAhead, setShowAhead] = useState(false);
   if (days.length === 0) {
     return (
-      <section className={`${card} p-5 text-xs text-slate-500`}>
+      <section className={`${card} p-5 text-xs text-slate-500 dark:text-slate-400`}>
         No Diwali projection yet. It arrives with the next sync of the Diwali_Projection tab (paste the updated Code.gs first).
       </section>
     );
@@ -877,7 +877,7 @@ function DiwaliSection({ days }: { days: DiwaliDay[] }) {
       <h3 className="px-4 py-2.5 text-sm font-bold text-slate-950 dark:text-white border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
         <span>
           Diwali Projection
-          <span className="ml-2 text-[11px] font-normal text-slate-500">Diwali_Projection tab; achievement = actual / projection</span>
+          <span className="ml-2 text-[11px] font-normal text-slate-500 dark:text-slate-400">Diwali_Projection tab; achievement = actual / projection</span>
         </span>
         <ExportCsvButton
           filename="diwali_projection"
@@ -941,9 +941,9 @@ function DiwaliSection({ days }: { days: DiwaliDay[] }) {
               return (
                 <React.Fragment key={d.date}>
                 {toggle}
-                <tr className={`${played ? '' : 'text-slate-400'} ${big ? 'bg-indigo-50 dark:bg-indigo-950/30 shadow-[inset_3px_0_0_0_#4f46e5]' : ''}`}>
+                <tr className={`${played ? '' : 'text-slate-400'} ${big ? 'bg-indigo-50 dark:bg-indigo-950/30 ' : ''}`}>
                   <td className="py-1.5 px-2 text-[11px] font-semibold whitespace-nowrap text-slate-900 dark:text-white">
-                    {fmtDay(d.date, false)} <span className="font-normal text-slate-500">{d.dow}</span>
+                    {fmtDay(d.date, false)} <span className="font-normal text-slate-500 dark:text-slate-400">{d.dow}</span>
                   </td>
                   <td className={td}>{d.weekFlag}</td>
                   <td className={td}>

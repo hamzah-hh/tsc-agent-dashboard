@@ -355,7 +355,7 @@ export function TeamView({
       {/* 1. Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Agents */}
-        <div className="bg-white/95 dark:bg-slate-900/90 backdrop-blur-sm border border-slate-200/90 dark:border-slate-800 rounded-2xl p-5 shadow-xs">
+        <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-5 shadow-xs">
           <span className="text-xs uppercase tracking-wider font-bold text-slate-400 dark:text-slate-500 font-mono block mb-1">
             Total Agents
           </span>
@@ -368,7 +368,7 @@ export function TeamView({
         </div>
 
         {/* Card 2: Total Revenue */}
-        <div className="bg-white/95 dark:bg-slate-900/90 backdrop-blur-sm border border-slate-200/90 dark:border-slate-800 rounded-2xl p-5 shadow-xs">
+        <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-5 shadow-xs">
           <span className="text-xs uppercase tracking-wider font-bold text-slate-400 dark:text-slate-500 font-mono block mb-1">
             Total Revenue
           </span>
@@ -379,7 +379,7 @@ export function TeamView({
         </div>
 
         {/* Total Visits */}
-        <div className="bg-white/95 dark:bg-slate-900/90 backdrop-blur-sm border border-slate-200/90 dark:border-slate-800 rounded-2xl p-5 shadow-xs">
+        <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-5 shadow-xs">
           <span className="text-xs uppercase tracking-wider font-bold text-slate-400 dark:text-slate-500 font-mono block mb-1">
             Total Visits
           </span>
@@ -390,7 +390,7 @@ export function TeamView({
         </div>
 
         {/* Card 3: Average Achievement % */}
-        <div className="bg-white/95 dark:bg-slate-900/90 backdrop-blur-sm border border-slate-200/90 dark:border-slate-800 rounded-2xl p-5 shadow-xs">
+        <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-5 shadow-xs">
           <span className="text-xs uppercase tracking-wider font-bold text-slate-400 dark:text-slate-500 font-mono block mb-1">
             Average Achievement %
           </span>
@@ -403,7 +403,7 @@ export function TeamView({
         </div>
 
         {/* Card 4: Total Incentive */}
-        <div className="bg-white/95 dark:bg-slate-900/90 backdrop-blur-sm border border-slate-200/90 dark:border-slate-800 rounded-2xl p-5 shadow-xs">
+        <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-5 shadow-xs">
           <span className="text-xs uppercase tracking-wider font-bold text-slate-400 dark:text-slate-500 font-mono block mb-1">
             Total Incentive
           </span>
@@ -414,7 +414,7 @@ export function TeamView({
         </div>
 
         {/* Team averages, from the agents' totals */}
-        <div className="bg-white/95 dark:bg-slate-900/90 backdrop-blur-sm border border-slate-200/90 dark:border-slate-800 rounded-2xl p-5 shadow-xs">
+        <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-5 shadow-xs">
           <span className="text-xs uppercase tracking-wider font-bold text-slate-400 dark:text-slate-500 font-mono block mb-1">
             Team AOV
           </span>
@@ -424,7 +424,7 @@ export function TeamView({
           <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">Total revenue / total orders</p>
         </div>
 
-        <div className="bg-white/95 dark:bg-slate-900/90 backdrop-blur-sm border border-slate-200/90 dark:border-slate-800 rounded-2xl p-5 shadow-xs">
+        <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-5 shadow-xs">
           <span className="text-xs uppercase tracking-wider font-bold text-slate-400 dark:text-slate-500 font-mono block mb-1">
             Avg Unique Connects
           </span>
@@ -434,7 +434,7 @@ export function TeamView({
           <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">Per agent per day (unique connected calls / worked days)</p>
         </div>
 
-        <div className="bg-white/95 dark:bg-slate-900/90 backdrop-blur-sm border border-slate-200/90 dark:border-slate-800 rounded-2xl p-5 shadow-xs">
+        <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-5 shadow-xs">
           <span className="text-xs uppercase tracking-wider font-bold text-slate-400 dark:text-slate-500 font-mono block mb-1">
             Avg Talk Time
           </span>
@@ -446,7 +446,7 @@ export function TeamView({
       </div>
 
       {/* 2. Class Distribution Card */}
-      <div className="bg-white/95 dark:bg-slate-900/90 backdrop-blur-sm border border-slate-200/90 dark:border-slate-800 rounded-2xl p-6 shadow-xs">
+      <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-6 shadow-xs">
         <h3 className="text-xs uppercase tracking-wider font-bold text-slate-400 dark:text-slate-500 font-mono mb-4">
           Class Distribution (NQ, A, B, C, D)
         </h3>
@@ -643,7 +643,7 @@ export function TeamView({
       </div>
 
       {/* 3. Agent Table Card */}
-      <div className="bg-white/95 dark:bg-slate-900/90 backdrop-blur-sm border border-slate-200/90 dark:border-slate-800 rounded-2xl shadow-xs overflow-hidden">
+      <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl shadow-xs overflow-hidden">
         {/* Controls Bar: Location Filter & Search */}
         <div className="p-4 border-b border-slate-200/90 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-3 w-full sm:w-auto">

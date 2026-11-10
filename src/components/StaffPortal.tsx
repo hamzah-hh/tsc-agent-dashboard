@@ -80,7 +80,7 @@ export function StaffPortal({
       )}
 
       {/* Top Role Header & Tab Navigation */}
-      <div className="bg-white/95 dark:bg-slate-900/90 backdrop-blur-sm border border-slate-200/90 dark:border-slate-800 rounded-2xl p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1 flex-wrap">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />

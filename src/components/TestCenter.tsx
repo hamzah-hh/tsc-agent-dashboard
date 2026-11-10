@@ -894,63 +894,63 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken, t
       </div>
 
       {/* Go-live readiness and the Live / Test switch */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+      <div className="bg-white dark:bg-panel border border-slate-200 dark:border-line rounded-xl p-6 shadow-sm">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
-            <Rocket className="w-5 h-5 text-emerald-600" />
-            <h2 className="text-base font-bold text-slate-900">Go-live readiness</h2>
+            <Rocket className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+            <h2 className="text-base font-bold text-slate-900 dark:text-fg">Go-live readiness</h2>
           </div>
           <button
             onClick={loadReadiness}
             disabled={readinessLoading}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-hover hover:bg-slate-200 text-slate-700 dark:text-fg-2 text-xs font-semibold rounded-lg transition disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${readinessLoading ? 'animate-spin' : ''}`} />
             Re-check
           </button>
         </div>
-        <p className="text-xs text-slate-600 mb-4">
-          Everything the app can check about itself. Fix every <strong className="text-rose-700">red</strong> row
-          before real agents log in; <strong className="text-amber-700">yellow</strong> rows need a look. Secrets are
+        <p className="text-xs text-slate-600 dark:text-fg-2 mb-4">
+          Everything the app can check about itself. Fix every <strong className="text-rose-700 dark:text-rose-400">red</strong> row
+          before real agents log in; <strong className="text-amber-700 dark:text-amber-400">yellow</strong> rows need a look. Secrets are
           never shown here, only whether they are set.
         </p>
 
         {readinessError && (
-          <div className="p-3 rounded-lg bg-rose-50 text-rose-800 border border-rose-200 text-xs mb-3">{readinessError}</div>
+          <div className="p-3 rounded-lg bg-rose-50 dark:bg-rose-500/10 text-rose-800 dark:text-rose-400 border border-rose-200 dark:border-rose-500/30 text-xs mb-3">{readinessError}</div>
         )}
         {!readiness && !readinessError && (
-          <div className="text-xs text-slate-500 py-4">{readinessLoading ? 'Checking...' : 'No result yet.'}</div>
+          <div className="text-xs text-slate-500 dark:text-slate-400 py-4">{readinessLoading ? 'Checking...' : 'No result yet.'}</div>
         )}
         {readiness && (
-          <ul className="divide-y divide-slate-100 border border-slate-200 rounded-lg overflow-hidden">
+          <ul className="divide-y divide-slate-100 dark:divide-line border border-slate-200 dark:border-line rounded-lg overflow-hidden">
             {readiness.checks.map((c) => (
-              <li key={c.id} className="flex items-start gap-3 px-4 py-2.5 text-xs bg-white">
+              <li key={c.id} className="flex items-start gap-3 px-4 py-2.5 text-xs bg-white dark:bg-panel">
                 {c.status === 'ok' ? (
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
                 ) : c.status === 'warn' ? (
                   <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
                 ) : (
-                  <XCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  <XCircle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
                 )}
                 <div>
-                  <div className="font-semibold text-slate-900">{c.label}</div>
-                  <div className={c.status === 'fail' ? 'text-rose-700' : 'text-slate-600'}>{c.detail}</div>
+                  <div className="font-semibold text-slate-900 dark:text-fg">{c.label}</div>
+                  <div className={c.status === 'fail' ? 'text-rose-700 dark:text-rose-400' : 'text-slate-600 dark:text-fg-2'}>{c.detail}</div>
                 </div>
               </li>
             ))}
           </ul>
         )}
 
-        <div className="mt-5 pt-4 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="text-xs text-slate-600">
+        <div className="mt-5 pt-4 border-t border-slate-200 dark:border-line flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="text-xs text-slate-600 dark:text-fg-2">
             {testMode ? (
               <>
-                <strong className="text-slate-900">Test mode is ON.</strong> Demo users are visible to everyone.
+                <strong className="text-slate-900 dark:text-fg">Test mode is ON.</strong> Demo users are visible to everyone.
                 When the checks above are green and the real roster is loaded, switch to Live.
               </>
             ) : (
               <>
-                <strong className="text-slate-900">The app is LIVE.</strong> Demo users are hidden from everyone
+                <strong className="text-slate-900 dark:text-fg">The app is LIVE.</strong> Demo users are hidden from everyone
                 except you. Switch back to Test mode only if you need the demo tools again.
               </>
             )}
@@ -978,7 +978,7 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken, t
           </button>
         </div>
         {modeMsg && (
-          <div className={`mt-3 text-xs font-medium ${modeMsg.type === 'ok' ? 'text-emerald-600' : 'text-rose-600'}`}>
+          <div className={`mt-3 text-xs font-medium ${modeMsg.type === 'ok' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
             {modeMsg.text}
           </div>
         )}
@@ -986,34 +986,34 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken, t
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Section 1: Health Check */}
-        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm flex flex-col justify-between">
+        <div className="bg-white dark:bg-panel border border-slate-200 dark:border-line rounded-xl p-6 shadow-sm flex flex-col justify-between">
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <Activity className="w-5 h-5 text-indigo-600" />
-              <h2 className="text-base font-bold text-slate-900">System Health Check</h2>
+              <Activity className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+              <h2 className="text-base font-bold text-slate-900 dark:text-fg">System Health Check</h2>
             </div>
-            <p className="text-xs text-slate-600 mb-4">
-              Runs <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-700">/api/health</code>: the server writes a timestamp to <code className="bg-slate-100 px-1 py-0.5 rounded">health/ping</code> in Firestore and reads it back. If it fails, the message says why.
+            <p className="text-xs text-slate-600 dark:text-fg-2 mb-4">
+              Runs <code className="bg-slate-100 dark:bg-hover px-1 py-0.5 rounded text-indigo-700 dark:text-indigo-400">/api/health</code>: the server writes a timestamp to <code className="bg-slate-100 dark:bg-hover px-1 py-0.5 rounded">health/ping</code> in Firestore and reads it back. If it fails, the message says why.
             </p>
 
             {healthStatus.result && (
               <div
                 className={`p-3.5 rounded-lg text-xs font-medium flex items-start gap-2.5 mb-4 ${
                   healthStatus.result === 'ok'
-                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                    : 'bg-rose-50 text-rose-800 border border-rose-200'
+                    ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-800 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30'
+                    : 'bg-rose-50 dark:bg-rose-500/10 text-rose-800 dark:text-rose-400 border border-rose-200 dark:border-rose-500/30'
                 }`}
               >
                 {healthStatus.result === 'ok' ? (
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
                 ) : (
-                  <XCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  <XCircle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
                 )}
                 <div>
                   <div className="font-semibold uppercase tracking-wider text-[11px]">
                     Status: {healthStatus.result}
                   </div>
-                  <div className="mt-0.5 text-slate-700">{healthStatus.message}</div>
+                  <div className="mt-0.5 text-slate-700 dark:text-fg-2">{healthStatus.message}</div>
                 </div>
               </div>
             )}
@@ -1037,26 +1037,26 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken, t
         </div>
 
         {/* Section 2: Calculation Engine Tests */}
-        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm flex flex-col justify-between">
+        <div className="bg-white dark:bg-panel border border-slate-200 dark:border-line rounded-xl p-6 shadow-sm flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <Flame className="w-5 h-5 text-amber-500" />
-                <h2 className="text-base font-bold text-slate-900">Calculation Engine Tests</h2>
+                <h2 className="text-base font-bold text-slate-900 dark:text-fg">Calculation Engine Tests</h2>
               </div>
               {testsRan && (
                 <span
                   className={`text-xs font-bold px-2.5 py-1 rounded-full ${
                     passedTestsCount === testCases.length
-                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                      : 'bg-rose-100 text-rose-800 border border-rose-200'
+                      ? 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-800 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30'
+                      : 'bg-rose-100 dark:bg-rose-500/15 text-rose-800 dark:text-rose-400 border border-rose-200 dark:border-rose-500/30'
                   }`}
                 >
                   {passedTestsCount} of {testCases.length} passed
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-600 mb-4">
+            <p className="text-xs text-slate-600 dark:text-fg-2 mb-4">
               Validates all {testCases.length} incentive test cases (HO, Store and Pre Sales) directly in the browser using the pure TypeScript calculation engine.
             </p>
           </div>
@@ -1072,18 +1072,18 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken, t
 
       {/* Test cases results table */}
       {testsRan && (
-        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-          <div className="px-5 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
-            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+        <div className="bg-white dark:bg-panel border border-slate-200 dark:border-line rounded-xl overflow-hidden shadow-sm">
+          <div className="px-5 py-4 border-b border-slate-200 dark:border-line bg-slate-50 dark:bg-raised flex items-center justify-between">
+            <h3 className="text-xs font-bold text-slate-800 dark:text-fg uppercase tracking-wider">
               Calculation Test Results
             </h3>
-            <span className="text-xs font-semibold text-slate-500">
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
               Total {testResults.length} cases
             </span>
           </div>
           <div className="overflow-x-auto max-h-96">
             <table className="w-full text-left border-collapse text-xs">
-              <thead className="bg-slate-100 text-slate-600 sticky top-0 border-b border-slate-200">
+              <thead className="bg-slate-100 dark:bg-hover text-slate-600 dark:text-fg-2 sticky top-0 border-b border-slate-200 dark:border-line">
                 <tr>
                   <th className="py-2.5 px-4 font-semibold w-12">#</th>
                   <th className="py-2.5 px-4 font-semibold">Test Specification</th>
@@ -1092,21 +1092,21 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken, t
                   <th className="py-2.5 px-4 font-semibold text-center w-24">Result</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 font-mono text-[11px]">
+              <tbody className="divide-y divide-slate-100 dark:divide-line font-mono text-[11px]">
                 {testResults.map((t) => (
-                  <tr key={t.id} className={t.passed ? 'hover:bg-slate-50' : 'bg-rose-50/50'}>
-                    <td className="py-2 px-4 text-slate-500 font-sans font-bold">{t.id}</td>
-                    <td className="py-2 px-4 text-slate-800 font-sans">{t.description}</td>
-                    <td className="py-2 px-4 text-slate-600">{t.expected}</td>
-                    <td className="py-2 px-4 text-slate-900">{t.actual}</td>
+                  <tr key={t.id} className={t.passed ? 'hover:bg-slate-50' : 'bg-rose-50/50 dark:bg-rose-500/10'}>
+                    <td className="py-2 px-4 text-slate-500 dark:text-slate-400 font-sans font-bold">{t.id}</td>
+                    <td className="py-2 px-4 text-slate-800 dark:text-fg font-sans">{t.description}</td>
+                    <td className="py-2 px-4 text-slate-600 dark:text-fg-2">{t.expected}</td>
+                    <td className="py-2 px-4 text-slate-900 dark:text-fg">{t.actual}</td>
                     <td className="py-2 px-4 text-center">
                       {t.passed ? (
-                        <span className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-sans font-semibold text-[10px]">
-                          <CheckCircle2 className="w-3 h-3 text-emerald-600" /> PASS
+                        <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 rounded font-sans font-semibold text-[10px]">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" /> PASS
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 text-rose-700 bg-rose-50 px-2 py-0.5 rounded font-sans font-semibold text-[10px]">
-                          <XCircle className="w-3 h-3 text-rose-600" /> FAIL
+                        <span className="inline-flex items-center gap-1 text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-500/10 px-2 py-0.5 rounded font-sans font-semibold text-[10px]">
+                          <XCircle className="w-3 h-3 text-rose-600 dark:text-rose-400" /> FAIL
                         </span>
                       )}
                     </td>
@@ -1119,38 +1119,38 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken, t
       )}
 
       {/* Section 3: Data Import & Google Sheets Integration */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+      <div className="bg-white dark:bg-panel border border-slate-200 dark:border-line rounded-xl p-6 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div className="flex items-center gap-2">
-            <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
+            <FileSpreadsheet className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
             <div>
-              <h2 className="text-base font-bold text-slate-900">Sync Cycle Data</h2>
-              <p className="text-xs text-slate-500">Connect Google Sheets directly or upload a spreadsheet file (.xlsx)</p>
+              <h2 className="text-base font-bold text-slate-900 dark:text-fg">Sync Cycle Data</h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Connect Google Sheets directly or upload a spreadsheet file (.xlsx)</p>
             </div>
           </div>
 
           {/* Tab selector */}
-          <div className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs font-semibold">
+          <div className="flex items-center bg-slate-100 dark:bg-hover p-1 rounded-lg border border-slate-200 dark:border-line text-xs font-semibold">
             <button
               onClick={() => setActiveImportTab('googleSheets')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition ${
                 activeImportTab === 'googleSheets'
-                  ? 'bg-white text-emerald-700 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white dark:bg-panel text-emerald-700 dark:text-emerald-400 shadow-sm'
+                  : 'text-slate-600 dark:text-fg-2 hover:text-slate-900'
               }`}
             >
-              <Globe className="w-3.5 h-3.5 text-emerald-600" />
+              <Globe className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
               <span>Google Sheets Live</span>
             </button>
             <button
               onClick={() => setActiveImportTab('fileUpload')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition ${
                 activeImportTab === 'fileUpload'
-                  ? 'bg-white text-slate-800 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white dark:bg-panel text-slate-800 dark:text-fg shadow-sm'
+                  : 'text-slate-600 dark:text-fg-2 hover:text-slate-900'
               }`}
             >
-              <Upload className="w-3.5 h-3.5 text-slate-500" />
+              <Upload className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
               <span>Upload .xlsx File</span>
             </button>
           </div>
@@ -1158,38 +1158,38 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken, t
 
         {activeImportTab === 'googleSheets' ? (
           <div className="space-y-4">
-            <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-50/60 to-teal-50/60 border border-emerald-100/80">
+            <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100/80 dark:border-emerald-500/30">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
                 <div className="flex items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="text-xs font-bold text-emerald-900">Direct Google Sheets API Connection</span>
+                  <span className="text-xs font-bold text-emerald-900 dark:text-emerald-400">Direct Google Sheets API Connection</span>
                 </div>
                 {hasSheetsToken ? (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                    <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 dark:bg-emerald-500/15 text-emerald-800 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-500/30">
+                    <CheckCircle className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                     Google Sheets Authorized
                   </span>
                 ) : (
                   <button
                     onClick={handleAuthorizeSheets}
                     disabled={sheetsConnectLoading}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 bg-white hover:bg-emerald-50 text-emerald-700 text-xs font-semibold rounded-lg border border-emerald-300 shadow-sm transition disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 px-3 py-1 bg-white dark:bg-panel hover:bg-emerald-50 text-emerald-700 dark:text-emerald-400 text-xs font-semibold rounded-lg border border-emerald-300 dark:border-emerald-500/30 shadow-sm transition disabled:opacity-50"
                   >
                     {sheetsConnectLoading ? (
                       <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                     ) : (
-                      <Globe className="w-3.5 h-3.5 text-emerald-600" />
+                      <Globe className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                     )}
                     Authorize Google Sheets Access
                   </button>
                 )}
               </div>
 
-              <p className="text-xs text-slate-600 leading-relaxed mb-4">
+              <p className="text-xs text-slate-600 dark:text-fg-2 leading-relaxed mb-4">
                 Enter your Google Sheet URL or Spreadsheet ID. The dashboard will automatically read tabs{' '}
-                <span className="font-semibold text-slate-800">MainSheet</span> (performance),{' '}
-                <span className="font-semibold text-slate-800">D-1_QualityAudit_Summary</span> (quality), and{' '}
-                <span className="font-semibold text-slate-800">Revenue</span> (channel breakdown) and sync them into your dashboard.
+                <span className="font-semibold text-slate-800 dark:text-fg">MainSheet</span> (performance),{' '}
+                <span className="font-semibold text-slate-800 dark:text-fg">D-1_QualityAudit_Summary</span> (quality), and{' '}
+                <span className="font-semibold text-slate-800 dark:text-fg">Revenue</span> (channel breakdown) and sync them into your dashboard.
               </p>
 
               <div className="flex flex-col sm:flex-row gap-2">
@@ -1199,7 +1199,7 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken, t
                     value={googleSheetUrl}
                     onChange={(e) => setGoogleSheetUrl(e.target.value)}
                     placeholder="https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs.../edit"
-                    className="w-full text-xs px-3.5 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono text-slate-800 bg-white"
+                    className="w-full text-xs px-3.5 py-2.5 rounded-lg border border-slate-300 dark:border-line-strong focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono text-slate-800 dark:text-fg bg-white dark:bg-panel"
                   />
                 </div>
                 <div className="flex items-center gap-2">
@@ -1221,10 +1221,10 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken, t
                   <button
                     onClick={saveDefaultSheetUrl}
                     disabled={savingDefaultUrl || !googleSheetUrl}
-                    className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg border border-slate-300 shadow-sm transition shrink-0"
+                    className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-white dark:bg-panel hover:bg-slate-50 text-slate-700 dark:text-fg-2 text-xs font-semibold rounded-lg border border-slate-300 dark:border-line-strong shadow-sm transition shrink-0"
                     title="Save as default sheet URL for this dashboard"
                   >
-                    {savingDefaultUrl ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Link className="w-3.5 h-3.5 text-slate-500" />}
+                    {savingDefaultUrl ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Link className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />}
                     <span>Save Default</span>
                   </button>
                   {googleSheetUrl && (
@@ -1232,10 +1232,10 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken, t
                       href={googleSheetUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold rounded-lg border border-emerald-300 shadow-sm transition shrink-0"
+                      className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-emerald-50 dark:bg-emerald-500/10 hover:bg-emerald-100 text-emerald-800 dark:text-emerald-400 text-xs font-semibold rounded-lg border border-emerald-300 dark:border-emerald-500/30 shadow-sm transition shrink-0"
                       title="Open Google Sheet in new tab"
                     >
-                      <ExternalLink className="w-3.5 h-3.5 text-emerald-600" />
+                      <ExternalLink className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                       <span>Open Sheet</span>
                     </a>
                   )}
@@ -1243,45 +1243,45 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken, t
               </div>
 
               {sheetFetchError && (
-                <div className="mt-3 p-3 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-700 flex items-start gap-2">
+                <div className="mt-3 p-3 rounded-lg bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 text-xs text-rose-700 dark:text-rose-400 flex items-start gap-2">
                   <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
                   <div>{sheetFetchError}</div>
                 </div>
               )}
 
               {sheetFetchResult && (
-                <div className="mt-4 p-3 bg-white rounded-lg border border-emerald-200 space-y-2">
+                <div className="mt-4 p-3 bg-white dark:bg-panel rounded-lg border border-emerald-200 dark:border-emerald-500/30 space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                      <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                    <span className="text-xs font-bold text-slate-800 dark:text-fg flex items-center gap-1.5">
+                      <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                       {sheetFetchResult.spreadsheetTitle}
                     </span>
-                    <span className="text-[11px] font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-semibold">
+                    <span className="text-[11px] font-mono text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-500/30 font-semibold">
                       {sheetFetchResult.sheetsFound.length} tabs found
                     </span>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 text-xs">
-                    <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200">
-                      <div className="text-[11px] text-slate-500 font-medium">Main Performance Tab</div>
-                      <div className="font-bold text-slate-800 text-sm mt-0.5">{sheetFetchResult.mainRows.length} rows</div>
-                      <div className="text-[10px] text-slate-500 font-mono mt-0.5">Tab: {sheetFetchResult.mainSheetName}</div>
+                    <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-raised border border-slate-200 dark:border-line">
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Main Performance Tab</div>
+                      <div className="font-bold text-slate-800 dark:text-fg text-sm mt-0.5">{sheetFetchResult.mainRows.length} rows</div>
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono mt-0.5">Tab: {sheetFetchResult.mainSheetName}</div>
                     </div>
-                    <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200">
-                      <div className="text-[11px] text-slate-500 font-medium">Quality Audit Tab</div>
-                      <div className="font-bold text-slate-800 text-sm mt-0.5">
+                    <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-raised border border-slate-200 dark:border-line">
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Quality Audit Tab</div>
+                      <div className="font-bold text-slate-800 dark:text-fg text-sm mt-0.5">
                         {sheetFetchResult.qualityRows.length} rows
                       </div>
-                      <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono mt-0.5">
                         Tab: {sheetFetchResult.qualitySheetName || 'Not detected'}
                       </div>
                     </div>
-                    <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200">
-                      <div className="text-[11px] text-slate-500 font-medium">Revenue Tab</div>
-                      <div className="font-bold text-slate-800 text-sm mt-0.5">
+                    <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-raised border border-slate-200 dark:border-line">
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Revenue Tab</div>
+                      <div className="font-bold text-slate-800 dark:text-fg text-sm mt-0.5">
                         {sheetFetchResult.revenueRows.length} rows
                       </div>
-                      <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono mt-0.5">
                         Tab: {sheetFetchResult.revenueSheetName || 'Calculated from Main'}
                       </div>
                     </div>
@@ -1310,20 +1310,20 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken, t
           </div>
         ) : (
           <div>
-            <p className="text-xs text-slate-600 mb-4">
-              Upload an Excel workbook (.xlsx) in the clean layout (<span className="font-semibold text-slate-800">Agents, Orders, Visits, Dialer, PreSales, Quality</span>), or the old one with <span className="font-semibold text-slate-800">MainSheet</span>, optional <span className="font-semibold text-slate-800">D-1_QualityAudit_Summary</span>, and optional <span className="font-semibold text-slate-800">Revenue</span>.
+            <p className="text-xs text-slate-600 dark:text-fg-2 mb-4">
+              Upload an Excel workbook (.xlsx) in the clean layout (<span className="font-semibold text-slate-800 dark:text-fg">Agents, Orders, Visits, Dialer, PreSales, Quality</span>), or the old one with <span className="font-semibold text-slate-800 dark:text-fg">MainSheet</span>, optional <span className="font-semibold text-slate-800 dark:text-fg">D-1_QualityAudit_Summary</span>, and optional <span className="font-semibold text-slate-800 dark:text-fg">Revenue</span>.
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
               <div className="md:col-span-2">
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-fg-2 mb-1">
                   Select .xlsx File
                 </label>
                 <input
                   type="file"
                   accept=".xlsx,.xls"
                   onChange={handleFileUpload}
-                  className="block w-full text-xs text-slate-700 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-slate-100 file:text-slate-800 hover:file:bg-slate-200 border border-slate-300 rounded-lg cursor-pointer p-1"
+                  className="block w-full text-xs text-slate-700 dark:text-fg-2 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-slate-100 file:text-slate-800 hover:file:bg-slate-200 border border-slate-300 dark:border-line-strong rounded-lg cursor-pointer p-1"
                 />
               </div>
 
@@ -1345,7 +1345,7 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken, t
             </div>
 
             {fileStats && selectedFile && (
-              <div className="mt-4 p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between text-xs text-slate-700">
+              <div className="mt-4 p-3 bg-slate-50 dark:bg-raised border border-slate-200 dark:border-line rounded-lg flex items-center justify-between text-xs text-slate-700 dark:text-fg-2">
                 <div>
                   <span className="font-semibold">Selected:</span> {selectedFile.name} (
                   {fileStats.cleanTabs
@@ -1364,18 +1364,18 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken, t
           <div
             className={`mt-4 p-4 rounded-lg text-xs ${
               importStatus.result === 'ok'
-                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                : 'bg-rose-50 text-rose-800 border border-rose-200'
+                ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-800 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30'
+                : 'bg-rose-50 dark:bg-rose-500/10 text-rose-800 dark:text-rose-400 border border-rose-200 dark:border-rose-500/30'
             }`}
           >
             <div className="font-bold flex items-center gap-2">
               {importStatus.result === 'ok' ? (
                 <>
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Sync Succeeded! Dashboard Updated.
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" /> Sync Succeeded! Dashboard Updated.
                 </>
               ) : (
                 <>
-                  <XCircle className="w-4 h-4 text-rose-600" /> Sync Error
+                  <XCircle className="w-4 h-4 text-rose-600 dark:text-rose-400" /> Sync Error
                 </>
               )}
             </div>
@@ -1387,7 +1387,7 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken, t
                   <strong>Last Data Date:</strong> {importStatus.summary.lastDataDate || 'N/A'}
                 </div>
                 {importStatus.summary.warnings?.length > 0 && (
-                  <div className="text-amber-800 bg-amber-50 p-2 rounded border border-amber-200 mt-2">
+                  <div className="text-amber-800 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 p-2 rounded border border-amber-200 dark:border-amber-500/30 mt-2">
                     <span className="font-semibold">Warnings ({importStatus.summary.warnings.length}):</span>
                     <ul className="list-disc list-inside mt-1 space-y-0.5">
                       {importStatus.summary.warnings.map((w: string, i: number) => (
@@ -1404,53 +1404,53 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken, t
       </div>
 
       {/* Section: Live Google Sheets Sync (Apps Script) */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
+      <div className="bg-white dark:bg-panel border border-slate-200 dark:border-line rounded-xl p-6 shadow-sm space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Link className="w-5 h-5 text-indigo-600" />
-            <h2 className="text-base font-bold text-slate-900">Link Live Google Sheet (Automated Daily Sync)</h2>
+            <Link className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+            <h2 className="text-base font-bold text-slate-900 dark:text-fg">Link Live Google Sheet (Automated Daily Sync)</h2>
           </div>
-          <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
+          <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/30">
             Webhook API
           </span>
         </div>
 
-        <p className="text-xs text-slate-600">
+        <p className="text-xs text-slate-600 dark:text-fg-2">
           Sync your Google Sheet directly into the dashboard with a 2-minute Apps Script. It updates caller performance, recalibrates leaderboard rankings, and refreshes the team view every night automatically.
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
-          <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
-            <span className="text-[10px] uppercase font-bold text-slate-500 font-mono block mb-1">
+          <div className="bg-slate-50 dark:bg-raised border border-slate-200 dark:border-line rounded-lg p-3">
+            <span className="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 font-mono block mb-1">
               Dashboard Webhook URL
             </span>
-            <code className="text-xs font-mono font-bold text-slate-900 select-all break-all">
+            <code className="text-xs font-mono font-bold text-slate-900 dark:text-fg select-all break-all">
               {window.location.origin}/api/sync
             </code>
           </div>
-          <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
-            <span className="text-[10px] uppercase font-bold text-slate-500 font-mono block mb-1">
+          <div className="bg-slate-50 dark:bg-raised border border-slate-200 dark:border-line rounded-lg p-3">
+            <span className="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 font-mono block mb-1">
               Sync Secret Header (X-Sync-Key)
             </span>
-            <code className="text-xs font-mono font-bold text-indigo-700 select-all">
+            <code className="text-xs font-mono font-bold text-indigo-700 dark:text-indigo-400 select-all">
               CHANGE_ME_TO_24_OR_MORE_RANDOM_CHARACTERS
             </code>
           </div>
         </div>
 
         {/* 3-Step Setup Instructions */}
-        <div className="border border-slate-200 rounded-lg p-4 bg-slate-50/60 space-y-3">
-          <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
+        <div className="border border-slate-200 dark:border-line rounded-lg p-4 bg-slate-50/60 dark:bg-raised/60 space-y-3">
+          <span className="text-xs font-bold text-slate-800 dark:text-fg uppercase tracking-wider block">
             Setup Instructions (3 Simple Steps)
           </span>
-          <ol className="text-xs text-slate-700 space-y-2 list-decimal list-inside font-medium">
+          <ol className="text-xs text-slate-700 dark:text-fg-2 space-y-2 list-decimal list-inside font-medium">
             <li>
               Open your Google Sheet{' '}
               <a
                 href="https://docs.google.com/spreadsheets/d/1cyAdyup2UontNJecjnZYdS4ndBq8qZtX9JJ5qiuq8mk/edit?usp=sharing"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-emerald-700 underline font-semibold hover:text-emerald-900 inline-flex items-center gap-1"
+                className="text-emerald-700 dark:text-emerald-400 underline font-semibold hover:text-emerald-900 inline-flex items-center gap-1"
               >
                 (Open Sheet ↗)
               </a>{' '}
@@ -1460,7 +1460,7 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken, t
               Delete any existing code in the script editor, paste the script below, and click <strong>Save</strong> (disk icon).
             </li>
             <li>
-              Click the <strong>Triggers</strong> icon (clock on the left) &rarr; <strong>Add Trigger</strong> &rarr; Run <code className="bg-slate-200 px-1 py-0.5 rounded font-mono">syncDataToDashboard</code> &rarr; select <strong>Time-driven</strong> &rarr; <strong>Day timer</strong> (e.g. 2:00 AM – 3:00 AM IST).
+              Click the <strong>Triggers</strong> icon (clock on the left) &rarr; <strong>Add Trigger</strong> &rarr; Run <code className="bg-slate-200 dark:bg-line px-1 py-0.5 rounded font-mono">syncDataToDashboard</code> &rarr; select <strong>Time-driven</strong> &rarr; <strong>Day timer</strong> (e.g. 2:00 AM – 3:00 AM IST).
             </li>
           </ol>
         </div>
@@ -1681,18 +1681,18 @@ function getRowsAsObjects(sheet) {
 
       {/* Section 4: Demo users (test mode only) */}
       {testMode && (
-      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+      <div className="bg-white dark:bg-panel border border-slate-200 dark:border-line rounded-xl p-6 shadow-sm">
         <div className="flex items-center gap-2 mb-2">
-          <Database className="w-5 h-5 text-blue-600" />
-          <h2 className="text-base font-bold text-slate-900">Demo Users (3)</h2>
+          <Database className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+          <h2 className="text-base font-bold text-slate-900 dark:text-fg">Demo Users (3)</h2>
         </div>
-        <p className="text-xs text-slate-600 mb-4">
-          Creates exactly <strong>3 demo users</strong>: 1 HO Caller (Dighe), 1 Store Caller (Andheri) and 1 Pre Sales agent (Dighe), with sample data from the cycle start up to the chosen date. All are marked <code className="bg-slate-100 px-1 py-0.5 rounded text-blue-700">isTest = true</code>: once test mode is off they stay out of leaderboards and team totals, and <strong>Clear All Test Data</strong> removes them. A blank login email gets a placeholder that nobody can sign in with; you can still open that demo user from the Team view.
+        <p className="text-xs text-slate-600 dark:text-fg-2 mb-4">
+          Creates exactly <strong>3 demo users</strong>: 1 HO Caller (Dighe), 1 Store Caller (Andheri) and 1 Pre Sales agent (Dighe), with sample data from the cycle start up to the chosen date. All are marked <code className="bg-slate-100 dark:bg-hover px-1 py-0.5 rounded text-blue-700 dark:text-blue-400">isTest = true</code>: once test mode is off they stay out of leaderboards and team totals, and <strong>Clear All Test Data</strong> removes them. A blank login email gets a placeholder that nobody can sign in with; you can still open that demo user from the Team view.
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
           <div>
-            <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+            <label className="block text-[11px] font-semibold text-slate-700 dark:text-fg-2 mb-1">
               HO Caller demo login email (Dighe)
             </label>
             <input
@@ -1700,12 +1700,12 @@ function getRowsAsObjects(sheet) {
               value={dummyForm.hoEmail}
               onChange={(e) => setDummyForm({ ...dummyForm, hoEmail: e.target.value })}
               placeholder="personal Gmail"
-              className="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 text-slate-800"
+              className="w-full text-xs border border-slate-300 dark:border-line-strong rounded-lg px-3 py-2 text-slate-800 dark:text-fg"
             />
           </div>
 
           <div>
-            <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+            <label className="block text-[11px] font-semibold text-slate-700 dark:text-fg-2 mb-1">
               Store Caller demo login email (Andheri)
             </label>
             <input
@@ -1713,12 +1713,12 @@ function getRowsAsObjects(sheet) {
               value={dummyForm.storeEmail}
               onChange={(e) => setDummyForm({ ...dummyForm, storeEmail: e.target.value })}
               placeholder="personal Gmail"
-              className="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 text-slate-800"
+              className="w-full text-xs border border-slate-300 dark:border-line-strong rounded-lg px-3 py-2 text-slate-800 dark:text-fg"
             />
           </div>
 
           <div>
-            <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+            <label className="block text-[11px] font-semibold text-slate-700 dark:text-fg-2 mb-1">
               Pre Sales demo login email (Dighe (Pre Sales))
             </label>
             <input
@@ -1726,55 +1726,55 @@ function getRowsAsObjects(sheet) {
               value={dummyForm.preSalesEmail}
               onChange={(e) => setDummyForm({ ...dummyForm, preSalesEmail: e.target.value })}
               placeholder="personal Gmail"
-              className="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 text-slate-800"
+              className="w-full text-xs border border-slate-300 dark:border-line-strong rounded-lg px-3 py-2 text-slate-800 dark:text-fg"
             />
           </div>
 
           <div>
-            <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+            <label className="block text-[11px] font-semibold text-slate-700 dark:text-fg-2 mb-1">
               Dighe TL login email (optional)
             </label>
             <input
               type="email"
               value={dummyForm.tlDigheEmail}
               onChange={(e) => setDummyForm({ ...dummyForm, tlDigheEmail: e.target.value })}
-              className="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 text-slate-800"
+              className="w-full text-xs border border-slate-300 dark:border-line-strong rounded-lg px-3 py-2 text-slate-800 dark:text-fg"
             />
           </div>
 
           <div>
-            <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+            <label className="block text-[11px] font-semibold text-slate-700 dark:text-fg-2 mb-1">
               Andheri TL login email (optional)
             </label>
             <input
               type="email"
               value={dummyForm.tlAndheriEmail}
               onChange={(e) => setDummyForm({ ...dummyForm, tlAndheriEmail: e.target.value })}
-              className="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 text-slate-800"
+              className="w-full text-xs border border-slate-300 dark:border-line-strong rounded-lg px-3 py-2 text-slate-800 dark:text-fg"
             />
           </div>
 
           <div>
-            <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+            <label className="block text-[11px] font-semibold text-slate-700 dark:text-fg-2 mb-1">
               Test Manager login email (optional)
             </label>
             <input
               type="email"
               value={dummyForm.managerEmail}
               onChange={(e) => setDummyForm({ ...dummyForm, managerEmail: e.target.value })}
-              className="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 text-slate-800"
+              className="w-full text-xs border border-slate-300 dark:border-line-strong rounded-lg px-3 py-2 text-slate-800 dark:text-fg"
             />
           </div>
 
           <div>
-            <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+            <label className="block text-[11px] font-semibold text-slate-700 dark:text-fg-2 mb-1">
               Data Up To (YYYY-MM-DD)
             </label>
             <input
               type="date"
               value={dummyForm.dataUpTo}
               onChange={(e) => setDummyForm({ ...dummyForm, dataUpTo: e.target.value })}
-              className="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 text-slate-800"
+              className="w-full text-xs border border-slate-300 dark:border-line-strong rounded-lg px-3 py-2 text-slate-800 dark:text-fg"
             />
           </div>
 
@@ -1811,23 +1811,23 @@ function getRowsAsObjects(sheet) {
           <div
             className={`p-4 rounded-lg text-xs ${
               dummyStatus.result === 'ok'
-                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                : 'bg-rose-50 text-rose-800 border border-rose-200'
+                ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-800 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30'
+                : 'bg-rose-50 dark:bg-rose-500/10 text-rose-800 dark:text-rose-400 border border-rose-200 dark:border-rose-500/30'
             }`}
           >
             <div className="font-bold flex items-center gap-2">
               {dummyStatus.result === 'ok' ? (
                 <>
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Demo users created successfully!
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" /> Demo users created successfully!
                 </>
               ) : (
                 <>
-                  <XCircle className="w-4 h-4 text-rose-600" /> Demo user creation failed
+                  <XCircle className="w-4 h-4 text-rose-600 dark:text-rose-400" /> Demo user creation failed
                 </>
               )}
             </div>
             {dummyStatus.summary && (
-              <div className="mt-2 text-slate-700">
+              <div className="mt-2 text-slate-700 dark:text-fg-2">
                 {dummyStatus.result === 'ok' ? (
                   <>
                     Created <strong>{dummyStatus.summary.agents ?? 3}</strong> demo users (HO Caller, Store Caller, Pre Sales) and their access records.
@@ -1840,7 +1840,7 @@ function getRowsAsObjects(sheet) {
                   </span>
                 )}
                 {dummyStatus.result === 'ok' && dummyStatus.summary.warnings?.length > 0 && (
-                  <div className="mt-2 text-amber-800 bg-amber-50 p-2 rounded border border-amber-200">
+                  <div className="mt-2 text-amber-800 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 p-2 rounded border border-amber-200 dark:border-amber-500/30">
                     {dummyStatus.summary.warnings.join('; ')}
                   </div>
                 )}
@@ -1852,16 +1852,16 @@ function getRowsAsObjects(sheet) {
       )}
 
       {/* Section 5: AI Coaching Suggestions (Gemini Flash) */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-6">
+      <div className="bg-white dark:bg-panel border border-slate-200 dark:border-line rounded-xl p-6 shadow-sm space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <Sparkles className="w-5 h-5 text-indigo-600" />
-              <h2 className="text-base font-bold text-slate-900">
+              <Sparkles className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+              <h2 className="text-base font-bold text-slate-900 dark:text-fg">
                 AI Coaching Suggestions (Gemini Flash)
               </h2>
             </div>
-            <p className="text-xs text-slate-600">
+            <p className="text-xs text-slate-600 dark:text-fg-2">
               Rewrites rule-based suggestions into short, upbeat Diwali sales coaching messages. Only runs on the server; the browser and Simulator never call Gemini. Numbers are strictly validated before saving.
             </p>
           </div>
@@ -1870,7 +1870,7 @@ function getRowsAsObjects(sheet) {
             <button
               onClick={handleTestAi}
               disabled={testAiLoading}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-lg border border-indigo-200 shadow-xs transition disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-400 text-xs font-bold rounded-lg border border-indigo-200 dark:border-indigo-500/30 shadow-xs transition disabled:opacity-50"
             >
               <Sparkles className={`w-3.5 h-3.5 ${testAiLoading ? 'animate-spin' : ''}`} />
               {testAiLoading ? 'Testing Gemini...' : 'Test AI text (Dry-Run)'}
@@ -1888,12 +1888,12 @@ function getRowsAsObjects(sheet) {
         </div>
 
         {/* AI Settings Controls */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 dark:bg-raised p-4 rounded-xl border border-slate-200 dark:border-line">
           {/* Switch: config/app.aiEnabled */}
-          <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-slate-200">
+          <div className="flex items-center justify-between p-3 bg-white dark:bg-panel rounded-lg border border-slate-200 dark:border-line">
             <div>
-              <span className="text-xs font-bold text-slate-900 block">AI Suggestions Active</span>
-              <span className="text-[11px] text-slate-500 block">
+              <span className="text-xs font-bold text-slate-900 dark:text-fg block">AI Suggestions Active</span>
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 block">
                 {aiEnabled ? 'Gemini rewrites suggestions on import' : 'Rule text is shown without AI calls'}
               </span>
             </div>
@@ -1905,15 +1905,15 @@ function getRowsAsObjects(sheet) {
                 onChange={(e) => updateAiConfig(e.target.checked, aiTone)}
                 className="sr-only peer"
               />
-              <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+              <div className="w-11 h-6 bg-slate-200 dark:bg-line peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
             </label>
           </div>
 
           {/* Select: config/app.aiTone */}
-          <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-slate-200">
+          <div className="flex items-center justify-between p-3 bg-white dark:bg-panel rounded-lg border border-slate-200 dark:border-line">
             <div>
-              <span className="text-xs font-bold text-slate-900 block">Coaching Tone</span>
-              <span className="text-[11px] text-slate-500 block">
+              <span className="text-xs font-bold text-slate-900 dark:text-fg block">Coaching Tone</span>
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 block">
                 Language style for motivational messages
               </span>
             </div>
@@ -1921,7 +1921,7 @@ function getRowsAsObjects(sheet) {
               value={aiTone}
               disabled={savingAiConfig}
               onChange={(e) => updateAiConfig(aiEnabled, e.target.value as 'english' | 'hinglish')}
-              className="text-xs font-semibold border border-slate-300 rounded-lg px-3 py-1.5 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="text-xs font-semibold border border-slate-300 dark:border-line-strong rounded-lg px-3 py-1.5 bg-white dark:bg-panel text-slate-800 dark:text-fg focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
               <option value="english">English (Simple & Friendly)</option>
               <option value="hinglish">Hinglish (Casual Hindi-English mix)</option>
@@ -1933,17 +1933,17 @@ function getRowsAsObjects(sheet) {
         {generateAllResult && (
           <div className={`p-4 rounded-xl text-xs ${
             generateAllResult.error
-              ? 'bg-rose-50 text-rose-800 border border-rose-200'
-              : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+              ? 'bg-rose-50 dark:bg-rose-500/10 text-rose-800 dark:text-rose-400 border border-rose-200 dark:border-rose-500/30'
+              : 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-800 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30'
           }`}>
             {generateAllResult.error ? (
               <div className="font-semibold flex items-center gap-1.5">
-                <XCircle className="w-4 h-4 text-rose-600" />
+                <XCircle className="w-4 h-4 text-rose-600 dark:text-rose-400" />
                 {generateAllResult.error}
               </div>
             ) : (
               <div className="font-semibold flex items-center gap-1.5">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                 Generated AI suggestions: {generateAllResult.okCount} OK, {generateAllResult.failedCount} failed
                 {generateAllResult.pendingCount ? `, ${generateAllResult.pendingCount} not reached in time (run it again)` : ''} out of {generateAllResult.total} agents in the active cycle. Saved to Firestore.
               </div>
@@ -1953,56 +1953,56 @@ function getRowsAsObjects(sheet) {
 
         {/* Test AI Report (3 columns: defaultText, Gemini text, and check result) */}
         {testAiReport && (
-          <div className="border border-slate-200 rounded-xl overflow-hidden">
-            <div className="p-3 bg-slate-100 border-b border-slate-200 flex items-center justify-between text-xs">
-              <span className="font-bold text-slate-800">
+          <div className="border border-slate-200 dark:border-line rounded-xl overflow-hidden">
+            <div className="p-3 bg-slate-100 dark:bg-hover border-b border-slate-200 dark:border-line flex items-center justify-between text-xs">
+              <span className="font-bold text-slate-800 dark:text-fg">
                 Dry-Run AI Validation Report {testAiReport.agentName ? `(${testAiReport.agentName})` : ''}
               </span>
-              <span className="text-[11px] text-slate-500">
+              <span className="text-[11px] text-slate-500 dark:text-slate-400">
                 Dry-run results are validated against strict number & word count rules without modifying Firestore.
               </span>
             </div>
 
             {testAiReport.error ? (
-              <div className="p-4 text-xs text-rose-600 bg-rose-50">
+              <div className="p-4 text-xs text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-500/10">
                 {testAiReport.error}
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs text-slate-700 border-collapse">
-                  <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase font-semibold text-[10px] tracking-wider">
+                <table className="w-full text-left text-xs text-slate-700 dark:text-fg-2 border-collapse">
+                  <thead className="bg-slate-50 dark:bg-raised border-b border-slate-200 dark:border-line text-slate-500 dark:text-slate-400 uppercase font-semibold text-[10px] tracking-wider">
                     <tr>
                       <th className="py-2.5 px-4 w-1/3">Default Text (Rule)</th>
                       <th className="py-2.5 px-4 w-1/3">Gemini Text (AI)</th>
                       <th className="py-2.5 px-4 w-1/3">Check Result</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-slate-100 dark:divide-line">
                     {testAiReport.items?.map((item, idx) => (
                       <tr key={idx} className="hover:bg-slate-50/60 transition">
-                        <td className="py-3 px-4 text-slate-600 align-top">
+                        <td className="py-3 px-4 text-slate-600 dark:text-fg-2 align-top">
                           <span className="font-mono text-[10px] text-slate-400 block mb-0.5">
                             [{item.id}]
                           </span>
                           {item.defaultText}
                         </td>
-                        <td className="py-3 px-4 text-slate-900 font-medium align-top">
+                        <td className="py-3 px-4 text-slate-900 dark:text-fg font-medium align-top">
                           {item.geminiText}
                         </td>
                         <td className="py-3 px-4 align-top">
                           {item.status === 'passed' ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
                               Passed (Numbers & words match)
                             </span>
                           ) : (
                             <div>
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                                <AlertTriangle className="w-3 h-3 text-amber-600" />
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-500/30">
+                                <AlertTriangle className="w-3 h-3 text-amber-600 dark:text-amber-400" />
                                 Dropped
                               </span>
                               {item.reason && (
-                                <p className="text-[11px] text-amber-700 mt-1 font-sans">
+                                <p className="text-[11px] text-amber-700 dark:text-amber-400 mt-1 font-sans">
                                   {item.reason}
                                 </p>
                               )}
@@ -2021,15 +2021,15 @@ function getRowsAsObjects(sheet) {
 
       {/* Section 6: Clear Test Data (test mode only) */}
       {testMode && (
-      <div className="bg-white border border-rose-200 rounded-xl p-6 shadow-sm">
+      <div className="bg-white dark:bg-panel border border-rose-200 dark:border-rose-500/30 rounded-xl p-6 shadow-sm">
         <div className="flex items-center justify-between">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <Trash2 className="w-5 h-5 text-rose-600" />
-              <h2 className="text-base font-bold text-slate-900">Clear Test Data</h2>
+              <Trash2 className="w-5 h-5 text-rose-600 dark:text-rose-400" />
+              <h2 className="text-base font-bold text-slate-900 dark:text-fg">Clear Test Data</h2>
             </div>
-            <p className="text-xs text-slate-600">
-              Deletes all agent records, access accounts, and leaderboards entries where <code className="bg-rose-50 text-rose-700 px-1 py-0.5 rounded font-mono">isTest == true</code> in the active cycle. Real imported agents remain untouched.
+            <p className="text-xs text-slate-600 dark:text-fg-2">
+              Deletes all agent records, access accounts, and leaderboards entries where <code className="bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400 px-1 py-0.5 rounded font-mono">isTest == true</code> in the active cycle. Real imported agents remain untouched.
             </p>
           </div>
           <button
@@ -2050,7 +2050,7 @@ function getRowsAsObjects(sheet) {
         </div>
 
         {clearStatus.result && (
-          <div className="mt-4 p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-700">
+          <div className="mt-4 p-3 bg-slate-50 dark:bg-raised border border-slate-200 dark:border-line rounded-lg text-xs font-medium text-slate-700 dark:text-fg-2">
             {clearStatus.result}
           </div>
         )}
@@ -2058,30 +2058,30 @@ function getRowsAsObjects(sheet) {
       )}
 
       {/* Roles & access management */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
+      <div className="bg-white dark:bg-panel border border-slate-200 dark:border-line rounded-xl p-6 shadow-sm space-y-4">
         <div className="flex items-center gap-2 mb-1">
-          <ShieldAlert className="w-5 h-5 text-indigo-600" />
-          <h2 className="text-base font-bold text-slate-900">
+          <ShieldAlert className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+          <h2 className="text-base font-bold text-slate-900 dark:text-fg">
             Roles & Access (Super Admin & Manager accounts)
           </h2>
         </div>
-        <p className="text-xs text-slate-600">
-          Configure which Google accounts have <strong>Super Admin</strong> (full system & test control) or <strong>Manager</strong> (cross-location team overview & 3 leaderboards) privileges in <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-700">config/app</code>.
+        <p className="text-xs text-slate-600 dark:text-fg-2">
+          Configure which Google accounts have <strong>Super Admin</strong> (full system & test control) or <strong>Manager</strong> (cross-location team overview & 3 leaderboards) privileges in <code className="bg-slate-100 dark:bg-hover px-1 py-0.5 rounded text-indigo-700 dark:text-indigo-400">config/app</code>.
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
           {/* Super Admins */}
-          <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
-            <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block mb-2">
+          <div className="bg-slate-50 dark:bg-raised border border-slate-200 dark:border-line rounded-lg p-4">
+            <span className="text-xs font-bold text-slate-800 dark:text-fg uppercase tracking-wider block mb-2">
               Super Admins ({appConfig?.superAdmins?.length || 0})
             </span>
             <div className="flex flex-wrap gap-2">
               {appConfig?.superAdmins?.map((email) => (
                 <span
                   key={email}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-100 text-indigo-900 border border-indigo-200 rounded-md text-xs font-medium font-mono"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-100 dark:bg-indigo-500/15 text-indigo-900 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/30 rounded-md text-xs font-medium font-mono"
                 >
-                  <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />
+                  <ShieldCheck className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
                   {email}
                 </span>
               ))}
@@ -2089,8 +2089,8 @@ function getRowsAsObjects(sheet) {
           </div>
 
           {/* Managers */}
-          <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
-            <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block mb-2">
+          <div className="bg-slate-50 dark:bg-raised border border-slate-200 dark:border-line rounded-lg p-4">
+            <span className="text-xs font-bold text-slate-800 dark:text-fg uppercase tracking-wider block mb-2">
               Managers ({appConfig?.managers?.length || 0})
             </span>
             <div className="flex flex-wrap gap-2 mb-3">
@@ -2100,15 +2100,15 @@ function getRowsAsObjects(sheet) {
                 appConfig.managers.map((email) => (
                   <span
                     key={email}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-100 text-emerald-900 border border-emerald-200 rounded-md text-xs font-medium font-mono"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-100 dark:bg-emerald-500/15 text-emerald-900 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30 rounded-md text-xs font-medium font-mono"
                   >
-                    <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
+                    <UserCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                     {email}
                     <button
                       onClick={() => handleRemoveManager(email)}
                       disabled={savingManagers}
                       title={`Revoke Manager role from ${email}`}
-                      className="text-emerald-700 hover:text-rose-600 font-bold ml-1 transition"
+                      className="text-emerald-700 dark:text-emerald-400 hover:text-rose-600 font-bold ml-1 transition"
                     >
                       ×
                     </button>
@@ -2118,13 +2118,13 @@ function getRowsAsObjects(sheet) {
             </div>
 
             {/* Add Manager Form */}
-            <div className="flex items-center gap-2 pt-2 border-t border-slate-200">
+            <div className="flex items-center gap-2 pt-2 border-t border-slate-200 dark:border-line">
               <input
                 type="email"
                 placeholder="Add manager email (e.g. testmanager.tsc@gmail.com)"
                 value={newManagerInput}
                 onChange={(e) => setNewManagerInput(e.target.value)}
-                className="flex-1 text-xs border border-slate-300 rounded-lg px-3 py-1.5 text-slate-800 bg-white"
+                className="flex-1 text-xs border border-slate-300 dark:border-line-strong rounded-lg px-3 py-1.5 text-slate-800 dark:text-fg bg-white dark:bg-panel"
               />
               <button
                 onClick={handleAddManager}
@@ -2138,7 +2138,7 @@ function getRowsAsObjects(sheet) {
             {managerSaveMsg && (
               <div
                 className={`mt-2 text-xs font-medium ${
-                  managerSaveMsg.type === 'ok' ? 'text-emerald-600' : 'text-rose-600'
+                  managerSaveMsg.type === 'ok' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
                 }`}
               >
                 {managerSaveMsg.text}
@@ -2158,27 +2158,27 @@ function getRowsAsObjects(sheet) {
       )}
 
       {/* Section 7: Sync Logs */}
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-        <div className="px-5 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+      <div className="bg-white dark:bg-panel border border-slate-200 dark:border-line rounded-xl overflow-hidden shadow-sm">
+        <div className="px-5 py-4 border-b border-slate-200 dark:border-line bg-slate-50 dark:bg-raised flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Clock className="w-4 h-4 text-slate-600" />
-            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+            <Clock className="w-4 h-4 text-slate-600 dark:text-fg-2" />
+            <h3 className="text-xs font-bold text-slate-800 dark:text-fg uppercase tracking-wider">
               Sync Logs (Last 30 Records)
             </h3>
           </div>
-          <span className="text-xs font-semibold text-slate-500">
+          <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
             {syncLogs.length} events logged
           </span>
         </div>
 
         {syncLogs.length === 0 ? (
-          <div className="p-8 text-center text-xs text-slate-500">
+          <div className="p-8 text-center text-xs text-slate-500 dark:text-slate-400">
             No sync logs recorded yet. Run a dummy generation or upload an .xlsx file to see logs.
           </div>
         ) : (
           <div className="overflow-x-auto max-h-96">
             <table className="w-full text-left border-collapse text-xs">
-              <thead className="bg-slate-100 text-slate-600 sticky top-0 border-b border-slate-200">
+              <thead className="bg-slate-100 dark:bg-hover text-slate-600 dark:text-fg-2 sticky top-0 border-b border-slate-200 dark:border-line">
                 <tr>
                   <th className="py-2.5 px-4 font-semibold">Timestamp (UTC/IST)</th>
                   <th className="py-2.5 px-4 font-semibold">Source</th>
@@ -2189,35 +2189,35 @@ function getRowsAsObjects(sheet) {
                   <th className="py-2.5 px-4 font-semibold">Notes & Warnings</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 font-mono text-[11px]">
+              <tbody className="divide-y divide-slate-100 dark:divide-line font-mono text-[11px]">
                 {syncLogs.map((log: any, idx: number) => (
                   <tr key={log.id || idx} className="hover:bg-slate-50">
-                    <td className="py-2 px-4 text-slate-600 whitespace-nowrap">
+                    <td className="py-2 px-4 text-slate-600 dark:text-fg-2 whitespace-nowrap">
                       {new Date(log.time).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST
                     </td>
                     <td className="py-2 px-4">
-                      <span className="font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded font-sans text-[10px]">
+                      <span className="font-semibold text-slate-700 dark:text-fg-2 bg-slate-100 dark:bg-hover px-2 py-0.5 rounded font-sans text-[10px]">
                         {log.source}
                       </span>
                     </td>
                     <td className="py-2 px-4">
                       {log.result === 'ok' ? (
-                        <span className="text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded font-sans text-[10px]">
+                        <span className="text-emerald-700 dark:text-emerald-400 font-semibold bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 rounded font-sans text-[10px]">
                           OK
                         </span>
                       ) : (
-                        <span className="text-rose-700 font-semibold bg-rose-50 px-2 py-0.5 rounded font-sans text-[10px]">
+                        <span className="text-rose-700 dark:text-rose-400 font-semibold bg-rose-50 dark:bg-rose-500/10 px-2 py-0.5 rounded font-sans text-[10px]">
                           ERROR
                         </span>
                       )}
                     </td>
-                    <td className="py-2 px-4 text-slate-800">{log.rows || 0}</td>
-                    <td className="py-2 px-4 text-slate-800">{log.agents || 0}</td>
-                    <td className="py-2 px-4 text-slate-600">{log.lastDataDate || '-'}</td>
-                    <td className="py-2 px-4 font-sans text-slate-600 text-[11px]">
-                      {log.error && <div className="text-rose-600 font-medium">{log.error}</div>}
+                    <td className="py-2 px-4 text-slate-800 dark:text-fg">{log.rows || 0}</td>
+                    <td className="py-2 px-4 text-slate-800 dark:text-fg">{log.agents || 0}</td>
+                    <td className="py-2 px-4 text-slate-600 dark:text-fg-2">{log.lastDataDate || '-'}</td>
+                    <td className="py-2 px-4 font-sans text-slate-600 dark:text-fg-2 text-[11px]">
+                      {log.error && <div className="text-rose-600 dark:text-rose-400 font-medium">{log.error}</div>}
                       {log.warnings?.length > 0 && (
-                        <div className="text-amber-700">{log.warnings.join('; ')}</div>
+                        <div className="text-amber-700 dark:text-amber-400">{log.warnings.join('; ')}</div>
                       )}
                       {!log.error && (!log.warnings || log.warnings.length === 0) && (
                         <span className="text-slate-400">Clean sync</span>

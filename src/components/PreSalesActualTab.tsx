@@ -99,7 +99,7 @@ function TierCard({
   nextText,
 }: TierCardProps) {
   return (
-    <div className="bg-white/95 dark:bg-slate-900/90 backdrop-blur-sm border border-slate-200/90 dark:border-slate-800 rounded-2xl p-5 shadow-xs flex flex-col justify-between">
+    <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-5 shadow-xs flex flex-col justify-between">
       <div>
         <div className="flex items-center justify-between mb-2">
           <span className="text-[11px] uppercase tracking-wider font-extrabold text-slate-900 dark:text-white font-mono flex items-center gap-1.5">
@@ -241,9 +241,9 @@ export function PreSalesActualTab({ agentRecord, plan, cycle, onNavigateToSimula
       {headline && (
         <div className="bg-slate-950 border border-slate-800 text-white p-4.5 rounded-xl shadow-xs flex items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
-            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-amber-300 shrink-0">
+            <div className="w-8 h-8 rounded-lg bg-white/10 dark:bg-panel/10 flex items-center justify-center text-amber-300 shrink-0">
               {headline.isAiText ? (
-                <Sparkles className="w-4 h-4 text-amber-300 animate-subtle-sparkle" />
+                <Sparkles className="w-4 h-4 text-amber-300" />
               ) : (
                 <Zap className="w-4 h-4 fill-amber-300" />
               )}
@@ -270,12 +270,12 @@ export function PreSalesActualTab({ agentRecord, plan, cycle, onNavigateToSimula
 
       {/* Total incentive + quality gate */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
-        <div className="md:col-span-5 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 text-white rounded-3xl p-6 sm:p-7 border border-amber-500/30 shadow-[0_12px_40px_-10px_rgba(245,158,11,0.25)] flex flex-col justify-between relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-44 h-44 bg-gradient-to-bl from-amber-400/20 via-amber-500/5 to-transparent rounded-full blur-2xl pointer-events-none" />
+        <div className="md:col-span-5 bg-slate-900 dark:bg-raised text-white rounded-3xl p-6 sm:p-7 border border-amber-500/30 flex flex-col justify-between relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-44 h-44 bg-amber-500/10 rounded-full blur-2xl pointer-events-none" />
           <div>
             <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
               <span className="text-[11px] uppercase tracking-wider font-extrabold text-amber-400 font-mono flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-subtle-sparkle" />
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
                 Incentive Earned
               </span>
               <span
@@ -289,7 +289,7 @@ export function PreSalesActualTab({ agentRecord, plan, cycle, onNavigateToSimula
               </span>
             </div>
 
-            <div className="text-4xl lg:text-[42px] font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-yellow-100 to-amber-300 tracking-tight font-mono mt-3">
+            <div className="text-4xl lg:text-[42px] font-black text-amber-300 dark:text-amber-300 tracking-tight font-mono mt-3">
               <AnimatedCounter value={calc.total} />
             </div>
             <p className="text-[11px] text-slate-300 mt-2 font-medium">
@@ -329,7 +329,7 @@ export function PreSalesActualTab({ agentRecord, plan, cycle, onNavigateToSimula
           </div>
         </div>
 
-        <div className="md:col-span-7 bg-white/95 dark:bg-slate-900/90 backdrop-blur-sm border border-slate-200/90 dark:border-slate-800 rounded-3xl p-6 sm:p-7 shadow-xs flex flex-col justify-between">
+        <div className="md:col-span-7 bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-6 sm:p-7 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
               <span className="text-xs uppercase tracking-wider font-extrabold text-slate-900 dark:text-white font-mono flex items-center gap-1.5">
@@ -452,7 +452,7 @@ export function PreSalesActualTab({ agentRecord, plan, cycle, onNavigateToSimula
       </div>
 
       {/* Suggestions */}
-      <div className="bg-white/95 dark:bg-slate-900/90 backdrop-blur-sm border border-slate-200/90 dark:border-slate-800 rounded-2xl p-6 shadow-xs">
+      <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-6 shadow-xs">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h4 className="text-xs uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 font-mono">
@@ -512,7 +512,7 @@ export function PreSalesActualTab({ agentRecord, plan, cycle, onNavigateToSimula
                         {item.defaultText}
                         {item.isAiText && (
                           <span title="AI Powered Coaching" className="inline-flex items-center text-amber-500 dark:text-amber-400 shrink-0">
-                            <Sparkles className="w-3.5 h-3.5 animate-subtle-sparkle" />
+                            <Sparkles className="w-3.5 h-3.5" />
                           </span>
                         )}
                       </span>
@@ -548,7 +548,7 @@ export function PreSalesActualTab({ agentRecord, plan, cycle, onNavigateToSimula
       </div>
 
       {/* Daily calls */}
-      <div className="bg-white/95 dark:bg-slate-900/90 backdrop-blur-sm border border-slate-200/90 dark:border-slate-800 rounded-2xl p-6 shadow-xs">
+      <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-6 shadow-xs">
         <div className="flex items-center justify-between mb-4">
           <span className="text-xs uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 font-mono">
             Daily Inbound Calls

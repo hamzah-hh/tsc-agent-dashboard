@@ -60,7 +60,7 @@ export const MilestoneLadder: React.FC<MilestoneLadderProps> = ({
   );
 
   return (
-    <div className="relative overflow-hidden rounded-3xl p-6 sm:p-7 border border-amber-500/30 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white shadow-[0_20px_50px_rgba(0,0,0,0.6)]">
+    <div className="relative overflow-hidden rounded-3xl p-6 sm:p-7 border border-amber-500/30 bg-slate-900 dark:bg-raised text-white">
       {/* Dynamic Ambient Background Lights */}
       <div className="absolute -top-32 -right-32 w-80 h-80 bg-amber-500/15 rounded-full blur-[100px] pointer-events-none" />
       <div className="absolute -bottom-32 -left-32 w-80 h-80 bg-indigo-500/15 rounded-full blur-[100px] pointer-events-none" />
@@ -75,11 +75,11 @@ export const MilestoneLadder: React.FC<MilestoneLadderProps> = ({
               <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500" />
             </span>
             <span className="text-xs uppercase tracking-widest font-black text-amber-400 font-mono flex items-center gap-1.5">
-              <Flame className="w-4 h-4 text-amber-400 animate-subtle-sparkle" />
+              <Flame className="w-4 h-4 text-amber-400" />
               Incentive Class Progression Highway
             </span>
-            <span className="text-slate-600">·</span>
-            <span className="text-xs text-slate-300 font-mono bg-white/10 px-2.5 py-0.5 rounded-full border border-white/10">
+            <span className="text-slate-600 dark:text-fg-2">·</span>
+            <span className="text-xs text-slate-300 font-mono bg-white/10 dark:bg-panel/10 px-2.5 py-0.5 rounded-full border border-white/10">
               Current: <strong className="text-amber-400 font-bold">Class {currentClass}</strong> ({formatNumberINR(achievementPct, 1)}%)
             </span>
           </div>
@@ -103,7 +103,7 @@ export const MilestoneLadder: React.FC<MilestoneLadderProps> = ({
       <div className="relative z-10 mb-7 hidden sm:block">
         <div className="h-2.5 w-full bg-slate-800/80 rounded-full overflow-hidden p-0.5 border border-white/10">
           <div
-            className="h-full rounded-full bg-gradient-to-r from-amber-600 via-amber-400 to-yellow-300 shadow-[0_0_15px_rgba(251,191,36,0.9)] transition-all duration-700 ease-out"
+            className="h-full rounded-full bg-amber-500 transition-all duration-700 ease-out"
             style={{ width: `${overallTrackPct}%` }}
           />
         </div>
@@ -141,14 +141,14 @@ export const MilestoneLadder: React.FC<MilestoneLadderProps> = ({
               }}
               className={`group relative p-4 rounded-2xl border transition-all duration-300 cursor-pointer overflow-hidden ${
                 isCurrent
-                  ? 'bg-gradient-to-b from-amber-500/20 to-amber-950/40 border-amber-400 shadow-[0_0_30px_rgba(245,158,11,0.3)] ring-1 ring-amber-400/50 scale-[1.02]'
+                  ? 'bg-amber-500/10 border-amber-400 ring-1 ring-amber-400/50 scale-[1.02]'
                   : isUnlocked
-                  ? 'bg-gradient-to-b from-emerald-950/40 to-slate-900/60 border-emerald-500/40 hover:border-emerald-400/80 hover:shadow-[0_0_20px_rgba(16,185,129,0.2)]'
-                  : 'bg-white/[0.03] border-white/10 hover:border-white/20 hover:bg-white/[0.06]'
+                  ? 'bg-emerald-500/10 border-emerald-500/40 hover:border-emerald-400/80'
+                  : 'bg-white dark:bg-panel/[0.03] border-white/10 hover:border-white/20 hover:bg-white/[0.06]'
               }`}
             >
               {/* Subtle metallic sheen glint */}
-              <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-white/10 to-transparent rounded-full blur-xl pointer-events-none" />
+              <div className="absolute top-0 right-0 w-24 h-24 rounded-full blur-xl pointer-events-none" />
 
               {/* Badge Top */}
               <div className="flex items-center justify-between mb-3">
@@ -159,7 +159,7 @@ export const MilestoneLadder: React.FC<MilestoneLadderProps> = ({
                         ? 'bg-amber-400 text-slate-950 font-bold'
                         : isUnlocked
                         ? 'bg-emerald-500 text-white'
-                        : 'bg-white/10 text-slate-400'
+                        : 'bg-white/10 dark:bg-panel/10 text-slate-400'
                     }`}
                   >
                     <TierIcon className="w-4 h-4" />
@@ -178,7 +178,7 @@ export const MilestoneLadder: React.FC<MilestoneLadderProps> = ({
                     <CheckCircle2 className="w-3 h-3" /> UNLOCKED
                   </span>
                 ) : (
-                  <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">
+                  <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                     LOCKED
                   </span>
                 )}
@@ -189,7 +189,7 @@ export const MilestoneLadder: React.FC<MilestoneLadderProps> = ({
                 <span className="text-lg font-black tracking-tight text-white group-hover:text-amber-200 transition">
                   {tier.name}
                 </span>
-                <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-md bg-white/10 text-amber-300 border border-amber-400/20">
+                <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-md bg-white/10 dark:bg-panel/10 text-amber-300 border border-amber-400/20">
                   {tier.reward}% Rate
                 </span>
               </div>

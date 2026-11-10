@@ -63,7 +63,7 @@ export function BusinessOverviewSection({ rows }: { rows: BusinessOverviewRow[] 
 
   if (rows.length === 0) {
     return (
-      <section className={`${card} p-5 text-xs text-slate-500`}>
+      <section className={`${card} p-5 text-xs text-slate-500 dark:text-slate-400`}>
         No business overview yet. It appears after the next sync (paste the updated Code.gs, and add the Business_Overview tab for the past months).
       </section>
     );
@@ -100,9 +100,9 @@ export function BusinessOverviewSection({ rows }: { rows: BusinessOverviewRow[] 
   return (
     <section className={`${card} overflow-hidden`}>
       <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2">
-        <Briefcase className="w-4 h-4 text-indigo-600" />
+        <Briefcase className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
         <h3 className="text-sm font-bold text-slate-950 dark:text-white">Business Overview</h3>
-        <span className="text-[11px] text-slate-500">
+        <span className="text-[11px] text-slate-500 dark:text-slate-400">
           month by month{liveMonths.size ? '; a month marked MTD is still running, so only its averages compare with full months' : ''}
         </span>
         <div className="ml-auto flex items-center gap-2">
@@ -146,9 +146,9 @@ export function BusinessOverviewSection({ rows }: { rows: BusinessOverviewRow[] 
         <table className="w-full text-xs border-collapse">
           <thead className="bg-slate-50 dark:bg-slate-800/60">
             <tr>
-              <th className="py-2 px-3 text-left text-[10px] uppercase tracking-wide font-bold text-slate-500 w-72">KPI</th>
+              <th className="py-2 px-3 text-left text-[10px] uppercase tracking-wide font-bold text-slate-500 dark:text-slate-400 w-72">KPI</th>
               {months.map((m) => (
-                <th key={m} className="py-2 px-3 text-right text-[10px] uppercase tracking-wide font-bold text-slate-500 whitespace-nowrap">
+                <th key={m} className="py-2 px-3 text-right text-[10px] uppercase tracking-wide font-bold text-slate-500 dark:text-slate-400 whitespace-nowrap">
                   {monthLabel(m)}
                   {liveMonths.has(m) ? ' (MTD)' : ''}
                 </th>

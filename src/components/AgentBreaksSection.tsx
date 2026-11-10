@@ -41,7 +41,7 @@ export function AgentBreaksSection({ getIdToken, agentName }: AgentBreaksSection
     v !== null && ((col.limitSec !== undefined && Math.round(v) > col.limitSec) || (col.limitPct !== undefined && v > col.limitPct));
 
   return (
-    <div className="bg-white/95 dark:bg-slate-900/90 backdrop-blur-sm border border-slate-200/90 dark:border-slate-800 rounded-2xl p-6 shadow-xs">
+    <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-6 shadow-xs">
       <div className="flex items-center justify-between mb-1 gap-2">
         <span className="text-xs uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 font-mono">
           12. Day on Day: Breaks

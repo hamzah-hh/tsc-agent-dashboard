@@ -521,7 +521,7 @@ export function DayOnDayView({
                         {i > 0 && r.agent.ordersDelta !== 0 && (
                           <span
                             className={`ml-1 text-[10px] ${
-                              r.agent.ordersDelta > 0 ? 'text-emerald-600' : 'text-rose-600'
+                              r.agent.ordersDelta > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
                             }`}
                           >
                             ({r.agent.ordersDelta > 0 ? `+${r.agent.ordersDelta}` : r.agent.ordersDelta})

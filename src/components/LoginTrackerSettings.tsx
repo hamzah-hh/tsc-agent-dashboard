@@ -148,22 +148,22 @@ export function LoginTrackerSettings({
   };
 
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-200">
+    <div className="bg-white dark:bg-panel border border-slate-200 dark:border-line rounded-xl p-6 shadow-sm">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-200 dark:border-line">
         <div>
           <div className="flex items-center gap-2">
-            <Timer className="w-5 h-5 text-indigo-600" />
-            <h2 className="text-base font-bold text-slate-900">
+            <Timer className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+            <h2 className="text-base font-bold text-slate-900 dark:text-fg">
               Agent Login Tracker & Time-Boxed Access
             </h2>
           </div>
-          <p className="text-xs text-slate-600 mt-1">
+          <p className="text-xs text-slate-600 dark:text-fg-2 mt-1">
             Controls daily active login limits for Agents. Split automatically into two distinct half-day windows (AM: 12:00 AM–11:59 AM IST, PM: 12:00 PM–11:59 PM IST).
           </p>
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-semibold bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/30">
             <Clock className="w-3.5 h-3.5" />
             Asia/Kolkata (IST)
           </span>
@@ -173,12 +173,12 @@ export function LoginTrackerSettings({
       {/* Main Settings Form */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         {/* Toggle Card */}
-        <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 flex flex-col justify-between">
+        <div className="p-4 rounded-xl border border-slate-200 dark:border-line bg-slate-50/60 dark:bg-raised/60 flex flex-col justify-between">
           <div>
-            <span className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-1">
+            <span className="text-xs font-bold text-slate-700 dark:text-fg-2 uppercase tracking-wider block mb-1">
               Time-Boxing Enforcement
             </span>
-            <p className="text-xs text-slate-500 mb-4">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
               When enabled, callers are automatically logged out once their session minutes for the current half-day window run out.
             </p>
           </div>
@@ -187,25 +187,25 @@ export function LoginTrackerSettings({
               type="checkbox"
               checked={enabled}
               onChange={(e) => setEnabled(e.target.checked)}
-              className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+              className="w-4 h-4 text-indigo-600 dark:text-indigo-400 rounded focus:ring-indigo-500"
             />
-            <span className="text-xs font-bold text-slate-800">
+            <span className="text-xs font-bold text-slate-800 dark:text-fg">
               {enabled ? 'Enforced (Active)' : 'Disabled (Unlimited Access)'}
             </span>
           </label>
         </div>
 
         {/* AM Window Limit */}
-        <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/60">
+        <div className="p-4 rounded-xl border border-slate-200 dark:border-line bg-slate-50/60 dark:bg-raised/60">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+            <span className="text-xs font-bold text-slate-700 dark:text-fg-2 uppercase tracking-wider">
               AM Window Limit
             </span>
-            <span className="text-[11px] font-mono text-indigo-600 font-bold">
+            <span className="text-[11px] font-mono text-indigo-600 dark:text-indigo-400 font-bold">
               12:00 AM – 11:59 AM
             </span>
           </div>
-          <p className="text-xs text-slate-500 mb-3">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
             Maximum active session minutes allowed for morning shifts.
           </p>
           <div className="flex items-center gap-2">
@@ -216,23 +216,23 @@ export function LoginTrackerSettings({
               value={amMinutes}
               onChange={(e) => setAmMinutes(Math.max(1, parseInt(e.target.value || '1', 10)))}
               disabled={!enabled}
-              className="w-28 text-sm font-mono font-bold px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-900 disabled:opacity-50"
+              className="w-28 text-sm font-mono font-bold px-3 py-1.5 rounded-lg border border-slate-300 dark:border-line-strong bg-white dark:bg-panel text-slate-900 dark:text-fg disabled:opacity-50"
             />
-            <span className="text-xs font-semibold text-slate-600">Minutes</span>
+            <span className="text-xs font-semibold text-slate-600 dark:text-fg-2">Minutes</span>
           </div>
         </div>
 
         {/* PM Window Limit */}
-        <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/60">
+        <div className="p-4 rounded-xl border border-slate-200 dark:border-line bg-slate-50/60 dark:bg-raised/60">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+            <span className="text-xs font-bold text-slate-700 dark:text-fg-2 uppercase tracking-wider">
               PM Window Limit
             </span>
-            <span className="text-[11px] font-mono text-indigo-600 font-bold">
+            <span className="text-[11px] font-mono text-indigo-600 dark:text-indigo-400 font-bold">
               12:00 PM – 11:59 PM
             </span>
           </div>
-          <p className="text-xs text-slate-500 mb-3">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
             Maximum active session minutes allowed for afternoon / evening shifts.
           </p>
           <div className="flex items-center gap-2">
@@ -243,18 +243,18 @@ export function LoginTrackerSettings({
               value={pmMinutes}
               onChange={(e) => setPmMinutes(Math.max(1, parseInt(e.target.value || '1', 10)))}
               disabled={!enabled}
-              className="w-28 text-sm font-mono font-bold px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-900 disabled:opacity-50"
+              className="w-28 text-sm font-mono font-bold px-3 py-1.5 rounded-lg border border-slate-300 dark:border-line-strong bg-white dark:bg-panel text-slate-900 dark:text-fg disabled:opacity-50"
             />
-            <span className="text-xs font-semibold text-slate-600">Minutes</span>
+            <span className="text-xs font-semibold text-slate-600 dark:text-fg-2">Minutes</span>
           </div>
         </div>
       </div>
 
       {/* Summary Note & Save Button */}
-      <div className="bg-indigo-50/70 border border-indigo-100 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+      <div className="bg-indigo-50/70 dark:bg-indigo-500/10 border border-indigo-100 dark:border-indigo-500/30 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div className="flex items-start gap-2.5">
-          <Settings2 className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
-          <div className="text-xs text-indigo-900 leading-relaxed">
+          <Settings2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5" />
+          <div className="text-xs text-indigo-900 dark:text-indigo-400 leading-relaxed">
             <strong>Active Rule:</strong> Each caller receives <strong>{amMinutes} minutes</strong> during the AM window and a separate <strong>{pmMinutes} minutes</strong> during the PM window (<strong>{amMinutes + pmMinutes} minutes/day</strong> total). Time is tracked only while the user is actively connected. Team Leaders, Managers, and Super Admins are exempt.
           </div>
         </div>
@@ -272,25 +272,25 @@ export function LoginTrackerSettings({
         <div
           className={`p-3 rounded-lg text-xs font-medium mb-6 flex items-center gap-2 ${
             saveMsg.type === 'ok'
-              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-              : 'bg-rose-50 text-rose-800 border border-rose-200'
+              ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-800 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30'
+              : 'bg-rose-50 dark:bg-rose-500/10 text-rose-800 dark:text-rose-400 border border-rose-200 dark:border-rose-500/30'
           }`}
         >
           {saveMsg.type === 'ok' ? (
-            <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+            <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
           ) : (
-            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
           )}
           <span>{saveMsg.text}</span>
         </div>
       )}
 
       {/* Active Callers Today Ledger */}
-      <div className="border border-slate-200 rounded-xl overflow-hidden">
-        <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+      <div className="border border-slate-200 dark:border-line rounded-xl overflow-hidden">
+        <div className="px-4 py-3 bg-slate-50 dark:bg-raised border-b border-slate-200 dark:border-line flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Users className="w-4 h-4 text-slate-600" />
-            <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+            <Users className="w-4 h-4 text-slate-600 dark:text-fg-2" />
+            <span className="text-xs font-bold text-slate-800 dark:text-fg uppercase tracking-wider">
               Today's Caller Session Activity
             </span>
           </div>
@@ -307,10 +307,10 @@ export function LoginTrackerSettings({
             <button
               onClick={fetchActivities}
               disabled={loadingActivity}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-slate-600 hover:text-slate-900 text-xs font-semibold rounded transition"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-slate-600 dark:text-fg-2 hover:text-slate-900 text-xs font-semibold rounded transition"
               title="Refresh active callers"
             >
-              <RotateCcw className={`w-3.5 h-3.5 ${loadingActivity ? 'animate-spin text-indigo-600' : ''}`} />
+              <RotateCcw className={`w-3.5 h-3.5 ${loadingActivity ? 'animate-spin text-indigo-600 dark:text-indigo-400' : ''}`} />
               Refresh
             </button>
           </div>
@@ -324,7 +324,7 @@ export function LoginTrackerSettings({
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="bg-slate-100/70 border-b border-slate-200 text-[11px] font-mono uppercase text-slate-600">
+                <tr className="bg-slate-100/70 dark:bg-hover/70 border-b border-slate-200 dark:border-line text-[11px] font-mono uppercase text-slate-600 dark:text-fg-2">
                   <th className="py-2.5 px-4 font-semibold">Caller Email</th>
                   <th className="py-2.5 px-4 font-semibold text-center">AM Used / Limit</th>
                   <th className="py-2.5 px-4 font-semibold text-center">PM Used / Limit</th>
@@ -332,7 +332,7 @@ export function LoginTrackerSettings({
                   <th className="py-2.5 px-4 font-semibold text-right">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 font-mono text-[11px]">
+              <tbody className="divide-y divide-slate-100 dark:divide-line font-mono text-[11px]">
                 {activities.map((a) => {
                   const amUsedMin = Math.round((a.amSecondsUsed || 0) / 60);
                   const pmUsedMin = Math.round((a.pmSecondsUsed || 0) / 60);
@@ -341,15 +341,15 @@ export function LoginTrackerSettings({
 
                   return (
                     <tr key={a.agentEmail} className="hover:bg-slate-50 transition-colors">
-                      <td className="py-2.5 px-4 font-bold text-slate-900">
+                      <td className="py-2.5 px-4 font-bold text-slate-900 dark:text-fg">
                         {a.agentEmail}
                       </td>
                       <td className="py-2.5 px-4 text-center">
                         <span
                           className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold ${
                             isAmExhausted
-                              ? 'bg-rose-100 text-rose-800 border border-rose-200'
-                              : 'bg-slate-100 text-slate-700'
+                              ? 'bg-rose-100 dark:bg-rose-500/15 text-rose-800 dark:text-rose-400 border border-rose-200 dark:border-rose-500/30'
+                              : 'bg-slate-100 dark:bg-hover text-slate-700 dark:text-fg-2'
                           }`}
                         >
                           {amUsedMin}m / {amMinutes}m
@@ -359,21 +359,21 @@ export function LoginTrackerSettings({
                         <span
                           className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold ${
                             isPmExhausted
-                              ? 'bg-rose-100 text-rose-800 border border-rose-200'
-                              : 'bg-slate-100 text-slate-700'
+                              ? 'bg-rose-100 dark:bg-rose-500/15 text-rose-800 dark:text-rose-400 border border-rose-200 dark:border-rose-500/30'
+                              : 'bg-slate-100 dark:bg-hover text-slate-700 dark:text-fg-2'
                           }`}
                         >
                           {pmUsedMin}m / {pmMinutes}m
                         </span>
                       </td>
-                      <td className="py-2.5 px-4 text-slate-500">
+                      <td className="py-2.5 px-4 text-slate-500 dark:text-slate-400">
                         {a.updatedAt ? new Date(a.updatedAt).toLocaleTimeString('en-IN') : '—'}
                       </td>
                       <td className="py-2.5 px-4 text-right">
                         <button
                           onClick={() => handleResetAgent(a.agentEmail)}
                           disabled={resettingEmail === a.agentEmail}
-                          className="px-2.5 py-1 text-[11px] font-semibold text-amber-700 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded transition disabled:opacity-50"
+                          className="px-2.5 py-1 text-[11px] font-semibold text-amber-700 dark:text-amber-400 hover:text-amber-900 bg-amber-50 dark:bg-amber-500/10 hover:bg-amber-100 border border-amber-200 dark:border-amber-500/30 rounded transition disabled:opacity-50"
                         >
                           {resettingEmail === a.agentEmail ? 'Resetting...' : 'Reset Usage'}
                         </button>

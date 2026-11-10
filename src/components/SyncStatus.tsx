@@ -86,7 +86,7 @@ export function SyncStatus({ getIdToken }: SyncStatusProps) {
   return (
     <div className="space-y-6">
       {/* Top Summary Banner */}
-      <div className="bg-white/95 dark:bg-slate-900/90 backdrop-blur-sm border border-slate-200/90 dark:border-slate-800 rounded-2xl p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className={`w-3 h-3 rounded-full ${latestDotColor} shadow-xs shrink-0`} />
@@ -165,7 +165,7 @@ export function SyncStatus({ getIdToken }: SyncStatusProps) {
       </div>
 
       {/* Table of Sync Records */}
-      <div className="bg-white/95 dark:bg-slate-900/90 backdrop-blur-sm border border-slate-200/90 dark:border-slate-800 rounded-2xl shadow-xs overflow-hidden">
+      <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl shadow-xs overflow-hidden">
         {loading ? (
           <div className="py-16 text-center text-xs text-slate-500 dark:text-slate-400">
             <RefreshCw className="w-6 h-6 animate-spin mx-auto text-amber-500 mb-2" />
