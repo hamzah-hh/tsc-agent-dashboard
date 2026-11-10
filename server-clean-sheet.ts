@@ -177,6 +177,8 @@ const CREDIT_DATE_KEYS = new Set(CREDIT_DATE_HEADERS.map(headerKey));
 // People who never show up, whatever their Status in Agents: test accounts (a "test" word in the name) and
 // the named inactive agents. Add a name here to hide someone for good.
 const HIDDEN_NAMES = /\btest\b|\bazma+n\b|\bsayed\s+saif\b/i;
+// Test users known by email (official or personal); hidden the same way as the names above.
+const HIDDEN_EMAILS = new Set(['riya@co.in']);
 
 const NO_EMAIL = new Set(['', 'none', 'null', 'na', 'n/a', '-', '#n/a']);
 
@@ -240,7 +242,7 @@ export function buildFromCleanSheet(tabs: CleanSheetTabs, cycle: { startDate: st
       tier: pick(row, 'Agent_Tier', 'Tier'),
       tlOfficial: normalizeEmail(pick(row, 'TL_Official_Email', 'TL_Email_Official', 'Leader_Official_Email')),
       tlPersonal: normalizeEmail(pick(row, 'TL_Personal_Email', 'TL_Email_Personal', 'Leader_Personal_Email', 'TL_Gmail')),
-      active: (status === '' || status.toLowerCase() === 'active') && !HIDDEN_NAMES.test(pick(row, 'Agent_Name', 'Name')),
+      active: (status === '' || status.toLowerCase() === 'active') && !HIDDEN_NAMES.test(pick(row, 'Agent_Name', 'Name')) && !HIDDEN_EMAILS.has(official) && !HIDDEN_EMAILS.has(personal),
     });
   }
   if (duplicates.length) warnings.push(`Agents: ${duplicates.length} email(s) appear twice; the first row is used: ${listOf(duplicates)}`);
