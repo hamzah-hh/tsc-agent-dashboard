@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { round2 } from '../utils/format';
 import { PreSalesPlan, PreSalesTier } from '../shared/types';
 import { calculatePreSales, formatCurrencyINR } from '../shared/incentive';
 import { AnimatedCounter } from './AnimatedCounter';
@@ -166,7 +167,7 @@ export function PreSalesSimulatorTab({
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-xs font-bold text-slate-900 dark:text-slate-100">Average Quality Audit Score (%)</label>
-              <span className={badgeClass}>{qualityScore}%</span>
+              <span className={badgeClass}>{round2(qualityScore)}%</span>
             </div>
             <div className="flex items-center gap-4">
               <input
@@ -244,7 +245,7 @@ export function PreSalesSimulatorTab({
               <div>
                 <span className="font-semibold text-slate-300">Quality gate</span>
                 <span className="text-[11px] text-slate-400 ml-1.5 font-mono">
-                  ({ps?.qualityScore === null || ps?.qualityScore === undefined ? 'no score' : `${ps.qualityScore}%`} vs {plan.qualityGate}%)
+                  ({ps?.qualityScore === null || ps?.qualityScore === undefined ? 'no score' : `${round2(ps.qualityScore)}%`} vs {plan.qualityGate}%)
                 </span>
               </div>
               <span className={`font-bold font-mono ${ps?.eligible ? 'text-emerald-300' : 'text-amber-300'}`}>

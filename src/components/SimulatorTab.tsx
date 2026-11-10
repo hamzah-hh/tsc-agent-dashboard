@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { round2 } from '../utils/format';
 import { Plan, ProcessedMetrics } from '../shared/types';
 import { calculateFromMetrics, formatCurrencyINR, formatNumberINR, roundHalfUp } from '../shared/incentive';
 import { classRank, classSteps } from '../shared/classes';
@@ -333,7 +334,7 @@ export function SimulatorTab({
                 Average Quality Audit Score (%)
               </label>
               <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200/80 dark:border-indigo-800/60 px-2 py-0.5 rounded font-mono">
-                {qualityScore}%
+                {round2(qualityScore)}%
               </span>
             </div>
             <div className="flex items-center gap-4">

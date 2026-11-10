@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { round2 } from '../utils/format';
 import { AgentRecord, AgentType } from '../shared/types';
 import { formatCurrencyINR, formatNumberINR } from '../shared/incentive';
 import { StaleBanner } from './StaleBanner';
@@ -288,7 +289,7 @@ export function TeamView({
         ps || !t?.orders ? '' : Math.round(t.sales / t.orders),
         ps ? '' : Number((a.result?.achievementPct || 0).toFixed(1)),
         ps ? 'PS' : a.result?.className || 'NQ',
-        a.quality?.audits ? a.quality.score : '',
+        a.quality?.audits ? round2(a.quality.score) : '',
         ps ? (a.result?.preSales?.eligible ? 'Gate met' : 'Locked') : a.result?.quality?.band || 'None',
         ps ? a.result?.preSales?.calls.value ?? 0 : days > 0 ? Number((t.connects / days).toFixed(1)) : 0,
         ps ? a.result?.preSales?.talk.value ?? 0 : days > 0 ? Number((t.talkSeconds / 60 / days).toFixed(1)) : 0,
@@ -870,7 +871,7 @@ export function TeamView({
                         </td>
                         <td className="py-3 px-4 text-center">
                           <span className="font-mono text-xs font-semibold text-slate-900 dark:text-slate-200">
-                            {agent.quality?.audits ? `${agent.quality.score}%` : '—'}
+                            {agent.quality?.audits ? `${round2(agent.quality.score)}%` : '—'}
                           </span>
                           <span className="text-[10px] text-slate-400 dark:text-slate-500 block font-mono">
                             {isPS ? (ps?.eligible ? 'Gate met' : 'Locked') : res?.quality?.band || 'None'}

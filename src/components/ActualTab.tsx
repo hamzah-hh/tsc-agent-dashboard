@@ -1,4 +1,5 @@
 import React from 'react';
+import { round2 } from '../utils/format';
 import {
   BarChart,
   Bar,
@@ -686,7 +687,7 @@ export function ActualTab({ agentRecord, plan, cycle, onNavigateToSimulator, onN
                 </div>
 
                 <div className="text-2xl font-black text-slate-950 dark:text-white font-mono tabular-nums">
-                  {metrics.qualityScore !== null ? `${metrics.qualityScore}%` : 'N/A'}
+                  {metrics.qualityScore !== null ? `${round2(metrics.qualityScore)}%` : 'N/A'}
                 </div>
                 <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">{quality.audits} audits completed</p>
 

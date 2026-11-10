@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { round2 } from '../utils/format';
 import {
   Target,
   TrendingUp,
@@ -469,7 +470,7 @@ export const TargetTab: React.FC<TargetTabProps> = ({
             </div>
 
             <div className="text-2xl font-black font-mono text-slate-900 dark:text-white">
-              {quality.score ? `${quality.score}%` : 'N/A'}
+              {quality.score ? `${round2(quality.score)}%` : 'N/A'}
             </div>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
               High: ≥{plan.bonuses.quality.high}% · Mid: ≥{plan.bonuses.quality.mid}%

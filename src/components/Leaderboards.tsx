@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { round2 } from '../utils/format';
 import { LeaderboardRecord, LeaderboardRow } from '../shared/types';
 import { formatCurrencyINR, formatNumberINR } from '../shared/incentive';
 import { Trophy, Medal, Award, MapPin, RefreshCw, Calendar, TrendingUp, Sparkles, Search, Crown, PhoneIncoming, Clock, ShieldCheck } from 'lucide-react';
@@ -168,7 +169,7 @@ export function Leaderboards({ userRole, userLocation, activeCycleId, cycleName,
                 {isPreSales ? (
                   <>
                     <div className="text-[11px] text-indigo-300 font-mono mb-1">{top2.avgCalls || 0} calls/day · {Math.round(top2.avgTalkSeconds || 0)}s talk</div>
-                    <div className="text-[10px] text-slate-400 font-mono">Quality: {top2.qualityScore !== null ? `${top2.qualityScore}%` : 'No audit'}</div>
+                    <div className="text-[10px] text-slate-400 font-mono">Quality: {top2.qualityScore !== null ? `${round2(top2.qualityScore)}%` : 'No audit'}</div>
                   </>
                 ) : (
                   <>
@@ -201,7 +202,7 @@ export function Leaderboards({ userRole, userLocation, activeCycleId, cycleName,
                 {isPreSales ? (
                   <>
                     <div className="text-xs text-indigo-300 font-mono font-bold mb-1">{top1.avgCalls || 0} calls/day · {Math.round(top1.avgTalkSeconds || 0)}s talk</div>
-                    <div className="text-xs text-slate-300 font-mono">Quality Score: {top1.qualityScore !== null ? `${top1.qualityScore}%` : 'No audit'}</div>
+                    <div className="text-xs text-slate-300 font-mono">Quality Score: {top1.qualityScore !== null ? `${round2(top1.qualityScore)}%` : 'No audit'}</div>
                   </>
                 ) : (
                   <>
@@ -225,7 +226,7 @@ export function Leaderboards({ userRole, userLocation, activeCycleId, cycleName,
                 {isPreSales ? (
                   <>
                     <div className="text-[11px] text-indigo-300 font-mono mb-1">{top3.avgCalls || 0} calls/day · {Math.round(top3.avgTalkSeconds || 0)}s talk</div>
-                    <div className="text-[10px] text-slate-400 font-mono">Quality: {top3.qualityScore !== null ? `${top3.qualityScore}%` : 'No audit'}</div>
+                    <div className="text-[10px] text-slate-400 font-mono">Quality: {top3.qualityScore !== null ? `${round2(top3.qualityScore)}%` : 'No audit'}</div>
                   </>
                 ) : (
                   <>
@@ -422,7 +423,7 @@ export function Leaderboards({ userRole, userLocation, activeCycleId, cycleName,
                                   : 'bg-rose-100 dark:bg-rose-950/70 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-800'
                               }`}>
                                 <ShieldCheck className="w-3 h-3" />
-                                {row.qualityScore}% {row.qualityScore >= 85 ? 'Qualified' : 'Below Gate'}
+                                {round2(row.qualityScore)}% {row.qualityScore >= 85 ? 'Qualified' : 'Below Gate'}
                               </span>
                             ) : (
                               <span className="text-slate-400 text-xs italic">No Audit</span>

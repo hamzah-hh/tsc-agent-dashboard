@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { round2 } from '../utils/format';
 import { AgentLeaderboardRow, LocationRevenueData } from '../shared/types';
 import { formatCurrencyINR, formatNumberINR } from '../shared/incentive';
 import {
@@ -355,7 +356,7 @@ export function AgentLeaderboardTab({
               <div>
                 <span className="text-[10px] uppercase font-mono text-slate-500 block">Quality</span>
                 <span className="font-mono font-bold text-emerald-700">
-                  {currentUserRow.qualityScore !== null ? `${currentUserRow.qualityScore}%` : '-'}
+                  {currentUserRow.qualityScore !== null ? `${round2(currentUserRow.qualityScore)}%` : '-'}
                 </span>
               </div>
             </div>
@@ -785,7 +786,7 @@ export function AgentLeaderboardTab({
                               row.qualityScore >= 85 ? 'text-emerald-700' : 'text-rose-600'
                             }`}
                           >
-                            {row.qualityScore}%
+                            {round2(row.qualityScore)}%
                           </span>
                         ) : (
                           <span className="text-slate-400 text-[11px]">-</span>
@@ -957,7 +958,7 @@ export function AgentLeaderboardTab({
                               row.qualityScore >= 85 ? 'text-emerald-700' : 'text-slate-600'
                             }`}
                           >
-                            {row.qualityScore}%
+                            {round2(row.qualityScore)}%
                           </span>
                         ) : (
                           <span className="text-slate-400 text-[11px]">-</span>

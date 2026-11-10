@@ -1,4 +1,5 @@
 import { ExportCsvButton } from './ExportCsvButton';
+import { round2 } from '../utils/format';
 import { csvName, csvStamp } from '../utils/csv';
 import React, { useState } from 'react';
 import {
@@ -336,7 +337,7 @@ export const TierSlabSection: React.FC<TierSlabSectionProps> = ({
               </div>
 
               <div className="mt-3 pt-3 border-t border-slate-200/80 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400 flex justify-between font-mono">
-                <span>Your Score: <strong className="text-slate-800 dark:text-slate-200">{agentRecord.quality?.score ? `${agentRecord.quality.score}%` : 'N/A'}</strong></span>
+                <span>Your Score: <strong className="text-slate-800 dark:text-slate-200">{agentRecord.quality?.score ? `${round2(agentRecord.quality.score)}%` : 'N/A'}</strong></span>
                 <span>{agentRecord.quality?.audits || 0} Audits</span>
               </div>
             </div>
