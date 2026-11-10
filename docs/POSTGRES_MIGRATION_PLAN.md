@@ -499,7 +499,7 @@ Apps Script adds `checksums: {Orders:{rows, sumOrderValue}, Dialer:{rows, sumCon
 ---
 
 ## 9. Owner answers (2026-11-09)
-- Q2: every TL and Manager may **export** CSVs; only the Super Admin (owner) may **purge**. No second approver.
+- Q2: every TL and Manager may **export** CSVs, but a TL exports **only their own team** (enforced on the server); only the Super Admin (owner) may **purge**. No second approver.
 - Q3: May-August will be agent-wise incentive **summaries** supplied by the owner (no cycle dates or plans to recompute). They go into `agent_month_summary`, not through the incentive calculation.
-- Q1 (MainSheet): asked again in plain words; pending.
-- Q6 (Vercel function region): pending.
+- Q1 (MainSheet): owner (2026-11-10) said keep it as **not used**. The relational tables will not map it; the old code stays in place until the end of the migration, then is deleted.
+- Q6 (Vercel function region): was iad1 (Washington); moved to sin1 (Singapore) via `vercel.json`.
