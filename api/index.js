@@ -3,7 +3,7 @@ import express2 from "express";
 
 // server-routes.ts
 import express from "express";
-import crypto2 from "crypto";
+import crypto3 from "crypto";
 
 // server-firebase-admin.ts
 import { applicationDefault, cert, deleteApp, getApps, initializeApp } from "firebase-admin/app";
@@ -40,6 +40,9 @@ var firebaseConfig = {
   oAuthClientId: firebase_applet_config_default.oAuthClientId || "",
   recaptchaSiteKey: firebase_applet_config_default.recaptchaSiteKey || ""
 };
+
+// server-pg.ts
+import { neon } from "@neondatabase/serverless";
 
 // server-db.ts
 import fs from "fs";
@@ -172,10 +175,10 @@ var FirestoreRestBackend = class {
           body: body !== void 0 ? JSON.stringify(body) : void 0,
           signal: AbortSignal.timeout(this.opts.timeoutMs ?? 2e4)
         });
-        const text = await res.text();
+        const text2 = await res.text();
         let json = null;
         try {
-          json = text ? JSON.parse(text) : null;
+          json = text2 ? JSON.parse(text2) : null;
         } catch (_e) {
           json = null;
         }
@@ -411,9 +414,9 @@ var CollectionRef = class extends Query {
     return new DocRef(this.db, `${this.collectionPath}/${docId}`);
   }
   async add(data) {
-    const ref = this.doc();
-    await ref.set(data);
-    return ref;
+    const ref2 = this.doc();
+    await ref2.set(data);
+    return ref2;
   }
 };
 var Batch = class {
@@ -421,12 +424,12 @@ var Batch = class {
     this.db = db;
     this.writes = [];
   }
-  set(ref, data, options) {
-    this.writes.push({ op: "set", path: ref.path, data, merge: options?.merge });
+  set(ref2, data, options) {
+    this.writes.push({ op: "set", path: ref2.path, data, merge: options?.merge });
     return this;
   }
-  delete(ref) {
-    this.writes.push({ op: "delete", path: ref.path });
+  delete(ref2) {
+    this.writes.push({ op: "delete", path: ref2.path });
     return this;
   }
   get size() {
@@ -474,6 +477,82 @@ function createFirestoreBackend(opts) {
 }
 function createLocalBackend(file) {
   return new LocalBackend(file);
+}
+
+// server-pg.ts
+var clean = (p) => p.replace(/^\/+|\/+$/g, "");
+var parentOf = (p) => p.split("/").slice(0, -1).join("/");
+var DDL = [
+  `CREATE TABLE IF NOT EXISTS doc_store (
+     path text PRIMARY KEY,
+     parent text NOT NULL,
+     id text NOT NULL,
+     data jsonb NOT NULL,
+     updated_at timestamptz NOT NULL DEFAULT now()
+   )`,
+  `CREATE INDEX IF NOT EXISTS doc_store_parent_idx ON doc_store (parent)`
+];
+var PgDocBackend = class {
+  constructor(connectionString) {
+    this.kind = "postgres";
+    this.ready = null;
+    this.sql = neon(connectionString);
+  }
+  init() {
+    this.ready ??= (async () => {
+      for (const stmt of DDL) await this.sql.query(stmt);
+    })().catch((e) => {
+      this.ready = null;
+      throw e;
+    });
+    return this.ready;
+  }
+  async getDoc(docPath) {
+    await this.init();
+    const rows = await this.sql.query("SELECT data FROM doc_store WHERE path = $1", [clean(docPath)]);
+    return rows.length ? rows[0].data : null;
+  }
+  async listDocs(collectionPath, query = {}) {
+    await this.init();
+    const col = clean(collectionPath);
+    const params = [col];
+    let text2 = "SELECT path, id, data FROM doc_store WHERE parent = $1";
+    for (const w of query.where || []) {
+      params.push(w.field, JSON.stringify(w.value));
+      text2 += ` AND data -> $${params.length - 1} = $${params.length}::jsonb`;
+    }
+    if (query.orderBy) {
+      params.push(query.orderBy.field);
+      text2 += ` ORDER BY data -> $${params.length} ${query.orderBy.dir === "desc" ? "DESC" : "ASC"}`;
+    }
+    if (query.limit !== void 0) {
+      params.push(query.limit);
+      text2 += ` LIMIT $${params.length}`;
+    }
+    const rows = await this.sql.query(text2, params);
+    return rows.map((r) => ({ id: r.id, path: r.path, data: r.data }));
+  }
+  async commit(writes) {
+    if (writes.length > MAX_WRITES_PER_COMMIT) {
+      throw new Error(`commit() takes at most ${MAX_WRITES_PER_COMMIT} writes, got ${writes.length}`);
+    }
+    if (!writes.length) return;
+    await this.init();
+    const stmts = writes.map((w) => {
+      const p = clean(w.path);
+      if (w.op === "delete") return this.sql.query("DELETE FROM doc_store WHERE path = $1", [p]);
+      const conflict = w.merge ? "doc_store.data || EXCLUDED.data" : "EXCLUDED.data";
+      return this.sql.query(
+        `INSERT INTO doc_store (path, parent, id, data) VALUES ($1, $2, $3, $4::jsonb)
+         ON CONFLICT (path) DO UPDATE SET data = ${conflict}, updated_at = now()`,
+        [p, parentOf(p), p.split("/").pop(), JSON.stringify(w.data ?? {})]
+      );
+    });
+    await this.sql.transaction(stmts);
+  }
+};
+function createPgBackend(connectionString) {
+  return new PgDocBackend(connectionString);
 }
 
 // server-env.ts
@@ -665,8 +744,13 @@ function buildBackend() {
     console.warn("[db] DB_MODE=local: using a local store, NOT Firestore. Never use this for the live app.");
     return createLocalBackend(file === "none" ? null : file || "local-db.json");
   }
+  if (mode === "postgres") {
+    const url = process.env.DATABASE_URL;
+    if (!url) throw new Error("DB_MODE=postgres needs DATABASE_URL.");
+    return createPgBackend(url);
+  }
   if (mode !== "firestore") {
-    throw new Error(`Unknown DB_MODE "${mode}". Use "firestore" (default) or "local".`);
+    throw new Error(`Unknown DB_MODE "${mode}". Use "firestore" (default), "postgres" or "local".`);
   }
   return createFirestoreBackend({
     projectId: projectId(),
@@ -1945,9 +2029,9 @@ function isAiConfigured() {
   return Boolean(process.env.GEMINI_API_KEY);
 }
 var geminiOverride = null;
-function extractNumbers(text) {
-  if (!text) return [];
-  const cleaned = text.replace(/,/g, "").replace(/[₹]/g, "").replace(/\bRs\.?\s*/gi, "").replace(/\s+%/g, "%");
+function extractNumbers(text2) {
+  if (!text2) return [];
+  const cleaned = text2.replace(/,/g, "").replace(/[₹]/g, "").replace(/\bRs\.?\s*/gi, "").replace(/\s+%/g, "%");
   const matches = cleaned.match(/\d+(?:\.\d+)?%?/g);
   if (!matches) return [];
   return matches.map((m) => m.trim());
@@ -1958,9 +2042,9 @@ function areNumberSetsEqual(arr1, arr2) {
   const s2 = [...arr2].sort();
   return s1.every((val, idx) => val === s2[idx]);
 }
-function countWords(text) {
-  if (!text) return 0;
-  return text.trim().split(/\s+/).filter(Boolean).length;
+function countWords(text2) {
+  if (!text2) return 0;
+  return text2.trim().split(/\s+/).filter(Boolean).length;
 }
 var SYSTEM_INSTRUCTION = "You write short, upbeat coaching messages for call sales agents of a mattress company during the Diwali sales season. For each item, rewrite defaultText in a fun, energetic, motivating way. Rules: 1) Keep every number exactly as it appears in defaultText, with the same digits, the rupee sign, and the Indian comma format. 2) Do not add any other number. 3) Max 25 words for each item. 4) Max 1 emoji for each item. 5) Never shame or pressure; no words like failure, poor, or bad. 6) Tone: if tone is english, use simple friendly English; if tone is hinglish, use casual Hindi-English mix in Latin script. 7) You can use Diwali, festival lights, rangoli, or cricket ideas. 8) Do not use a person's name. 9) For the headline item, write a headline of max 12 words and return it in the headline field. Return only JSON.";
 async function callGeminiWithTimeoutAndRetry(payloadString) {
@@ -2224,9 +2308,10 @@ async function runBatchAiGeneration(agents, cycle, appConfig, options = {}) {
 }
 
 // server-raw-data.ts
+import { createHash } from "crypto";
 var DEFAULT_RAW_SHEET_URL = "https://docs.google.com/spreadsheets/d/1Bg_F0Asq16F1BSwxyKF7SjFH4UUSVk6cTZ6cp9dnqb0/edit";
-function parseCSV(text) {
-  const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+function parseCSV(text2) {
+  const lines = text2.split(/\r?\n/).filter((l) => l.trim().length > 0);
   if (lines.length < 2) return [];
   const parseLine = (line) => {
     const res = [];
@@ -2278,8 +2363,8 @@ function pick(row, ...names) {
 var ORDER_VALUE_HEADERS = ["Order Value", "order_value", "Order_Value"];
 var ORDER_AGENT_HEADERS = ["Agent", "Agent Email", "Agent_Email"];
 var VISIT_AGENT_HEADERS = ["Agent ID", "agent_id", "Agent", "Agent Email"];
-function branchOf(text, fallback) {
-  const t = text.toLowerCase();
+function branchOf(text2, fallback) {
+  const t = text2.toLowerCase();
   if (t.includes("andheri")) return "Andheri";
   if (t.includes("bangalore") || t.includes("bengaluru")) return "Bangalore";
   if (t.includes("dighe") || /\bho\b/.test(t)) return "Dighe";
@@ -2467,14 +2552,25 @@ async function saveRawRecords(cycleId, orders, visits) {
   const prevData = prev.exists ? prev.data() : null;
   const orderChunks = chunk(orders);
   const visitChunks = chunk(visits);
+  const hashOf = (rows) => createHash("sha256").update(JSON.stringify(rows)).digest("hex");
+  const orderHashes = orderChunks.map(hashOf);
+  const visitHashes = visitChunks.map(hashOf);
+  const prevOrderHashes = Array.isArray(prevData?.orderHashes) ? prevData.orderHashes : [];
+  const prevVisitHashes = Array.isArray(prevData?.visitHashes) ? prevData.visitHashes : [];
   const batch = adminDb.batch();
-  orderChunks.forEach((rows, i) => batch.set(rawChunksCol(cycleId).doc(`orders-${i}`), { rows }));
-  visitChunks.forEach((rows, i) => batch.set(rawChunksCol(cycleId).doc(`visits-${i}`), { rows }));
+  orderChunks.forEach((rows, i) => {
+    if (prevOrderHashes[i] !== orderHashes[i]) batch.set(rawChunksCol(cycleId).doc(`orders-${i}`), { rows });
+  });
+  visitChunks.forEach((rows, i) => {
+    if (prevVisitHashes[i] !== visitHashes[i]) batch.set(rawChunksCol(cycleId).doc(`visits-${i}`), { rows });
+  });
   for (let i = orderChunks.length; i < (prevData?.orderChunks || 0); i++) batch.delete(rawChunksCol(cycleId).doc(`orders-${i}`));
   for (let i = visitChunks.length; i < (prevData?.visitChunks || 0); i++) batch.delete(rawChunksCol(cycleId).doc(`visits-${i}`));
   batch.set(rawRecordsRef(cycleId), {
     orderChunks: orderChunks.length,
     visitChunks: visitChunks.length,
+    orderHashes,
+    visitHashes,
     ordersCount: orders.length,
     visitsCount: visits.length,
     locationSummaries,
@@ -2490,13 +2586,13 @@ async function readRawRecords(cycleId) {
   if (Array.isArray(d.orders) || Array.isArray(d.visits)) {
     return { orders: d.orders || [], visits: d.visits || [], locationSummaries: d.locationSummaries, updatedAt: d.updatedAt };
   }
-  const read = async (prefix, count) => {
+  const read2 = async (prefix, count) => {
     const parts = await Promise.all(
       Array.from({ length: count }, (_, i) => rawChunksCol(cycleId).doc(`${prefix}-${i}`).get())
     );
     return parts.flatMap((p) => p.exists ? p.data()?.rows || [] : []);
   };
-  const [orders, visits] = await Promise.all([read("orders", d.orderChunks || 0), read("visits", d.visitChunks || 0)]);
+  const [orders, visits] = await Promise.all([read2("orders", d.orderChunks || 0), read2("visits", d.visitChunks || 0)]);
   return { orders, visits, locationSummaries: d.locationSummaries, updatedAt: d.updatedAt };
 }
 async function saveRawPayload(cycleId, rawRevenueTabRows, rawVisitRows, excludedSet) {
@@ -2618,6 +2714,87 @@ async function getOrLoadRawRecordsUncached(cycleId) {
   };
 }
 
+// src/shared/businessOverview.ts
+var ALL_TIERS = "All";
+function overviewTier(agentTier, location) {
+  const t = (agentTier || "").toLowerCase();
+  if (/pre\s*-?\s*sales/.test(t)) return null;
+  if (/store/.test(t)) return `Store Callers - ${(location || "").trim()}`;
+  if (/\bho\b|head\s*office/.test(t)) return "HO Caller";
+  return null;
+}
+var div = (a, b) => b > 0 ? a / b : null;
+function computeOverview(days, quality = []) {
+  const blank = () => ({ outbound: 0, connected: 0, talkSec: 0, agentDays: 0, sales: 0, orders: 0, agents: /* @__PURE__ */ new Set() });
+  const acc = /* @__PURE__ */ new Map();
+  const add = (key, d) => {
+    const a = acc.get(key) || blank();
+    a.outbound += d.outbound;
+    a.connected += d.connected;
+    a.talkSec += d.talkSec;
+    a.agentDays += d.day;
+    a.sales += d.sales;
+    a.orders += d.orders;
+    if (d.day > 0) a.agents.add(d.agent);
+    acc.set(key, a);
+  };
+  for (const d of days) {
+    if (!d.tier) continue;
+    const month = d.date.slice(0, 7);
+    add(`${month}|${d.tier}`, d);
+    add(`${month}|${ALL_TIERS}`, d);
+  }
+  const q = /* @__PURE__ */ new Map();
+  const addQ = (key, audits, score) => {
+    const cur = q.get(key) || { audits: 0, weighted: 0 };
+    cur.audits += audits;
+    cur.weighted += audits * score;
+    q.set(key, cur);
+  };
+  for (const item of quality) {
+    if (!(item.audits > 0)) continue;
+    const score = item.score > 1 ? item.score / 100 : item.score;
+    if (item.tier) {
+      addQ(`${item.month}|${item.tier}`, item.audits, score);
+      addQ(`${item.month}|${ALL_TIERS}`, item.audits, score);
+    } else {
+      addQ(`${item.month}|pre-sales`, item.audits, score);
+    }
+  }
+  const qualityOf = (month, tier) => {
+    const c = q.get(`${month}|${tier}`);
+    return c && c.audits > 0 ? c.weighted / c.audits : null;
+  };
+  const rows = [];
+  for (const [key, a] of acc) {
+    const [month, tier] = key.split("|");
+    rows.push({
+      month,
+      tier,
+      outbound: a.outbound,
+      avgOutbound: div(a.outbound, a.agentDays),
+      connected: a.connected,
+      avgConnected: div(a.connected, a.agentDays),
+      talkSec: Math.round(a.talkSec),
+      avgTalkSec: div(a.talkSec, a.agentDays),
+      revenue: Math.round(a.sales),
+      avgRevenue: div(a.sales, a.agents.size),
+      teamSize: a.agents.size,
+      aov: div(a.sales, a.orders),
+      quality: qualityOf(month, tier),
+      ...tier === ALL_TIERS ? { qualityPreSales: qualityOf(month, "pre-sales") } : {},
+      live: true
+    });
+  }
+  return rows.sort((x, y) => x.month.localeCompare(y.month) || x.tier.localeCompare(y.tier));
+}
+function mergeOverview(history, live) {
+  const byKey = /* @__PURE__ */ new Map();
+  for (const r of history) byKey.set(`${r.month}|${r.tier}`, r);
+  for (const r of live) byKey.set(`${r.month}|${r.tier}`, r);
+  return [...byKey.values()].sort((x, y) => x.month.localeCompare(y.month) || x.tier.localeCompare(y.tier));
+}
+
 // server-clean-sheet.ts
 function isCleanSheetPayload(body) {
   return Array.isArray(body?.agentsRows) && body.agentsRows.length > 0;
@@ -2637,12 +2814,25 @@ function cell(row, ...names) {
 function pick2(row, ...names) {
   return String(cell(row, ...names)).trim();
 }
-function numberOf(text) {
-  if (text === "") return null;
-  const n = Number(text.replace(/,/g, ""));
+function numberOf(text2) {
+  if (text2 === "") return null;
+  const n = Number(text2.replace(/,/g, ""));
   return Number.isFinite(n) ? n : null;
 }
 var pad = (n) => String(n).padStart(2, "0");
+var MONTH_NAMES = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+function monthOf(value) {
+  const text2 = String(value ?? "").trim();
+  if (!text2) return null;
+  let m = /^([a-z]{3})[a-z]*[-\s/]+(\d{2}|\d{4})$/i.exec(text2);
+  if (m) {
+    const i = MONTH_NAMES.indexOf(m[1].toLowerCase());
+    if (i >= 0) return `${m[2].length === 2 ? "20" + m[2] : m[2]}-${pad(i + 1)}`;
+  }
+  m = /^(\d{4})-(\d{1,2})$/.exec(text2);
+  if (m) return `${m[1]}-${pad(+m[2])}`;
+  return sheetDateTime(value)?.day.slice(0, 7) ?? null;
+}
 function sheetDateTime(value) {
   if (value === void 0 || value === null || value === "") return null;
   let y, mo, d, h = 0, mi = 0, s = 0;
@@ -2679,14 +2869,16 @@ function revenueBucket(category) {
   if (c.includes("pos")) return "posoc";
   return null;
 }
-function dayValue(text) {
-  const t = text.toLowerCase();
+function dayValue(text2) {
+  const t = text2.toLowerCase();
   if (t.includes("half")) return 0.5;
   if (t.includes("full")) return 1;
-  return numberOf(text) ?? 0;
+  return numberOf(text2) ?? 0;
 }
 var CREDIT_DATE_HEADERS = ["Credit_Date", "Credited_Date", "Credit Date", "Credited Date"];
 var CREDIT_DATE_KEYS = new Set(CREDIT_DATE_HEADERS.map(headerKey2));
+var HIDDEN_NAMES = /\btest\b|\bazma+n\b|\bsayed\s+saif\b/i;
+var HIDDEN_EMAILS = /* @__PURE__ */ new Set(["riya@co.in"]);
 var NO_EMAIL = /* @__PURE__ */ new Set(["", "none", "null", "na", "n/a", "-", "#n/a"]);
 function listOf(items, max = 10) {
   return items.length <= max ? items.join(", ") : `${items.slice(0, max).join(", ")} and ${items.length - max} more`;
@@ -2715,7 +2907,7 @@ function buildFromCleanSheet(tabs, cycle) {
       tier: pick2(row, "Agent_Tier", "Tier"),
       tlOfficial: normalizeEmail(pick2(row, "TL_Official_Email", "TL_Email_Official", "Leader_Official_Email")),
       tlPersonal: normalizeEmail(pick2(row, "TL_Personal_Email", "TL_Email_Personal", "Leader_Personal_Email", "TL_Gmail")),
-      active: status === "" || status.toLowerCase() === "active"
+      active: (status === "" || status.toLowerCase() === "active") && !HIDDEN_NAMES.test(pick2(row, "Agent_Name", "Name")) && !HIDDEN_EMAILS.has(official) && !HIDDEN_EMAILS.has(personal)
     });
   }
   if (duplicates.length) warnings.push(`Agents: ${duplicates.length} email(s) appear twice; the first row is used: ${listOf(duplicates)}`);
@@ -2735,7 +2927,7 @@ function buildFromCleanSheet(tabs, cycle) {
     if (!totals.has(agent)) totals.set(agent, /* @__PURE__ */ new Map());
     const byDay = totals.get(agent);
     if (!byDay.has(day)) {
-      byDay.set(day, { orders: 0, sales: 0, visits: 0, connects: 0, talkSec: 0, day: null, calls: null, ttNum: 0, ttCalls: 0 });
+      byDay.set(day, { orders: 0, sales: 0, visits: 0, connects: 0, outbound: 0, connectedAll: 0, talkSec: 0, day: null, calls: null, ttNum: 0, ttCalls: 0 });
     }
     return byDay.get(day);
   };
@@ -2843,6 +3035,8 @@ function buildFromCleanSheet(tabs, cycle) {
     const t = dayOf(p.official, when.day);
     if (t.day !== null) twiceDialer.push(`${p.official} ${when.day}`);
     t.connects += numberOf(pick2(row, "Total_Unique_Connected_Calls", "Unique_Connects")) ?? 0;
+    t.outbound += numberOf(pick2(row, "Total_Outbound_Calls", "Outbound_Calls")) ?? 0;
+    t.connectedAll += numberOf(pick2(row, "Total_Connected_Calls", "Connected_Calls")) ?? 0;
     t.talkSec += numberOf(pick2(row, "Total_Talk_Time_sec", "Talk_Time_sec")) ?? 0;
     t.day = Math.max(t.day ?? 0, dayValue(pick2(row, "Day_Type", "Day", "Active_Day_Count")));
   });
@@ -2963,11 +3157,31 @@ function buildFromCleanSheet(tabs, cycle) {
       });
     }
   }
-  const qualityRows = (tabs.qualityRows || []).map((row) => ({
-    Agent_Email_Official: normalizeEmail(pick2(row, "Agent_Email", "Agent_Email_Official", "Email")),
-    Total_Audits: pick2(row, "Total_Audits", "Audits"),
-    Average_Audit_Score: pick2(row, "Average_Score", "Average_Audit_Score", "Score")
-  })).filter((q) => q.Agent_Email_Official);
+  const cycleMonths = /* @__PURE__ */ new Set();
+  for (let d = cycle.startDate.slice(0, 7); d <= cycle.endDate.slice(0, 7); ) {
+    cycleMonths.add(d);
+    const [y, m] = d.split("-").map(Number);
+    d = m === 12 ? `${y + 1}-01` : `${y}-${pad(m + 1)}`;
+  }
+  const allQuality = (tabs.qualityRows || []).map((row) => ({
+    month: monthOf(cell(row, "Month")) || cycle.startDate.slice(0, 7),
+    email: normalizeEmail(pick2(row, "Agent_Email", "Agent_Email_Official", "Email")),
+    audits: numberOf(pick2(row, "Total_Audits", "Audits")) ?? 0,
+    score: numberOf(pick2(row, "Average_Score", "Average_Audit_Score", "Score")) ?? 0
+  })).filter((q) => q.email);
+  const cycleQuality = /* @__PURE__ */ new Map();
+  for (const q of allQuality) {
+    if (!cycleMonths.has(q.month)) continue;
+    const cur = cycleQuality.get(q.email) || { audits: 0, weighted: 0 };
+    cur.audits += q.audits;
+    cur.weighted += q.audits * q.score;
+    cycleQuality.set(q.email, cur);
+  }
+  const qualityRows = [...cycleQuality.entries()].map(([email, c]) => ({
+    Agent_Email_Official: email,
+    Total_Audits: c.audits,
+    Average_Audit_Score: c.audits > 0 ? c.weighted / c.audits : 0
+  }));
   const leaderMappingRows = [...people.values()].filter((p) => p.active).map((p) => ({
     Agent_Email_Official: p.official,
     Agent_Email_Personal: p.personal,
@@ -2976,7 +3190,20 @@ function buildFromCleanSheet(tabs, cycle) {
     Status: "Active"
   }));
   const excludedAgentsRows = [...people.values()].filter((p) => !p.active).map((p) => ({ Agent_Email_Official: p.official, Reason: "Status in Agents is not Active", Excluded_Since: "", Active_Exclusion: "TRUE" }));
-  return { mainRows, qualityRows, revenueRows, leaderMappingRows, excludedAgentsRows, rawRevenueTabRows, rawVisitRows, breaks, targets, warnings };
+  const overviewDays = [];
+  for (const p of people.values()) {
+    if (!p.active) continue;
+    const tier = overviewTier(p.tier, p.location);
+    for (const [day, t] of totals.get(p.official) || []) {
+      overviewDays.push({ agent: p.official, tier, date: day, day: t.day ?? 0, outbound: t.outbound, connected: t.connectedAll, talkSec: t.talkSec, sales: t.sales, orders: t.orders });
+    }
+  }
+  const overviewQuality = allQuality.flatMap((q) => {
+    const p = people.get(q.email);
+    return p?.active ? [{ month: q.month, tier: overviewTier(p.tier, p.location), audits: q.audits, score: q.score }] : [];
+  });
+  const overviewLive = computeOverview(overviewDays, overviewQuality);
+  return { mainRows, qualityRows, revenueRows, leaderMappingRows, excludedAgentsRows, rawRevenueTabRows, rawVisitRows, breaks, targets, warnings, overviewLive };
 }
 
 // server-team-ops.ts
@@ -3032,22 +3259,22 @@ async function loadTeamOps(cycleId) {
   return value;
 }
 
-// src/shared/cohortReport.ts
-var COHORT_REPORT_VIEWERS = ["anirban.tsc@gmail.com", "anirban@thesleepcompany.in", "agha.h489@gmail.com"];
-
-// server-cohort-report.ts
-var CHUNK2 = 2e3;
-var headRef2 = () => adminDb.collection("privateReports").doc("cohort");
-var chunksCol2 = () => headRef2().collection("chunks");
-function canSeeCohortReport(email) {
-  const list = process.env.COHORT_REPORT_VIEWERS ? process.env.COHORT_REPORT_VIEWERS.split(",").map((e) => normalizeEmail(e)).filter(Boolean) : COHORT_REPORT_VIEWERS;
-  const me = normalizeEmail(email);
-  return Boolean(me) && list.includes(me);
-}
+// server-business-overview.ts
 function headerKey3(h) {
   return String(h ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
-function pick3(row, ...names) {
+function num(row, ...names) {
+  const values = /* @__PURE__ */ new Map();
+  for (const [k, v] of Object.entries(row || {})) values.set(headerKey3(k), v);
+  for (const n of names) {
+    const v = values.get(headerKey3(n));
+    if (v === void 0 || v === null || String(v).trim() === "") continue;
+    const x = Number(String(v).replace(/[,%\s]/g, ""));
+    if (Number.isFinite(x)) return x;
+  }
+  return null;
+}
+function text(row, ...names) {
   const values = /* @__PURE__ */ new Map();
   for (const [k, v] of Object.entries(row || {})) values.set(headerKey3(k), v);
   for (const n of names) {
@@ -3056,11 +3283,91 @@ function pick3(row, ...names) {
   }
   return "";
 }
+function parseBusinessOverviewRows(rows) {
+  const out = [];
+  let skipped = 0;
+  for (const row of rows || []) {
+    const monthCell = Object.entries(row || {}).find(([k]) => headerKey3(k) === "month")?.[1];
+    const month = monthOf(monthCell);
+    const tier = text(row, "Tier");
+    if (!month || !tier) {
+      skipped++;
+      continue;
+    }
+    const revenue = num(row, "Revenue") ?? 0;
+    const teamSize = num(row, "Active_Team_Size") ?? 0;
+    const quality = num(row, "Quality_Score");
+    const pre = num(row, "Quality_Score_Pre_Sales");
+    out.push({
+      month,
+      tier,
+      outbound: num(row, "Outbound_Calls") ?? 0,
+      avgOutbound: num(row, "Avg_Outbound_Calls_Per_Agent_Day"),
+      connected: num(row, "Connected_Calls") ?? 0,
+      avgConnected: num(row, "Avg_Connected_Calls_Per_Agent_Day"),
+      talkSec: num(row, "Talk_Time_Sec") ?? 0,
+      avgTalkSec: num(row, "Avg_Talk_Time_Sec"),
+      revenue,
+      // Average revenue per agent is always Total Revenue / Active Team Size (the typed column is only a fallback)
+      avgRevenue: teamSize > 0 ? revenue / teamSize : num(row, "Avg_Revenue_Per_Agent"),
+      teamSize,
+      aov: num(row, "AOV"),
+      quality: quality === null ? null : quality > 1 ? quality / 100 : quality,
+      ...pre !== null ? { qualityPreSales: pre > 1 ? pre / 100 : pre } : {}
+    });
+  }
+  return { rows: out, skipped };
+}
+var ref = () => adminDb.collection("privateReports").doc("businessOverview");
+async function read() {
+  const snap = await ref().get();
+  return snap.exists ? snap.data() || {} : {};
+}
+async function saveBusinessOverview(history, live) {
+  const old = await read();
+  await ref().set({
+    history: history ?? old.history ?? [],
+    live: live ?? old.live ?? [],
+    updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+  });
+}
+async function loadBusinessOverview() {
+  const s = await read();
+  return mergeOverview(s.history || [], s.live || []);
+}
+
+// server-cohort-report.ts
+import crypto2 from "crypto";
+
+// src/shared/cohortReport.ts
+var COHORT_REPORT_VIEWERS = ["anirban.tsc@gmail.com", "anirban@thesleepcompany.in", "agha.h489@gmail.com"];
+
+// server-cohort-report.ts
+var CHUNK2 = 2e3;
+var headRefOf = (name) => adminDb.collection("privateReports").doc(name);
+var chunksColOf = (name) => headRefOf(name).collection("chunks");
+function canSeeCohortReport(email) {
+  const list = process.env.COHORT_REPORT_VIEWERS ? process.env.COHORT_REPORT_VIEWERS.split(",").map((e) => normalizeEmail(e)).filter(Boolean) : COHORT_REPORT_VIEWERS;
+  const me = normalizeEmail(email);
+  return Boolean(me) && list.includes(me);
+}
+function headerKey4(h) {
+  return String(h ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+function pick3(row, ...names) {
+  const values = /* @__PURE__ */ new Map();
+  for (const [k, v] of Object.entries(row || {})) values.set(headerKey4(k), v);
+  for (const n of names) {
+    const v = values.get(headerKey4(n));
+    if (v !== void 0 && v !== null && String(v).trim() !== "") return String(v).trim();
+  }
+  return "";
+}
 function parseCohortRows(rows) {
   const out = [];
   let skipped = 0;
   for (const row of rows || []) {
-    const dateCell = Object.entries(row || {}).find(([k]) => headerKey3(k) === "date")?.[1];
+    const dateCell = Object.entries(row || {}).find(([k]) => headerKey4(k) === "date")?.[1];
     const m = /^(\d{4})-(\d{2})/.exec(sheetDateTime(dateCell)?.day || "");
     const day = Number(pick3(row, "Day_Number", "Day"));
     const orders = Number(pick3(row, "Order_Count", "Orders").replace(/,/g, ""));
@@ -3075,28 +3382,104 @@ function parseCohortRows(rows) {
   }
   return { rows: out, skipped };
 }
-async function saveCohortRows(rows) {
-  const prev = await headRef2().get();
-  const prevChunks = prev.exists ? prev.data()?.chunks || 0 : 0;
+function parseCompanyDodRows(rows) {
+  const byDate = /* @__PURE__ */ new Map();
+  let skipped = 0;
+  for (const row of rows || []) {
+    const dateCell = Object.entries(row || {}).find(([k]) => headerKey4(k) === "date")?.[1];
+    const date = sheetDateTime(dateCell)?.day;
+    const sales = Number(pick3(row, "sales", "Revenue").replace(/,/g, ""));
+    const orders = Number(pick3(row, "order_id", "Orders", "Order_Count").replace(/,/g, "") || "0");
+    const main = pick3(row, "Main_Channel", "Main Channel").toLowerCase();
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(orders) || !Number.isFinite(sales)) {
+      skipped++;
+      continue;
+    }
+    const day = byDate.get(date) || { date, orders: 0, sales: 0, retail: 0, marketplace: 0, website: 0 };
+    day.orders += orders;
+    day.sales += sales;
+    if (main === "retail") day.retail = (day.retail || 0) + sales;
+    else if (main === "marketplace") day.marketplace = (day.marketplace || 0) + sales;
+    else if (main === "website") day.website = (day.website || 0) + sales;
+    byDate.set(date, day);
+  }
+  return { rows: [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date)), skipped };
+}
+var companyRef = () => adminDb.collection("privateReports").doc("companyDod");
+async function saveCompanyDod(rows) {
+  await companyRef().set({ rows, count: rows.length, updatedAt: (/* @__PURE__ */ new Date()).toISOString() });
+}
+async function loadCompanyDod() {
+  const snap = await companyRef().get();
+  return snap.exists ? snap.data()?.rows || [] : [];
+}
+async function saveRowsOf(name, rows) {
+  const hash = crypto2.createHash("sha256").update(JSON.stringify(rows)).digest("hex");
+  const prev = await headRefOf(name).get();
+  const prevData = prev.exists ? prev.data() : {};
+  if (prevData?.hash === hash) return;
+  const prevChunks = prevData?.chunks || 0;
   const parts = [];
   for (let i = 0; i < rows.length; i += CHUNK2) parts.push(rows.slice(i, i + CHUNK2));
   const batch = adminDb.batch();
-  parts.forEach((p, i) => batch.set(chunksCol2().doc(`rows-${i}`), { rows: p }));
-  for (let i = parts.length; i < prevChunks; i++) batch.delete(chunksCol2().doc(`rows-${i}`));
-  batch.set(headRef2(), { chunks: parts.length, count: rows.length, updatedAt: (/* @__PURE__ */ new Date()).toISOString() });
+  parts.forEach((p, i) => batch.set(chunksColOf(name).doc(`rows-${i}`), { rows: p }));
+  for (let i = parts.length; i < prevChunks; i++) batch.delete(chunksColOf(name).doc(`rows-${i}`));
+  batch.set(headRefOf(name), { chunks: parts.length, count: rows.length, hash, updatedAt: (/* @__PURE__ */ new Date()).toISOString() });
   await batch.commit();
 }
+async function loadRowsOf(name) {
+  const head = await headRefOf(name).get();
+  if (!head.exists) return { rows: [], updatedAt: null };
+  const d = head.data();
+  const parts = await Promise.all(Array.from({ length: d.chunks || 0 }, (_, i) => chunksColOf(name).doc(`rows-${i}`).get()));
+  return { rows: parts.flatMap((p) => p.exists ? p.data()?.rows || [] : []), updatedAt: d.updatedAt || null };
+}
+var saveCohortRows = (rows) => saveRowsOf("cohort", rows);
+var loadCohortRows = () => loadRowsOf("cohort");
+var saveCohortV2Rows = (rows) => saveRowsOf("cohortV2", rows);
+var loadCohortV2Rows = () => loadRowsOf("cohortV2");
 async function cohortReportStatus() {
-  const head = await headRef2().get();
+  const head = await headRefOf("cohort").get();
   const d = head.exists ? head.data() : {};
   return { count: d.count || 0, updatedAt: d.updatedAt || null };
 }
-async function loadCohortRows() {
-  const head = await headRef2().get();
-  if (!head.exists) return { rows: [], updatedAt: null };
-  const d = head.data();
-  const parts = await Promise.all(Array.from({ length: d.chunks || 0 }, (_, i) => chunksCol2().doc(`rows-${i}`).get()));
-  return { rows: parts.flatMap((p) => p.exists ? p.data()?.rows || [] : []), updatedAt: d.updatedAt || null };
+function parseDiwaliRows(rows) {
+  const out = [];
+  let skipped = 0;
+  const n = (row, ...names) => {
+    const s = pick3(row, ...names).replace(/[,%\s]/g, "");
+    const x = Number(s);
+    return s !== "" && Number.isFinite(x) ? x : 0;
+  };
+  for (const row of rows || []) {
+    const dateCell = Object.entries(row || {}).find(([k]) => headerKey4(k) === "date")?.[1];
+    const date = sheetDateTime(dateCell)?.day;
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      skipped++;
+      continue;
+    }
+    const sp = pick3(row, "Sale_Percentage", "Sale Percentage");
+    const spn = Number(sp.replace(/[,%\s]/g, ""));
+    out.push({
+      date,
+      dow: pick3(row, "DoW"),
+      weekFlag: pick3(row, "Week_Flag"),
+      salePct: sp !== "" && Number.isFinite(spn) ? spn > 1 ? spn / 100 : spn : null,
+      projection: n(row, "Company_Projection"),
+      actual: n(row, "Company_Actual"),
+      attributed: n(row, "Attributed_Revenue"),
+      threeMin: n(row, "3_min_Revenue", "3_Minute_Revenue")
+    });
+  }
+  return { rows: out.sort((a, b) => a.date.localeCompare(b.date)), skipped };
+}
+var diwaliRef = () => adminDb.collection("privateReports").doc("diwali");
+async function saveDiwali(rows) {
+  await diwaliRef().set({ rows, count: rows.length, updatedAt: (/* @__PURE__ */ new Date()).toISOString() });
+}
+async function loadDiwali() {
+  const snap = await diwaliRef().get();
+  return snap.exists ? snap.data()?.rows || [] : [];
 }
 
 // server-import.ts
@@ -3120,8 +3503,8 @@ var REQUIRED_QUALITY_HEADERS = [
   "Average_Audit_Score"
 ];
 function canonicalizeMainHeader(rawHeader) {
-  const clean = String(rawHeader || "").trim();
-  const normalized = clean.toLowerCase().replace(/[\s_\-\(\)\[\]\.\/\\]+/g, "");
+  const clean2 = String(rawHeader || "").trim();
+  const normalized = clean2.toLowerCase().replace(/[\s_\-\(\)\[\]\.\/\\]+/g, "");
   if (normalized === "talktimemins" || normalized === "talktimemin" || normalized === "talktimeminutes" || normalized === "talkminutes" || normalized === "talkmins" || normalized === "talkdurationmins" || normalized === "talkdurationminutes" || normalized === "totaltalktimemins" || normalized === "totaltalktimeminutes" || normalized === "talktimem" || normalized === "talktimeseconds" || normalized === "talktime" || normalized === "talkseconds" || normalized === "talktimesec" || normalized === "talktimesecs" || normalized === "talkduration" || normalized === "talkdurationseconds" || normalized === "totaltalktime" || normalized === "totaltalktimeseconds" || normalized === "talktimeinmins") {
     return "Talk_Time_Minutes";
   }
@@ -3176,16 +3559,16 @@ function canonicalizeMainHeader(rawHeader) {
   if (normalized === "avgttperday" || normalized === "avgtt" || normalized === "averagett" || normalized === "avgttsec" || normalized === "talktimepercall" || normalized === "averagetalktime" || normalized === "avgttseconds") {
     return "Avg_TT_per_day";
   }
-  return clean;
+  return clean2;
 }
-function headerKey4(h) {
+function headerKey5(h) {
   return String(h ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 function pickColumn(row, ...names) {
   const values = /* @__PURE__ */ new Map();
-  for (const [k, v] of Object.entries(row || {})) values.set(headerKey4(k), v);
+  for (const [k, v] of Object.entries(row || {})) values.set(headerKey5(k), v);
   for (const name of names) {
-    const v = values.get(headerKey4(name));
+    const v = values.get(headerKey5(name));
     if (v !== void 0 && v !== null && String(v).trim() !== "") return String(v).trim();
   }
   return "";
@@ -3223,8 +3606,8 @@ function normalizeRawMainRow(row) {
   return normalized;
 }
 function canonicalizeQualityHeader(rawHeader) {
-  const clean = String(rawHeader || "").trim();
-  const normalized = clean.toLowerCase().replace(/[\s_\-\(\)\[\]\.\/\\]+/g, "");
+  const clean2 = String(rawHeader || "").trim();
+  const normalized = clean2.toLowerCase().replace(/[\s_\-\(\)\[\]\.\/\\]+/g, "");
   if (normalized === "agentemailofficial" || normalized === "agentofficialemail" || normalized === "officialemail" || normalized === "agentemail" || normalized === "email") {
     return "Agent_Email_Official";
   }
@@ -3234,7 +3617,7 @@ function canonicalizeQualityHeader(rawHeader) {
   if (normalized === "averageauditscore" || normalized === "auditscore" || normalized === "avgscore" || normalized === "qualityscore" || normalized === "score" || normalized === "avgauditscore") {
     return "Average_Audit_Score";
   }
-  return clean;
+  return clean2;
 }
 function normalizeRawQualityRow(row) {
   const normalized = {};
@@ -3246,8 +3629,8 @@ function normalizeRawQualityRow(row) {
 }
 var PRE_SALES_HEADERS = ["Inbound_Calls", "Avg_TT_per_day"];
 var DEFAULT_SUPER_ADMIN = "agha.h489@gmail.com";
-var DEFAULT_AI_SYNC_BUDGET_MS = 35e3;
-var AI_START_DEADLINE_MS = 32e3;
+var DEFAULT_AI_SYNC_BUDGET_MS = 2e4;
+var AI_START_DEADLINE_MS = 18e3;
 function envEmails(name) {
   loadEnv();
   return (process.env[name] || "").split(/[,;\s]+/).map(normalizeEmail).filter(Boolean);
@@ -3278,9 +3661,33 @@ function defaultAppConfig() {
   };
 }
 var LEGACY_CODE_MANAGER = "snehatsc@gmail.com";
-var CACHE_TTL_MS = 3e4;
+var CACHE_TTL_MS = 6e4;
+var AGENTS_MAX_AGE_MS = 30 * 6e4;
 var seedCache = null;
 var agentsCache = /* @__PURE__ */ new Map();
+function newDataVersion() {
+  return Date.now();
+}
+function stableJson(v) {
+  return JSON.stringify(v, (_k, val) => {
+    if (val && typeof val === "object" && !Array.isArray(val)) {
+      const out = {};
+      for (const k of Object.keys(val).sort()) if (val[k] !== void 0) out[k] = val[k];
+      return out;
+    }
+    return val;
+  });
+}
+function sameAgentRecord(stored, next) {
+  if (!stored || !next) return false;
+  const { updatedAt: _a, ...a } = stored;
+  const { updatedAt: _b, ...b } = next;
+  return stableJson(a) === stableJson(b);
+}
+function accessAlreadyHolds(stored, patch) {
+  if (!stored) return false;
+  return Object.entries(patch).every(([k, v]) => v === void 0 || stableJson(stored[k]) === stableJson(v));
+}
 function invalidateReadCache() {
   seedCache = null;
   agentsCache.clear();
@@ -3382,11 +3789,13 @@ async function ensureSeedDataUncached() {
   return { appConfig, cycle };
 }
 async function loadAgents(cycleId) {
+  const { appConfig } = await ensureSeedData();
+  const version = appConfig.dataVersion;
   const hit = agentsCache.get(cycleId);
-  if (hit && Date.now() - hit.at < CACHE_TTL_MS) return structuredClone(hit.value);
+  if (hit && hit.version === version && Date.now() - hit.at < AGENTS_MAX_AGE_MS) return structuredClone(hit.value);
   const snap = await adminDb.collection("cycles").doc(cycleId).collection("agents").get();
   const agents = snap.docs.map((d) => d.data());
-  agentsCache.set(cycleId, { at: Date.now(), value: structuredClone(agents) });
+  agentsCache.set(cycleId, { at: Date.now(), version, value: structuredClone(agents) });
   return agents;
 }
 function buildLeaderboardDocs(agents, appConfig) {
@@ -3432,6 +3841,7 @@ async function clearTestData(appConfig) {
     }
   });
   logsSnap.forEach((d) => batch.delete(d.ref));
+  batch.set(adminDb.collection("config").doc("app"), { dataVersion: newDataVersion() }, { merge: true });
   await batch.commit();
   await rebuildLeaderboards(appConfig);
   return {
@@ -3448,6 +3858,7 @@ async function saveAiText(cycleId, agents) {
       batch.set(col.doc(agent.officialEmail), { aiSuggestions: agent.aiSuggestions }, { merge: true });
     }
   }
+  batch.set(adminDb.collection("config").doc("app"), { dataVersion: newDataVersion() }, { merge: true });
   await batch.commit();
 }
 async function processImport(source, mainRows, qualityRows = [], options = {}) {
@@ -3625,13 +4036,18 @@ async function processImport(source, mainRows, qualityRows = [], options = {}) {
     const tlAccessEntries = [];
     const knownTlAccessSnap = await adminDb.collection("access").get();
     const tlOfficialToPersonal = /* @__PURE__ */ new Map();
+    const existingAccess = /* @__PURE__ */ new Map();
     knownTlAccessSnap.forEach((d) => {
       const data = d.data();
+      existingAccess.set(d.id, data);
       if (data?.role === "tl" && data.officialEmail) {
         tlOfficialToPersonal.set(normalizeEmail(data.officialEmail), d.id);
       }
     });
     const emailsToDelete = /* @__PURE__ */ new Set();
+    for (const email of existingAgentData.keys()) {
+      if (excludedEmails.has(normalizeEmail(email))) emailsToDelete.add(email);
+    }
     for (const [officialEmail, agentRows] of groupedByAgent.entries()) {
       if (excludedEmails.has(officialEmail)) {
         emailsToDelete.add(officialEmail);
@@ -3779,12 +4195,14 @@ async function processImport(source, mainRows, qualityRows = [], options = {}) {
     const batch = adminDb.batch();
     const agentsCollection = adminDb.collection("cycles").doc(cycleId).collection("agents");
     for (const agent of updatedAgents) {
+      if (sameAgentRecord(existingAgentData.get(agent.officialEmail), agent)) continue;
       batch.set(agentsCollection.doc(agent.officialEmail), agent);
     }
     for (const email of emailsToDelete) {
       batch.delete(agentsCollection.doc(email));
     }
     for (const entry of agentAccessEntries) {
+      if (accessAlreadyHolds(existingAccess.get(entry.email), entry.doc)) continue;
       batch.set(adminDb.collection("access").doc(entry.email), entry.doc, { merge: true });
     }
     const tlMap = /* @__PURE__ */ new Map();
@@ -3799,6 +4217,7 @@ async function processImport(source, mainRows, qualityRows = [], options = {}) {
       }
     }
     for (const [email, doc] of tlMap.entries()) {
+      if (accessAlreadyHolds(existingAccess.get(email), doc)) continue;
       batch.set(adminDb.collection("access").doc(email), doc, { merge: true });
     }
     const allAgentsMap = /* @__PURE__ */ new Map();
@@ -3836,7 +4255,9 @@ async function processImport(source, mainRows, qualityRows = [], options = {}) {
       warnings
     };
     batch.set(syncLogRef, syncLogDoc);
+    batch.set(adminDb.collection("config").doc("app"), { dataVersion: newDataVersion() }, { merge: true });
     await batch.commit();
+    console.log(`[Sync] data saved after ${Date.now() - startedAt} ms`);
     const ai = { ok: 0, failed: 0, skipped: 0, pending: 0 };
     if (appConfig.aiEnabled && updatedAgents.length > 0) {
       const need = updatedAgents.filter((a) => !aiTextIsCurrent(a));
@@ -3878,6 +4299,7 @@ async function processImport(source, mainRows, qualityRows = [], options = {}) {
         console.error("Failed to complete the sync log entry:", logErr);
       }
     }
+    console.log(`[Sync] finished after ${Date.now() - startedAt} ms`);
     return {
       result: "ok",
       rows: validRowCount,
@@ -3898,6 +4320,73 @@ async function processImport(source, mainRows, qualityRows = [], options = {}) {
     };
   }
 }
+async function saveReportTabs(tabs, warnings) {
+  const saved = [];
+  const jobs = [
+    {
+      tab: "Anirban_Ref",
+      rows: tabs.cohortRows,
+      run: async (rows) => {
+        const p = parseCohortRows(rows);
+        await saveCohortRows(p.rows);
+        return { count: p.rows.length, skipped: p.skipped };
+      }
+    },
+    {
+      tab: "Anirban_Cohort_Reportv2",
+      rows: tabs.cohortV2Rows,
+      run: async (rows) => {
+        const p = parseCohortRows(rows);
+        await saveCohortV2Rows(p.rows);
+        return { count: p.rows.length, skipped: p.skipped };
+      }
+    },
+    {
+      tab: "Company_DOD",
+      rows: tabs.companyDodRows,
+      run: async (rows) => {
+        const p = parseCompanyDodRows(rows);
+        await saveCompanyDod(p.rows);
+        return { count: p.rows.length, skipped: p.skipped };
+      }
+    },
+    {
+      tab: "Diwali_Projection",
+      rows: tabs.diwaliRows,
+      run: async (rows) => {
+        const p = parseDiwaliRows(rows);
+        await saveDiwali(p.rows);
+        return { count: p.rows.length, skipped: p.skipped };
+      }
+    }
+  ];
+  for (const job of jobs) {
+    if (!job.rows) continue;
+    try {
+      const r = await job.run(job.rows);
+      saved.push(`${job.tab} (${r.count} rows)`);
+      if (r.skipped) warnings.push(`${job.tab}: ${r.skipped} row(s) could not be read and were left out.`);
+    } catch (err) {
+      warnings.push(`${job.tab} not saved: ${err?.message || String(err)}`);
+    }
+  }
+  return saved;
+}
+async function processReportTabs(tabs) {
+  const warnings = [];
+  const saved = await saveReportTabs(tabs, warnings);
+  if (tabs.businessOverviewRows) {
+    try {
+      const parsed = parseBusinessOverviewRows(tabs.businessOverviewRows);
+      await saveBusinessOverview(parsed.rows, null);
+      saved.push(`Business_Overview (${parsed.rows.length} rows)`);
+      if (parsed.skipped) warnings.push(`Business_Overview: ${parsed.skipped} row(s) had no Month or Tier and were left out.`);
+    } catch (err) {
+      warnings.push(`Business Overview not saved: ${err?.message || String(err)}`);
+    }
+  }
+  return { result: "ok", partial: true, rows: 0, agents: 0, lastDataDate: "", saved, warnings };
+}
 async function processCleanSheetImport(source, tabs, options = {}) {
   const startedAt = Date.now();
   const { appConfig, cycle } = await ensureSeedData();
@@ -3909,14 +4398,13 @@ async function processCleanSheetImport(source, tabs, options = {}) {
   } catch (err) {
     early.push(`Breaks / Targets not saved: ${err?.message || String(err)}`);
   }
-  if (tabs.cohortRows) {
-    try {
-      const parsed = parseCohortRows(tabs.cohortRows);
-      await saveCohortRows(parsed.rows);
-      if (parsed.skipped) early.push(`Anirban_Ref: ${parsed.skipped} row(s) could not be read and were left out.`);
-    } catch (err) {
-      early.push(`Anirban_Ref not saved: ${err?.message || String(err)}`);
-    }
+  await saveReportTabs(tabs, early);
+  try {
+    const parsed = tabs.businessOverviewRows ? parseBusinessOverviewRows(tabs.businessOverviewRows) : null;
+    await saveBusinessOverview(parsed ? parsed.rows : null, built.overviewLive);
+    if (parsed?.skipped) early.push(`Business_Overview: ${parsed.skipped} row(s) had no Month or Tier and were left out.`);
+  } catch (err) {
+    early.push(`Business Overview not saved: ${err?.message || String(err)}`);
   }
   return processImport(source, built.mainRows, built.qualityRows, {
     ...options,
@@ -3971,7 +4459,7 @@ async function buildReadiness() {
   } else {
     try {
       await adminDb.healthCheck();
-      add("database", "Database", "ok", "The server can write to and read from Firestore.");
+      add("database", "Database", "ok", `The server can write to and read from ${adminDb.kind === "postgres" ? "Postgres (Neon)" : "Firestore"}.`);
     } catch (err) {
       add("database", "Database", "fail", err?.message || String(err));
     }
@@ -4124,6 +4612,18 @@ function getWindowInfo(now = /* @__PURE__ */ new Date(), config) {
     nextWindowOpensAt
   };
 }
+var ACTIVITY_CACHE_MS = 3 * 6e4;
+var PERSIST_EVERY_MS = 2 * 6e4;
+var LOW_REMAINING_SECONDS = 150;
+var activityCache = /* @__PURE__ */ new Map();
+async function readActivity(docId, nowMs) {
+  const hit = activityCache.get(docId);
+  if (hit && nowMs - hit.at < ACTIVITY_CACHE_MS) return hit;
+  const snap = await adminDb.collection("loginActivity").doc(docId).get();
+  const entry = { at: nowMs, persistedAt: nowMs, data: snap.exists ? snap.data() : null };
+  activityCache.set(docId, entry);
+  return entry;
+}
 async function checkAgentAllowance(agentEmail, config, now = /* @__PURE__ */ new Date()) {
   const isEnabled = config?.enabled !== false;
   const windowInfo = getWindowInfo(now, config);
@@ -4142,8 +4642,7 @@ async function checkAgentAllowance(agentEmail, config, now = /* @__PURE__ */ new
   }
   const cleanEmail = normalizeEmail(agentEmail);
   const docId = `${cleanEmail}_${windowInfo.dateKey}`;
-  const docSnap = await adminDb.collection("loginActivity").doc(docId).get();
-  const data = docSnap.exists ? docSnap.data() : null;
+  const data = (await readActivity(docId, now.getTime())).data;
   const usedSeconds = windowInfo.isAm ? data?.amSecondsUsed || 0 : data?.pmSecondsUsed || 0;
   const remainingSeconds = Math.max(0, windowInfo.windowLimitSeconds - usedSeconds);
   const allowed = remainingSeconds > 0;
@@ -4184,16 +4683,16 @@ async function recordAgentHeartbeat(agentEmail, config, now = /* @__PURE__ */ ne
   const cleanEmail = normalizeEmail(agentEmail);
   const docId = `${cleanEmail}_${windowInfo.dateKey}`;
   const docRef = adminDb.collection("loginActivity").doc(docId);
-  const docSnap = await docRef.get();
-  const data = docSnap.exists ? docSnap.data() : null;
   const nowMs = now.getTime();
+  const cached = await readActivity(docId, nowMs);
+  const data = cached.data;
   const lastTime = data?.lastHeartbeatTime;
   const lastWindow = data?.lastWindow;
   let delta = 0;
   if (lastTime && lastWindow === windowInfo.windowId) {
     const diffMs = nowMs - lastTime;
-    if (diffMs > 0 && diffMs <= 45e3) {
-      delta = Math.min(30, Math.max(1, Math.round(diffMs / 1e3)));
+    if (diffMs > 0 && diffMs <= 1e5) {
+      delta = Math.min(75, Math.max(1, Math.round(diffMs / 1e3)));
     } else {
       delta = 1;
     }
@@ -4207,18 +4706,21 @@ async function recordAgentHeartbeat(agentEmail, config, now = /* @__PURE__ */ ne
   const currentUsed = windowInfo.isAm ? newAm : newPm;
   const remainingSeconds = Math.max(0, windowInfo.windowLimitSeconds - currentUsed);
   const allowed = remainingSeconds > 0;
-  await docRef.set(
-    {
-      agentEmail: cleanEmail,
-      date: windowInfo.dateKey,
-      amSecondsUsed: newAm,
-      pmSecondsUsed: newPm,
-      lastHeartbeatTime: nowMs,
-      lastWindow: windowInfo.windowId,
-      updatedAt: now.toISOString()
-    },
-    { merge: true }
-  );
+  const next = {
+    agentEmail: cleanEmail,
+    date: windowInfo.dateKey,
+    amSecondsUsed: newAm,
+    pmSecondsUsed: newPm,
+    lastHeartbeatTime: nowMs,
+    lastWindow: windowInfo.windowId,
+    updatedAt: now.toISOString()
+  };
+  const neverSaved = !data;
+  const windowChanged = Boolean(lastWindow) && lastWindow !== windowInfo.windowId;
+  const due = nowMs - cached.persistedAt >= PERSIST_EVERY_MS;
+  const persist = neverSaved || windowChanged || due || remainingSeconds <= LOW_REMAINING_SECONDS;
+  activityCache.set(docId, { at: nowMs, persistedAt: persist ? nowMs : cached.persistedAt, data: { ...data, ...next } });
+  if (persist) await docRef.set(next, { merge: true });
   let reason = void 0;
   if (!allowed) {
     const windowLabel = windowInfo.isAm ? "AM window (12:00 AM \u2013 11:59 AM)" : "PM window (12:00 PM \u2013 11:59 PM)";
@@ -4242,6 +4744,7 @@ async function resetAgentLoginUsage(agentEmail, dateKey, now = /* @__PURE__ */ n
   const targetDateKey = dateKey || windowInfo.dateKey;
   const cleanEmail = normalizeEmail(agentEmail);
   const docId = `${cleanEmail}_${targetDateKey}`;
+  activityCache.delete(docId);
   await adminDb.collection("loginActivity").doc(docId).set(
     {
       agentEmail: cleanEmail,
@@ -4275,11 +4778,11 @@ function includesEmail(list, email) {
   return (list || []).map(normalizeEmail).includes(email);
 }
 function sameSecret(a, b) {
-  const ha = crypto2.createHash("sha256").update(a).digest();
-  const hb = crypto2.createHash("sha256").update(b).digest();
-  return crypto2.timingSafeEqual(ha, hb);
+  const ha = crypto3.createHash("sha256").update(a).digest();
+  const hb = crypto3.createHash("sha256").update(b).digest();
+  return crypto3.timingSafeEqual(ha, hb);
 }
-var ROUTE_CACHE_TTL_MS = 3e4;
+var ROUTE_CACHE_TTL_MS = 12e4;
 var excludedCache = /* @__PURE__ */ new Map();
 var accessCache = /* @__PURE__ */ new Map();
 function clearRouteCache() {
@@ -4391,6 +4894,13 @@ function createApiApp(options = {}) {
       if (data?.role === "tl" || data?.role === "agent") return { role: data.role, access: { ...data } };
     } catch (_err) {
     }
+    try {
+      const agent = (await loadAgents(appConfig.activeCycleId)).find((x) => normalizeEmail(x.personalEmail) === normalized);
+      if (agent && agent.officialEmail) {
+        return { role: "agent", access: { role: "agent", officialEmail: agent.officialEmail, name: agent.name, location: agent.location } };
+      }
+    } catch (_err) {
+    }
     return null;
   }
   async function requireSuperAdmin(req) {
@@ -4442,6 +4952,9 @@ function createApiApp(options = {}) {
         if (isCleanSheetPayload(req.body)) {
           return res.json(await processCleanSheetImport("apps-script", req.body));
         }
+        if (req.body?.format === "clean-v1" && req.body?.partial === true) {
+          return res.json(await processReportTabs(req.body));
+        }
         const { mainRows, qualityRows, revenueRows, leaderMappingRows, excludedAgentsRows, rawVisitRows, rawRevenueTabRows } = req.body || {};
         const result = await processImport("apps-script", mainRows || [], qualityRows || [], {
           revenueRows: revenueRows || [],
@@ -4463,7 +4976,17 @@ function createApiApp(options = {}) {
       const user = await authenticate(req);
       if (!canSeeCohortReport(user.email)) throw new HttpError(403, "This report is private.");
       res.set("Cache-Control", "private, no-store");
-      return res.json(await loadCohortRows());
+      const [cohort, company, diwali] = await Promise.all([loadCohortRows(), loadCompanyDod(), loadDiwali()]);
+      return res.json({ ...cohort, company, diwali });
+    })
+  );
+  api.get(
+    "/api/cohort-report-v2",
+    route(async (req, res) => {
+      const user = await authenticate(req);
+      if (!canSeeCohortReport(user.email)) throw new HttpError(403, "This report is private.");
+      res.set("Cache-Control", "private, no-store");
+      return res.json(await loadCohortV2Rows());
     })
   );
   api.get(
@@ -4482,6 +5005,7 @@ function createApiApp(options = {}) {
       if (identity.role === "tl") agents = agents.filter((a) => isAgentOfTl(a, user.email, identity.access));
       const inScope = new Set(agents.map((a) => normalizeEmail(a.officialEmail)));
       const ops = await loadTeamOps(cycleId);
+      const myTiers = new Set(agents.map((a) => overviewTier(a.agentType === "HO" ? "HO Callers" : a.agentType === "STORE" ? "Store Callers" : "PreSales", a.location)).filter((t) => Boolean(t)));
       const myEmails = new Set([normalizeEmail(user.email), normalizeEmail(identity.access?.officialEmail)].filter(Boolean));
       const body = {
         cycle: { id: cycleId, name: cycle.name, startDate: cycle.startDate, endDate: cycle.endDate },
@@ -4498,9 +5022,29 @@ function createApiApp(options = {}) {
         ),
         breaks: ops.breaks.filter((b) => inScope.has(normalizeEmail(b.agentEmail))),
         targets: identity.role === "tl" ? ops.targets.filter((t) => myEmails.has(normalizeEmail(t.managerEmail))) : ops.targets,
-        breaksUpdatedAt: ops.updatedAt
+        breaksUpdatedAt: ops.updatedAt,
+        // A TL sees the tiers of their own agents only; Managers and the Super Admin see every tier and the total
+        businessOverview: (await loadBusinessOverview()).filter(
+          (r) => identity.role !== "tl" || myTiers.has(r.tier)
+        )
       };
       return res.json(body);
+    })
+  );
+  api.get(
+    "/api/my-breaks",
+    route(async (req, res) => {
+      const user = await authenticate(req);
+      const { appConfig } = await ensureSeedData();
+      const identity = await identify(user.email, appConfig);
+      if (!identity || identity.role !== "agent" || !identity.access) throw new HttpError(403, "Agents only.");
+      const mine = normalizeEmail(identity.access.officialEmail);
+      const ops = await loadTeamOps(appConfig.activeCycleId);
+      res.set("Cache-Control", "private, no-store");
+      return res.json({
+        breaks: ops.breaks.filter((b) => normalizeEmail(b.agentEmail) === mine),
+        updatedAt: ops.updatedAt
+      });
     })
   );
   api.get(
@@ -4578,6 +5122,24 @@ function createApiApp(options = {}) {
       const { appConfig } = await requireSuperAdmin(req);
       const counts = await clearTestData(appConfig);
       return res.json({ status: "ok", ...counts });
+    })
+  );
+  let dataStatusCache = null;
+  api.get(
+    "/api/data-status",
+    route(async (req, res) => {
+      await authenticate(req);
+      res.set("Cache-Control", "private, max-age=60");
+      if (!dataStatusCache || Date.now() - dataStatusCache.at > 6e4) {
+        const snap = await adminDb.collection("syncLogs").orderBy("time", "desc").limit(10).get();
+        const logs = snap.docs.map((d) => d.data());
+        const last = logs.find((l) => l.result === "ok" && l.source !== "test");
+        dataStatusCache = {
+          at: Date.now(),
+          body: { syncedAt: last?.time || null, lastDataDate: last?.lastDataDate || null, source: last?.source || null, lastFailed: logs[0]?.result === "error" && logs[0]?.source !== "test" }
+        };
+      }
+      return res.json(dataStatusCache.body);
     })
   );
   api.get(
