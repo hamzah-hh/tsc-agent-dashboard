@@ -16,9 +16,14 @@ import {
   TeamSummaryAgent,
   TeamSummaryResponse,
   TargetRow,
+  breakAverages,
   hms,
   idleAcwPct,
+  lowConnects,
+  lowTalk,
   nameFromEmail,
+  overLimit,
+  prodStats,
 } from '../shared/teamOps';
 
 interface TeamSummaryViewProps {
@@ -38,72 +43,6 @@ const dayLabel = (d: number) => (d === 1 ? 'Full Day' : d === 0.5 ? 'Half Day' :
 const fmt1 = (n: number | null) => (n === null || !Number.isFinite(n) ? '-' : formatNumberINR(n, 1));
 
 // ------------------------------------------------------------------ calculations
-
-interface ProdStats {
-  agents: number;
-  agentDays: number; // sum of Day_Type
-  avgConnects: number | null;
-  avgTalk: number | null;
-  daysLowConnects: number;
-  daysLowTalk: number;
-}
-
-function prodStats(days: ProductivityDay[]): ProdStats {
-  const agentDays = days.reduce((s, d) => s + d.day, 0);
-  const connects = days.reduce((s, d) => s + d.connects, 0);
-  const talk = days.reduce((s, d) => s + d.talkSeconds, 0);
-  return {
-    agents: new Set(days.map((d) => d.agentEmail)).size,
-    agentDays,
-    avgConnects: agentDays > 0 ? connects / agentDays : null,
-    avgTalk: agentDays > 0 ? talk / agentDays : null,
-    daysLowConnects: days.filter((d) => lowConnects(d.connects, d.day)).length,
-    daysLowTalk: days.filter((d) => lowTalk(d.talkSeconds, d.day)).length,
-  };
-}
-
-// A half day needs half the daily minimum
-const lowConnects = (value: number | null, day = 1) => value !== null && value < PRODUCTIVITY_RULES.minUniqueConnectsPerDay * day;
-// Times are compared in whole seconds, as shown (hh:mm:ss), so a red value never displays as equal to the limit
-const lowTalk = (value: number | null, day = 1) => value !== null && Math.round(value) < PRODUCTIVITY_RULES.minTalkSecondsPerDay * day;
-
-type BreakAverages = Record<BreakMetric, number | null> & { days: number; agents: number; daysOver: number };
-
-function overLimit(key: BreakMetric, value: number | null): boolean {
-  const col = BREAK_COLUMNS.find((c) => c.key === key)!;
-  if (value === null) return false;
-  if (col.limitSec !== undefined) return Math.round(value) > col.limitSec;
-  if (col.limitPct !== undefined) return value > col.limitPct;
-  return false;
-}
-
-function dayOverAnyLimit(b: BreakDay): boolean {
-  return (
-    BREAK_COLUMNS.some((c) => c.limitSec !== undefined && overLimit(c.key, (b as any)[c.key])) ||
-    overLimit('idleAcwPct', idleAcwPct(b.idleAcw, b.staffed))
-  );
-}
-
-/** Averages per agent per day; Idle Time and ACW % is total idle + ACW over total staffed time. */
-function breakAverages(rows: BreakDay[]): BreakAverages {
-  const n = rows.length;
-  const avg = (k: keyof BreakDay) => (n > 0 ? rows.reduce((s, r) => s + (r[k] as number), 0) / n : null);
-  const idleAcw = rows.reduce((s, r) => s + r.idleAcw, 0);
-  const staffed = rows.reduce((s, r) => s + r.staffed, 0);
-  return {
-    bio: avg('bio'),
-    first: avg('first'),
-    lunch: avg('lunch'),
-    last: avg('last'),
-    total: avg('total'),
-    idleAcw: avg('idleAcw'),
-    staffed: avg('staffed'),
-    idleAcwPct: idleAcwPct(idleAcw, staffed),
-    days: n,
-    agents: new Set(rows.map((r) => r.agentEmail)).size,
-    daysOver: rows.filter(dayOverAnyLimit).length,
-  };
-}
 
 const breakText = (key: BreakMetric, value: number | null) => (key === 'idleAcwPct' ? (value === null ? '-' : `${value.toFixed(2)}%`) : hms(value));
 

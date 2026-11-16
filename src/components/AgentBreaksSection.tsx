@@ -1,48 +1,23 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React from 'react';
 import { ExportCsvButton } from './ExportCsvButton';
 import { SortTh } from './SortTh';
-import { DateRangeFilter, inDateRange } from './DateRangeFilter';
 import { useSort } from '../utils/useSort';
 import { csvName, csvStamp } from '../utils/csv';
 import { BREAK_COLUMNS, BreakDay, hms, idleAcwPct } from '../shared/teamOps';
 
 interface AgentBreaksSectionProps {
-  getIdToken: () => Promise<string>;
+  /** The agent's break days in the chosen date range, newest first; null while loading. */
+  days: BreakDay[] | null;
+  error: string | null;
   agentName: string;
-  /** The data-date range, shared with the Connects & Talk Time table above. */
-  from?: string;
-  to?: string;
-  onRange?: (from: string, to: string) => void;
+  /** Summary tiles shown above the table. */
+  summary?: React.ReactNode;
 }
 
 const RED = 'text-red-600 dark:text-red-400 font-semibold';
 
 /** The agent's own Breaks tab days, newest first; a value past its daily limit is red. */
-export function AgentBreaksSection({ getIdToken, agentName, from = '', to = '', onRange }: AgentBreaksSectionProps) {
-  const [allDays, setDays] = useState<BreakDay[] | null>(null);
-  const days = useMemo(() => (allDays ? allDays.filter((d) => inDateRange(d.date, from, to)) : null), [allDays, from, to]);
-  const firstDay = allDays && allDays.length ? allDays[allDays.length - 1].date : '';
-  const lastDay = allDays && allDays.length ? allDays[0].date : '';
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let live = true;
-    (async () => {
-      try {
-        const res = await fetch('/api/my-breaks', { headers: { Authorization: `Bearer ${await getIdToken()}` } });
-        const json = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(res.status === 403 ? 'Breaks are shown to the agent only.' : json.error || `HTTP ${res.status}`);
-        if (live) setDays([...(json.breaks || [])].sort((a: BreakDay, b: BreakDay) => b.date.localeCompare(a.date)));
-      } catch (err: any) {
-        if (live) setError(err?.message || 'Could not load breaks.');
-      }
-    })();
-    return () => {
-      live = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
+export function AgentBreaksSection({ days, error, agentName, summary }: AgentBreaksSectionProps) {
   const valueOf = (d: BreakDay, key: (typeof BREAK_COLUMNS)[number]['key']): number | null =>
     key === 'idleAcwPct' ? idleAcwPct(d.idleAcw, d.staffed) : d[key];
   const show = (key: (typeof BREAK_COLUMNS)[number]['key'], v: number | null) =>
@@ -63,8 +38,6 @@ export function AgentBreaksSection({ getIdToken, agentName, from = '', to = '', 
         <span className="text-xs uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 font-mono">
           12. Day on Day: Breaks
         </span>
-        <div className="flex flex-wrap items-center gap-2">
-          {onRange && <DateRangeFilter from={from} to={to} min={firstDay} max={lastDay} onChange={onRange} />}
         <ExportCsvButton
           filename={csvName('breaks', agentName, csvStamp())}
           disabled={!days || days.length === 0}
@@ -77,17 +50,17 @@ export function AgentBreaksSection({ getIdToken, agentName, from = '', to = '', 
             ]),
           ]}
         />
-        </div>
       </div>
       <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-4">
         Red means over the daily limit: Bio 20m, First 15m, Lunch 30m, Last 15m, Total break 1h 20m, Idle + ACW 30.6% of staffed time.
       </p>
+      {summary}
       {error ? (
         <div className="h-24 flex items-center justify-center text-xs text-slate-400 dark:text-slate-500">{error}</div>
       ) : days === null ? (
         <div className="h-24 flex items-center justify-center text-xs text-slate-400 dark:text-slate-500">Loading...</div>
       ) : days.length === 0 ? (
-        <div className="h-24 flex items-center justify-center text-xs text-slate-400 dark:text-slate-500">No break data recorded yet</div>
+        <div className="h-24 flex items-center justify-center text-xs text-slate-400 dark:text-slate-500">No break data in this date range</div>
       ) : (
         <div className="overflow-x-auto max-h-96 overflow-y-auto">
           <table className="w-full text-xs text-left">
