@@ -153,7 +153,7 @@ export function ActualTab({ agentRecord, plan, cycle, onNavigateToSimulator, onN
     <div className="space-y-6">
       {/* 8. Suggestions Headline (top banner) */}
       {headline && (
-        <div className="bg-slate-950 border border-slate-800 text-white p-4.5 rounded-xl shadow-xs flex items-center justify-between gap-4">
+        <div className="bg-brand-900 dark:bg-raised border border-brand-800 dark:border-line text-white p-4.5 rounded-xl shadow-xs flex items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
             <div className="w-8 h-8 rounded-lg bg-white/10 dark:bg-panel/10 flex items-center justify-center text-amber-300 shrink-0">
               {headline.isAiText ? (
@@ -235,7 +235,7 @@ export function ActualTab({ agentRecord, plan, cycle, onNavigateToSimulator, onN
       {/* Grid: Card 1 (Total Incentive) & Card 2 (Revenue Progress) */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
         {/* Card 1: Total Incentive - Executive Gold Luxury Card */}
-        <div className="md:col-span-5 bg-slate-900 dark:bg-raised text-white rounded-3xl p-6 sm:p-7 border border-amber-500/30 flex flex-col justify-between relative overflow-hidden group">
+        <div className="md:col-span-5 bg-brand-900 dark:bg-raised text-white rounded-3xl p-6 sm:p-7 border border-amber-500/30 flex flex-col justify-between relative overflow-hidden group">
           {/* Ambient Corner Flare */}
           <div className="absolute top-0 right-0 w-44 h-44 bg-amber-500/10 rounded-full blur-2xl pointer-events-none group-hover:scale-110 transition-transform duration-700" />
           <div className="absolute -bottom-10 -left-10 w-36 h-36 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />

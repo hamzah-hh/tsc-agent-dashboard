@@ -239,7 +239,7 @@ export function PreSalesActualTab({ agentRecord, plan, cycle, onNavigateToSimula
     <div className="space-y-6">
       {/* Headline */}
       {headline && (
-        <div className="bg-slate-950 border border-slate-800 text-white p-4.5 rounded-xl shadow-xs flex items-center justify-between gap-4">
+        <div className="bg-brand-900 dark:bg-raised border border-brand-800 dark:border-line text-white p-4.5 rounded-xl shadow-xs flex items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
             <div className="w-8 h-8 rounded-lg bg-white/10 dark:bg-panel/10 flex items-center justify-center text-amber-300 shrink-0">
               {headline.isAiText ? (
@@ -270,7 +270,7 @@ export function PreSalesActualTab({ agentRecord, plan, cycle, onNavigateToSimula
 
       {/* Total incentive + quality gate */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
-        <div className="md:col-span-5 bg-slate-900 dark:bg-raised text-white rounded-3xl p-6 sm:p-7 border border-amber-500/30 flex flex-col justify-between relative overflow-hidden">
+        <div className="md:col-span-5 bg-brand-900 dark:bg-raised text-white rounded-3xl p-6 sm:p-7 border border-amber-500/30 flex flex-col justify-between relative overflow-hidden">
           <div className="absolute top-0 right-0 w-44 h-44 bg-amber-500/10 rounded-full blur-2xl pointer-events-none" />
           <div>
             <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">

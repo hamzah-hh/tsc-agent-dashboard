@@ -60,7 +60,7 @@ export const MilestoneLadder: React.FC<MilestoneLadderProps> = ({
   );
 
   return (
-    <div className="relative overflow-hidden rounded-3xl p-6 sm:p-7 border border-amber-500/30 bg-slate-900 dark:bg-raised text-white">
+    <div className="relative overflow-hidden rounded-3xl p-6 sm:p-7 border border-amber-500/30 bg-brand-900 dark:bg-raised text-white">
       {/* Dynamic Ambient Background Lights */}
       <div className="absolute -top-32 -right-32 w-80 h-80 bg-amber-500/15 rounded-full blur-[100px] pointer-events-none" />
       <div className="absolute -bottom-32 -left-32 w-80 h-80 bg-indigo-500/15 rounded-full blur-[100px] pointer-events-none" />
@@ -144,7 +144,7 @@ export const MilestoneLadder: React.FC<MilestoneLadderProps> = ({
                   ? 'bg-amber-500/10 border-amber-400 ring-1 ring-amber-400/50 scale-[1.02]'
                   : isUnlocked
                   ? 'bg-emerald-500/10 border-emerald-500/40 hover:border-emerald-400/80'
-                  : 'bg-white dark:bg-panel/[0.03] border-white/10 hover:border-white/20 hover:bg-white/[0.06]'
+                  : 'bg-white/[0.03] border-white/10 hover:border-white/20 hover:bg-white/[0.06]'
               }`}
             >
               {/* Subtle metallic sheen glint */}

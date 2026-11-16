@@ -110,7 +110,7 @@ export const TargetTab: React.FC<TargetTabProps> = ({
   return (
     <div className="space-y-6">
       {/* 1. Master Target Overview Banner (Executive Fintech Finish) */}
-      <div className="bg-slate-900 dark:bg-raised text-white rounded-3xl p-6 sm:p-8 border border-amber-500/30 relative overflow-hidden">
+      <div className="bg-brand-900 dark:bg-raised text-white rounded-3xl p-6 sm:p-8 border border-amber-500/30 relative overflow-hidden">
         {/* Ambient Corner Lighting */}
         <div className="absolute top-0 right-0 w-80 h-80 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute -bottom-10 -left-10 w-60 h-60 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />

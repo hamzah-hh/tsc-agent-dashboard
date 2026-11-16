@@ -200,7 +200,7 @@ export function PreSalesSimulatorTab({
         </div>
 
         {/* Result */}
-        <div className="lg:col-span-5 bg-slate-900 dark:bg-raised text-white rounded-3xl p-6 sm:p-7 border border-amber-500/30 space-y-5 sticky top-20 relative overflow-hidden">
+        <div className="lg:col-span-5 bg-brand-900 dark:bg-raised text-white rounded-3xl p-6 sm:p-7 border border-amber-500/30 space-y-5 sticky top-20 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-44 h-44 bg-amber-500/10 rounded-full blur-2xl pointer-events-none" />
           <div className="relative z-10">
             <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">

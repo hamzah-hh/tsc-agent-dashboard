@@ -393,7 +393,7 @@ export function SimulatorTab({
         </div>
 
         {/* Right Side: Output Card */}
-        <div className="lg:col-span-5 bg-slate-900 dark:bg-raised text-white rounded-3xl p-6 sm:p-7 border border-amber-500/30 space-y-5 sticky top-20 relative overflow-hidden group">
+        <div className="lg:col-span-5 bg-brand-900 dark:bg-raised text-white rounded-3xl p-6 sm:p-7 border border-amber-500/30 space-y-5 sticky top-20 relative overflow-hidden group">
           {/* Ambient Lighting */}
           <div className="absolute top-0 right-0 w-44 h-44 bg-amber-500/10 rounded-full blur-2xl pointer-events-none group-hover:scale-110 transition-transform duration-700" />
           <div className="absolute -bottom-10 -left-10 w-36 h-36 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />

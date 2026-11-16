@@ -161,7 +161,7 @@ export function Leaderboards({ userRole, userLocation, activeCycleId, cycleName,
 
       {/* Top 3 Podium Showcase (if at least 1 agent exists) */}
       {rows.length > 0 && (
-        <div className="relative overflow-hidden bg-slate-900 dark:bg-raised border border-amber-500/20 rounded-2xl p-6 shadow-xl text-white">
+        <div className="relative overflow-hidden bg-brand-900 dark:bg-raised border border-amber-500/20 rounded-2xl p-6 shadow-xl text-white">
           <div className="absolute top-0 right-1/4 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
           <div className="flex items-center justify-between mb-6 relative z-10">
             <div className="flex items-center gap-2">
