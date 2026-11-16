@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { SortTh } from './SortTh';
+import { useSort } from '../utils/useSort';
 import { formatCurrencyINR, formatNumberINR } from '../shared/incentive';
 import {
   CalendarDays,
@@ -240,6 +242,30 @@ export function DayOnDayView({
     document.body.removeChild(link);
   };
 
+  const baseDate = data?.dailyComparison?.[0]?.date;
+  const dayRows = data?.dailyComparison ?? [];
+  const daySort = useSort(dayRows, {
+    date: (r) => r.date,
+    sales: (r) => r.agent.sales,
+    growth: (r) => r.agent.salesDelta,
+    orders: (r) => r.agent.orders,
+    connects: (r) => r.agent.connects,
+    teamSales: (r) => r.team.sales,
+    teamGrowth: (r) => r.team.salesDelta,
+    teamOrders: (r) => r.team.orders,
+    share: (r) => r.sharePct,
+    cum: (r) => r.cumulative.agentSales,
+  });
+  const matrixRows = data?.teamRosterMatrix ?? [];
+  const matrixSort = useSort(matrixRows, {
+    caller: (a) => a.name,
+    cls: (a) => a.className,
+    ...Object.fromEntries((data?.summary?.dates ?? []).map((d) => [`d:${d}`, (a: TeamRosterItem) => a.daySales[d] || 0])),
+    total: (a) => a.totalSales,
+    orders: (a) => a.totalOrders,
+    share: (a) => a.shareOfTeam,
+  });
+
   return (
     <div className="space-y-6">
       {/* Header Banner */}
@@ -457,20 +483,20 @@ export function DayOnDayView({
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-slate-50 dark:bg-slate-950/60 border-b border-slate-200 dark:border-slate-800 text-[11px] font-mono uppercase font-bold text-slate-500 dark:text-slate-400">
-                  <th className="py-3.5 px-4">Date</th>
-                  <th className="py-3.5 px-4 text-right">Caller Sales</th>
-                  <th className="py-3.5 px-4 text-center">Caller D-o-D Growth</th>
-                  <th className="py-3.5 px-4 text-center">Orders</th>
-                  <th className="py-3.5 px-4 text-center">Connects</th>
-                  <th className="py-3.5 px-4 text-right">Team Sales ({data.team.location})</th>
-                  <th className="py-3.5 px-4 text-center">Team D-o-D Growth</th>
-                  <th className="py-3.5 px-4 text-center">Team Orders</th>
-                  <th className="py-3.5 px-4 text-center">Share of Team</th>
-                  <th className="py-3.5 px-4 text-right">Cumulative Sales</th>
+                  <SortTh sort={daySort} k="date" className="py-3.5 px-4">Date</SortTh>
+                  <SortTh sort={daySort} k="sales" right className="py-3.5 px-4 text-right">Caller Sales</SortTh>
+                  <SortTh sort={daySort} k="growth" className="py-3.5 px-4 text-center">Caller D-o-D Growth</SortTh>
+                  <SortTh sort={daySort} k="orders" className="py-3.5 px-4 text-center">Orders</SortTh>
+                  <SortTh sort={daySort} k="connects" className="py-3.5 px-4 text-center">Connects</SortTh>
+                  <SortTh sort={daySort} k="teamSales" right className="py-3.5 px-4 text-right">Team Sales ({data.team.location})</SortTh>
+                  <SortTh sort={daySort} k="teamGrowth" className="py-3.5 px-4 text-center">Team D-o-D Growth</SortTh>
+                  <SortTh sort={daySort} k="teamOrders" className="py-3.5 px-4 text-center">Team Orders</SortTh>
+                  <SortTh sort={daySort} k="share" className="py-3.5 px-4 text-center">Share of Team</SortTh>
+                  <SortTh sort={daySort} k="cum" right className="py-3.5 px-4 text-right">Cumulative Sales</SortTh>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                {data.dailyComparison.map((r, i) => {
+                {daySort.sorted.map((r) => {
                   const agDelta = r.agent.salesDelta;
                   const tmDelta = r.team.salesDelta;
 
@@ -496,7 +522,7 @@ export function DayOnDayView({
 
                       {/* Caller D-o-D Growth */}
                       <td className="py-3.5 px-4 text-center font-mono text-[11px]">
-                        {i === 0 ? (
+                        {r.date === baseDate ? (
                           <span className="text-slate-400">Baseline</span>
                         ) : agDelta > 0 ? (
                           <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md font-bold text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-400">
@@ -518,7 +544,7 @@ export function DayOnDayView({
                         <span className="font-bold text-slate-800 dark:text-slate-200">
                           {r.agent.orders}
                         </span>
-                        {i > 0 && r.agent.ordersDelta !== 0 && (
+                        {r.date !== baseDate && r.agent.ordersDelta !== 0 && (
                           <span
                             className={`ml-1 text-[10px] ${
                               r.agent.ordersDelta > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
@@ -541,7 +567,7 @@ export function DayOnDayView({
 
                       {/* Team D-o-D Growth */}
                       <td className="py-3.5 px-4 text-center font-mono text-[11px]">
-                        {i === 0 ? (
+                        {r.date === baseDate ? (
                           <span className="text-slate-400">Baseline</span>
                         ) : tmDelta > 0 ? (
                           <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md font-bold text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-400">
@@ -613,20 +639,20 @@ export function DayOnDayView({
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-slate-50 dark:bg-slate-950/60 border-b border-slate-200 dark:border-slate-800 text-[11px] font-mono uppercase font-bold text-slate-500 dark:text-slate-400">
-                  <th className="py-3.5 px-4">Caller</th>
-                  <th className="py-3.5 px-3 text-center">Class</th>
+                  <SortTh sort={matrixSort} k="caller" className="py-3.5 px-4">Caller</SortTh>
+                  <SortTh sort={matrixSort} k="cls" className="py-3.5 px-3 text-center">Class</SortTh>
                   {data.summary.dates.map((d) => (
-                    <th key={d} className="py-3.5 px-4 text-right font-mono">
+                    <SortTh key={d} sort={matrixSort} k={`d:${d}`} right className="py-3.5 px-4 text-right font-mono">
                       {d.slice(5)}
-                    </th>
+                    </SortTh>
                   ))}
-                  <th className="py-3.5 px-4 text-right">Total Revenue</th>
-                  <th className="py-3.5 px-3 text-center">Orders</th>
-                  <th className="py-3.5 px-4 text-center">% of Branch</th>
+                  <SortTh sort={matrixSort} k="total" right className="py-3.5 px-4 text-right">Total Revenue</SortTh>
+                  <SortTh sort={matrixSort} k="orders" className="py-3.5 px-3 text-center">Orders</SortTh>
+                  <SortTh sort={matrixSort} k="share" className="py-3.5 px-4 text-center">% of Branch</SortTh>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                {data.teamRosterMatrix.map((agent) => (
+                {matrixSort.sorted.map((agent) => (
                   <tr
                     key={agent.officialEmail}
                     className="hover:bg-slate-50/80 dark:hover:bg-slate-800/30 transition-colors"

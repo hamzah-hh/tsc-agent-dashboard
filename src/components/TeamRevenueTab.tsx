@@ -1,3 +1,5 @@
+import { SortTh } from './SortTh';
+import { useSort } from '../utils/useSort';
 import React, { useState, useEffect } from 'react';
 import { TeamRevenueDoc } from '../shared/types';
 import { formatCurrencyINR, formatNumberINR } from '../shared/incentive';
@@ -119,6 +121,17 @@ export function TeamRevenueTab({ getIdToken, agentLocation, agentType }: TeamRev
     link.click();
     document.body.removeChild(link);
   };
+
+  const sort = useSort(filteredDaily, {
+    date: (d) => d.date,
+    day: (d) => d.day,
+    shopify: (d) => d.shopify.sales,
+    bfan: (d) => d.bfan.sales,
+    bfmp: (d) => d.bfmp.sales,
+    posoc: (d) => d.posoc.sales,
+    orders: (d) => d.totalOrders,
+    total: (d) => d.totalSales,
+  });
 
   return (
     <div className="space-y-6">
@@ -409,18 +422,18 @@ export function TeamRevenueTab({ getIdToken, agentLocation, agentType }: TeamRev
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-50 dark:bg-raised border-b border-slate-200 dark:border-line text-[11px] font-mono uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
-                    <th className="py-3 px-4">Date</th>
-                    <th className="py-3 px-3 text-center">Day</th>
-                    <th className="py-3 px-3 text-right">Shopify (Ord · Rev)</th>
-                    <th className="py-3 px-3 text-right">BFAN (Ord · Rev)</th>
-                    <th className="py-3 px-3 text-right">BFMP (Ord · Rev)</th>
-                    <th className="py-3 px-3 text-right">POSOC (Ord · Rev)</th>
-                    <th className="py-3 px-3 text-right">Total Orders</th>
-                    <th className="py-3 px-4 text-right bg-slate-100/60 dark:bg-hover/60">Total Daily Revenue</th>
+                    <SortTh sort={sort} k="date" className="py-3 px-4">Date</SortTh>
+                    <SortTh sort={sort} k="day" className="py-3 px-3 text-center">Day</SortTh>
+                    <SortTh sort={sort} k="shopify" right className="py-3 px-3 text-right">Shopify (Ord · Rev)</SortTh>
+                    <SortTh sort={sort} k="bfan" right className="py-3 px-3 text-right">BFAN (Ord · Rev)</SortTh>
+                    <SortTh sort={sort} k="bfmp" right className="py-3 px-3 text-right">BFMP (Ord · Rev)</SortTh>
+                    <SortTh sort={sort} k="posoc" right className="py-3 px-3 text-right">POSOC (Ord · Rev)</SortTh>
+                    <SortTh sort={sort} k="orders" right className="py-3 px-3 text-right">Total Orders</SortTh>
+                    <SortTh sort={sort} k="total" right className="py-3 px-4 text-right bg-slate-100/60 dark:bg-hover/60">Total Daily Revenue</SortTh>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-line text-xs">
-                  {filteredDaily.map((row) => (
+                  {sort.sorted.map((row) => (
                     <tr key={row.date} className="hover:bg-slate-50/70 transition-colors">
                       {/* Date */}
                       <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-fg whitespace-nowrap">

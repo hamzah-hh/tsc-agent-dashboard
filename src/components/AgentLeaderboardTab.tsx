@@ -1,3 +1,5 @@
+import { SortTh } from './SortTh';
+import { useSort } from '../utils/useSort';
 import React, { useState, useEffect } from 'react';
 import { round2 } from '../utils/format';
 import { AgentLeaderboardRow, LocationRevenueData } from '../shared/types';
@@ -166,6 +168,46 @@ export function AgentLeaderboardTab({
       : activeTab === 'store'
       ? 'Performance standings for all Store Callers across Andheri and Bangalore. Ranked by overall incentive performance.'
       : 'Performance standings for all Head Office Callers (Dighe). Ranked by overall incentive performance.';
+
+  const locRows = locationRevenue?.rows ?? [];
+  const locSort = useSort(locRows, {
+    agent: (x) => x.agentEmail,
+    shopOrd: (x) => x.shopifyOrders,
+    shopRev: (x) => x.shopifyRevenue,
+    altOrd: (x) => x.altOrders,
+    altRev: (x) => x.altRevenue,
+    mpOrd: (x) => x.mpOrders,
+    mpRev: (x) => x.mpRevenue,
+    posOrd: (x) => x.posOrders,
+    posRev: (x) => x.posRevenue,
+    totOrd: (x) => x.totalOrders,
+    totRev: (x) => x.totalRevenue,
+    aov: (x) => x.aov,
+  });
+  const preSort = useSort(filteredList, {
+    rank: (x) => x.rank,
+    name: (x) => x.name,
+    location: (x) => x.location,
+    days: (x) => x.activeDays,
+    calls: (x) => x.avgCalls ?? 0,
+    talk: (x) => x.avgTalkSeconds ?? 0,
+    quality: (x) => x.qualityScore,
+  });
+  const hoSort = useSort(filteredList, {
+    rank: (x) => x.rank,
+    name: (x) => x.name,
+    location: (x) => x.location,
+    orders: (x) => x.orders,
+    sales: (x) => x.sales,
+    ach: (x) => x.achievementPct,
+    cls: (x) => x.className,
+    aov: (x) => x.aov,
+    days: (x) => x.activeDays,
+    connects: (x) => x.avgConnects,
+    talk: (x) => x.avgTalkMinutes,
+    quality: (x) => x.qualityScore,
+    visits: (x) => x.visitsAttributed,
+  });
 
   return (
     <div className="space-y-6">
@@ -560,22 +602,22 @@ export function AgentLeaderboardTab({
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="bg-slate-50 dark:bg-raised border-b border-slate-200 dark:border-line text-[10px] font-mono uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold">
-                    <th className="py-2.5 px-3">Agent</th>
-                    <th className="py-2.5 px-3 text-right">Shopify Orders</th>
-                    <th className="py-2.5 px-3 text-right">Shopify Revenue</th>
-                    <th className="py-2.5 px-3 text-right">Alt No. Orders</th>
-                    <th className="py-2.5 px-3 text-right">Alt No. Revenue</th>
-                    <th className="py-2.5 px-3 text-right">Marketplace Orders</th>
-                    <th className="py-2.5 px-3 text-right">Marketplace Revenue</th>
-                    <th className="py-2.5 px-3 text-right">POS OC Orders</th>
-                    <th className="py-2.5 px-3 text-right">POS OC Revenue</th>
-                    <th className="py-2.5 px-3 text-right font-black">Total Orders</th>
-                    <th className="py-2.5 px-3 text-right font-black">Total Revenue</th>
-                    <th className="py-2.5 px-3 text-right">AOV</th>
+<SortTh sort={locSort} k="agent" className="py-2.5 px-3">Agent</SortTh>
+                    <SortTh sort={locSort} k="shopOrd" right className="py-2.5 px-3 text-right">Shopify Orders</SortTh>
+                    <SortTh sort={locSort} k="shopRev" right className="py-2.5 px-3 text-right">Shopify Revenue</SortTh>
+                    <SortTh sort={locSort} k="altOrd" right className="py-2.5 px-3 text-right">Alt No. Orders</SortTh>
+                    <SortTh sort={locSort} k="altRev" right className="py-2.5 px-3 text-right">Alt No. Revenue</SortTh>
+                    <SortTh sort={locSort} k="mpOrd" right className="py-2.5 px-3 text-right">Marketplace Orders</SortTh>
+                    <SortTh sort={locSort} k="mpRev" right className="py-2.5 px-3 text-right">Marketplace Revenue</SortTh>
+                    <SortTh sort={locSort} k="posOrd" right className="py-2.5 px-3 text-right">POS OC Orders</SortTh>
+                    <SortTh sort={locSort} k="posRev" right className="py-2.5 px-3 text-right">POS OC Revenue</SortTh>
+                    <SortTh sort={locSort} k="totOrd" right className="py-2.5 px-3 text-right font-black">Total Orders</SortTh>
+                    <SortTh sort={locSort} k="totRev" right className="py-2.5 px-3 text-right font-black">Total Revenue</SortTh>
+                    <SortTh sort={locSort} k="aov" right className="py-2.5 px-3 text-right">AOV</SortTh>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-line font-mono">
-                  {locationRevenue.rows.map((r) => {
+                  {locSort.sorted.map((r) => {
                     const isCurrent = r.agentEmail.toLowerCase() === currentAgentEmail.toLowerCase();
                     return (
                       <tr
@@ -657,18 +699,18 @@ export function AgentLeaderboardTab({
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50 dark:bg-raised border-b border-slate-200 dark:border-line text-[11px] font-mono uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
-                  <th className="py-3 px-4 w-14 text-center">Rank</th>
-                  <th className="py-3 px-4">Caller</th>
-                  <th className="py-3 px-3">Location</th>
-                  <th className="py-3 px-3 text-center">Worked Days</th>
-                  <th className="py-3 px-4 text-right">Inbound Calls / Day</th>
-                  <th className="py-3 px-4 text-right">Average Talk Time</th>
-                  <th className="py-3 px-3 text-center">Quality Score</th>
-                  <th className="py-3 px-4 text-center">Quality Gate (≥85)</th>
+<SortTh sort={preSort} k="rank" className="py-3 px-4 w-14 text-center">Rank</SortTh>
+                  <SortTh sort={preSort} k="name" className="py-3 px-4">Caller</SortTh>
+                  <SortTh sort={preSort} k="location" className="py-3 px-3">Location</SortTh>
+                  <SortTh sort={preSort} k="days" className="py-3 px-3 text-center">Worked Days</SortTh>
+                  <SortTh sort={preSort} k="calls" right className="py-3 px-4 text-right">Inbound Calls / Day</SortTh>
+                  <SortTh sort={preSort} k="talk" right className="py-3 px-4 text-right">Average Talk Time</SortTh>
+                  <SortTh sort={preSort} k="quality" className="py-3 px-3 text-center">Quality Score</SortTh>
+                  <SortTh sort={preSort} k="quality" className="py-3 px-4 text-center">Quality Gate (≥85)</SortTh>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-line text-xs">
-                {filteredList.map((row) => {
+                {preSort.sorted.map((row) => {
                   const isCurrent =
                     row.isCurrentAgent || row.officialEmail.toLowerCase() === currentAgentEmail.toLowerCase();
                   const isTop1 = row.rank === 1;
@@ -818,23 +860,23 @@ export function AgentLeaderboardTab({
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50 dark:bg-raised border-b border-slate-200 dark:border-line text-[11px] font-mono uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
-                  <th className="py-3 px-4 w-14 text-center">Rank</th>
-                  <th className="py-3 px-4">Caller</th>
-                  <th className="py-3 px-3">Location</th>
-                  <th className="py-3 px-3 text-right">Orders</th>
-                  <th className="py-3 px-4 text-right">Net Revenue</th>
-                  <th className="py-3 px-3 text-right">Target Achieved</th>
-                  <th className="py-3 px-3 text-center">Class</th>
-                  <th className="py-3 px-3 text-right">AOV</th>
-                  <th className="py-3 px-3 text-center">Worked Days</th>
-                  <th className="py-3 px-3 text-right">Daily Connects</th>
-                  <th className="py-3 px-3 text-right">Daily Talk Time</th>
-                  <th className="py-3 px-3 text-center">Quality</th>
-                  <th className="py-3 px-4 text-right">Store Footfalls</th>
+<SortTh sort={hoSort} k="rank" className="py-3 px-4 w-14 text-center">Rank</SortTh>
+                  <SortTh sort={hoSort} k="name" className="py-3 px-4">Caller</SortTh>
+                  <SortTh sort={hoSort} k="location" className="py-3 px-3">Location</SortTh>
+                  <SortTh sort={hoSort} k="orders" right className="py-3 px-3 text-right">Orders</SortTh>
+                  <SortTh sort={hoSort} k="sales" right className="py-3 px-4 text-right">Net Revenue</SortTh>
+                  <SortTh sort={hoSort} k="ach" right className="py-3 px-3 text-right">Target Achieved</SortTh>
+                  <SortTh sort={hoSort} k="cls" className="py-3 px-3 text-center">Class</SortTh>
+                  <SortTh sort={hoSort} k="aov" right className="py-3 px-3 text-right">AOV</SortTh>
+                  <SortTh sort={hoSort} k="days" className="py-3 px-3 text-center">Worked Days</SortTh>
+                  <SortTh sort={hoSort} k="connects" right className="py-3 px-3 text-right">Daily Connects</SortTh>
+                  <SortTh sort={hoSort} k="talk" right className="py-3 px-3 text-right">Daily Talk Time</SortTh>
+                  <SortTh sort={hoSort} k="quality" className="py-3 px-3 text-center">Quality</SortTh>
+                  <SortTh sort={hoSort} k="visits" right className="py-3 px-4 text-right">Store Footfalls</SortTh>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-line text-xs">
-                {filteredList.map((row) => {
+                {hoSort.sorted.map((row) => {
                   const isCurrent =
                     row.isCurrentAgent || row.officialEmail.toLowerCase() === currentAgentEmail.toLowerCase();
                   const isTop1 = row.rank === 1;

@@ -1,3 +1,5 @@
+import { SortTh } from './SortTh';
+import { useSort } from '../utils/useSort';
 import React, { useState, useEffect } from 'react';
 import {
   Clock,
@@ -146,6 +148,13 @@ export function LoginTrackerSettings({
       setResettingEmail(null);
     }
   };
+
+  const sort = useSort(activities, {
+    email: (a) => a.agentEmail,
+    am: (a) => a.amSecondsUsed || 0,
+    pm: (a) => a.pmSecondsUsed || 0,
+    beat: (a) => a.updatedAt,
+  });
 
   return (
     <div className="bg-white dark:bg-panel border border-slate-200 dark:border-line rounded-xl p-6 shadow-sm">
@@ -325,15 +334,15 @@ export function LoginTrackerSettings({
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-slate-100/70 dark:bg-hover/70 border-b border-slate-200 dark:border-line text-[11px] font-mono uppercase text-slate-600 dark:text-fg-2">
-                  <th className="py-2.5 px-4 font-semibold">Caller Email</th>
-                  <th className="py-2.5 px-4 font-semibold text-center">AM Used / Limit</th>
-                  <th className="py-2.5 px-4 font-semibold text-center">PM Used / Limit</th>
-                  <th className="py-2.5 px-4 font-semibold">Last Heartbeat</th>
+                  <SortTh sort={sort} k="email" className="py-2.5 px-4 font-semibold">Caller Email</SortTh>
+                  <SortTh sort={sort} k="am" className="py-2.5 px-4 font-semibold text-center">AM Used / Limit</SortTh>
+                  <SortTh sort={sort} k="pm" className="py-2.5 px-4 font-semibold text-center">PM Used / Limit</SortTh>
+                  <SortTh sort={sort} k="beat" className="py-2.5 px-4 font-semibold">Last Heartbeat</SortTh>
                   <th className="py-2.5 px-4 font-semibold text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-line font-mono text-[11px]">
-                {activities.map((a) => {
+                {sort.sorted.map((a) => {
                   const amUsedMin = Math.round((a.amSecondsUsed || 0) / 60);
                   const pmUsedMin = Math.round((a.pmSecondsUsed || 0) / 60);
                   const isAmExhausted = (a.amSecondsUsed || 0) >= amMinutes * 60;

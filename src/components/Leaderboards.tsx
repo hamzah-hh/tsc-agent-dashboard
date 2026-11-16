@@ -1,3 +1,5 @@
+import { SortTh } from './SortTh';
+import { useSort } from '../utils/useSort';
 import React, { useState, useEffect } from 'react';
 import { round2 } from '../utils/format';
 import { LeaderboardRecord, LeaderboardRow } from '../shared/types';
@@ -85,6 +87,18 @@ export function Leaderboards({ userRole, userLocation, activeCycleId, cycleName,
       r.officialEmail.toLowerCase().includes(term) ||
       r.className.toLowerCase().includes(term)
     );
+  });
+
+  const sort = useSort(filteredRows, {
+    rank: (x) => x.rank,
+    name: (x) => x.name,
+    calls: (x) => x.avgCalls ?? 0,
+    talk: (x) => x.avgTalkSeconds ?? 0,
+    quality: (x) => x.qualityScore,
+    sales: (x) => x.sales,
+    ach: (x) => x.achievementPct,
+    cls: (x) => x.className,
+    incentive: (x) => x.totalIncentive,
   });
 
   return (
@@ -316,26 +330,26 @@ export function Leaderboards({ userRole, userLocation, activeCycleId, cycleName,
               <thead className="bg-slate-50 dark:bg-slate-950/60 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 uppercase font-semibold text-[10px] tracking-wider font-mono">
                 {isPreSales ? (
                   <tr>
-                    <th className="py-3 px-4 w-16 text-center">Rank</th>
-                    <th className="py-3 px-4">Caller</th>
-                    <th className="py-3 px-4 text-center">Avg Calls / Day</th>
-                    <th className="py-3 px-4 text-center">Avg Talk Time</th>
-                    <th className="py-3 px-4 text-center">Quality Gate (≥85%)</th>
-                    <th className="py-3 px-4 text-right">Total Incentive</th>
+<SortTh sort={sort} k="rank" className="py-3 px-4 w-16 text-center">Rank</SortTh>
+                    <SortTh sort={sort} k="name" className="py-3 px-4">Caller</SortTh>
+                    <SortTh sort={sort} k="calls" className="py-3 px-4 text-center">Avg Calls / Day</SortTh>
+                    <SortTh sort={sort} k="talk" className="py-3 px-4 text-center">Avg Talk Time</SortTh>
+                    <SortTh sort={sort} k="quality" className="py-3 px-4 text-center">Quality Gate (≥85%)</SortTh>
+                    <SortTh sort={sort} k="incentive" right className="py-3 px-4 text-right">Total Incentive</SortTh>
                   </tr>
                 ) : (
                   <tr>
-                    <th className="py-3 px-4 w-16 text-center">Rank</th>
-                    <th className="py-3 px-4">Caller</th>
-                    <th className="py-3 px-4 text-right">Revenue</th>
-                    <th className="py-3 px-4 text-right">Target %</th>
-                    <th className="py-3 px-4 text-center">Class</th>
-                    <th className="py-3 px-4 text-right">Total Incentive</th>
+<SortTh sort={sort} k="rank" className="py-3 px-4 w-16 text-center">Rank</SortTh>
+                    <SortTh sort={sort} k="name" className="py-3 px-4">Caller</SortTh>
+                    <SortTh sort={sort} k="sales" right className="py-3 px-4 text-right">Revenue</SortTh>
+                    <SortTh sort={sort} k="ach" right className="py-3 px-4 text-right">Target %</SortTh>
+                    <SortTh sort={sort} k="cls" className="py-3 px-4 text-center">Class</SortTh>
+                    <SortTh sort={sort} k="incentive" right className="py-3 px-4 text-right">Total Incentive</SortTh>
                   </tr>
                 )}
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {filteredRows.map((row: LeaderboardRow) => {
+                {sort.sorted.map((row: LeaderboardRow) => {
                   const isTop1 = row.rank === 1;
                   const isTop2 = row.rank === 2;
                   const isTop3 = row.rank === 3;

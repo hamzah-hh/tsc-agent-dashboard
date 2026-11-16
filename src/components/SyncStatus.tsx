@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { SyncLogRecord } from '../shared/types';
 import { formatNumberINR } from '../shared/incentive';
+import { SortTh } from './SortTh';
+import { useSort } from '../utils/useSort';
 import { ExportCsvButton } from './ExportCsvButton';
 import { csvName, csvStamp } from '../utils/csv';
 import { RefreshCw, CheckCircle, AlertTriangle, XCircle, Database, AlertCircle, ExternalLink, FileSpreadsheet } from 'lucide-react';
@@ -82,6 +84,15 @@ export function SyncStatus({ getIdToken }: SyncStatusProps) {
       }
     }
   }
+
+  const sort = useSort(logs, {
+    time: (l) => new Date(l.time).getTime(),
+    source: (l) => l.source,
+    result: (l) => l.result,
+    rows: (l) => l.rows,
+    agents: (l) => l.agents,
+    date: (l) => l.lastDataDate,
+  });
 
   return (
     <div className="space-y-6">
@@ -184,17 +195,17 @@ export function SyncStatus({ getIdToken }: SyncStatusProps) {
             <table className="w-full text-left text-xs text-slate-700 dark:text-slate-300 border-collapse">
               <thead className="bg-slate-50 dark:bg-slate-950/60 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 uppercase font-semibold text-[10px] tracking-wider font-mono">
                 <tr>
-                  <th className="py-3 px-4">Time</th>
-                  <th className="py-3 px-4">Source</th>
-                  <th className="py-3 px-4 text-center">Result</th>
-                  <th className="py-3 px-4 text-right">Rows</th>
-                  <th className="py-3 px-4 text-right">Agents</th>
-                  <th className="py-3 px-4">Last Data Date</th>
+                  <SortTh sort={sort} k="time" className="py-3 px-4">Time</SortTh>
+                  <SortTh sort={sort} k="source" className="py-3 px-4">Source</SortTh>
+                  <SortTh sort={sort} k="result" className="py-3 px-4 text-center">Result</SortTh>
+                  <SortTh sort={sort} k="rows" right className="py-3 px-4 text-right">Rows</SortTh>
+                  <SortTh sort={sort} k="agents" right className="py-3 px-4 text-right">Agents</SortTh>
+                  <SortTh sort={sort} k="date" className="py-3 px-4">Last Data Date</SortTh>
                   <th className="py-3 px-4">Warnings / Notes</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {logs.map((log, idx) => (
+                {sort.sorted.map((log, idx) => (
                   <tr key={idx} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/60 transition">
                     <td className="py-3 px-4 font-mono text-[11px] text-slate-600 dark:text-slate-400 whitespace-nowrap">
                       {new Date(log.time).toLocaleString('en-IN', {

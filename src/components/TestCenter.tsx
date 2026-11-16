@@ -1,3 +1,5 @@
+import { SortTh } from './SortTh';
+import { useSort } from '../utils/useSort';
 import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import {
@@ -848,6 +850,21 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken, t
   };
 
   const passedTestsCount = testResults.filter((r) => r.passed).length;
+  const testSort = useSort(testResults, {
+    id: (t) => t.id,
+    description: (t) => t.description,
+    expected: (t) => String(t.expected),
+    actual: (t) => String(t.actual),
+    result: (t) => (t.passed ? 1 : 0),
+  });
+  const logSort = useSort(syncLogs, {
+    time: (l) => new Date(l.time).getTime(),
+    source: (l) => l.source,
+    status: (l) => l.result,
+    rows: (l) => l.rows || 0,
+    agents: (l) => l.agents || 0,
+    date: (l) => l.lastDataDate,
+  });
 
   return (
     <div className="space-y-8 pb-16">
@@ -1085,15 +1102,15 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken, t
             <table className="w-full text-left border-collapse text-xs">
               <thead className="bg-slate-100 dark:bg-hover text-slate-600 dark:text-fg-2 sticky top-0 border-b border-slate-200 dark:border-line">
                 <tr>
-                  <th className="py-2.5 px-4 font-semibold w-12">#</th>
-                  <th className="py-2.5 px-4 font-semibold">Test Specification</th>
-                  <th className="py-2.5 px-4 font-semibold">Expected</th>
-                  <th className="py-2.5 px-4 font-semibold">Actual</th>
-                  <th className="py-2.5 px-4 font-semibold text-center w-24">Result</th>
+                  <SortTh sort={testSort} k="id" className="py-2.5 px-4 font-semibold w-12">#</SortTh>
+                  <SortTh sort={testSort} k="description" className="py-2.5 px-4 font-semibold">Test Specification</SortTh>
+                  <SortTh sort={testSort} k="expected" className="py-2.5 px-4 font-semibold">Expected</SortTh>
+                  <SortTh sort={testSort} k="actual" className="py-2.5 px-4 font-semibold">Actual</SortTh>
+                  <SortTh sort={testSort} k="result" className="py-2.5 px-4 font-semibold text-center w-24">Result</SortTh>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-line font-mono text-[11px]">
-                {testResults.map((t) => (
+                {testSort.sorted.map((t) => (
                   <tr key={t.id} className={t.passed ? 'hover:bg-slate-50' : 'bg-rose-50/50 dark:bg-rose-500/10'}>
                     <td className="py-2 px-4 text-slate-500 dark:text-slate-400 font-sans font-bold">{t.id}</td>
                     <td className="py-2 px-4 text-slate-800 dark:text-fg font-sans">{t.description}</td>
@@ -2180,17 +2197,17 @@ function getRowsAsObjects(sheet) {
             <table className="w-full text-left border-collapse text-xs">
               <thead className="bg-slate-100 dark:bg-hover text-slate-600 dark:text-fg-2 sticky top-0 border-b border-slate-200 dark:border-line">
                 <tr>
-                  <th className="py-2.5 px-4 font-semibold">Timestamp (UTC/IST)</th>
-                  <th className="py-2.5 px-4 font-semibold">Source</th>
-                  <th className="py-2.5 px-4 font-semibold">Status</th>
-                  <th className="py-2.5 px-4 font-semibold">Rows</th>
-                  <th className="py-2.5 px-4 font-semibold">Agents</th>
-                  <th className="py-2.5 px-4 font-semibold">Last Data Date</th>
+                  <SortTh sort={logSort} k="time" className="py-2.5 px-4 font-semibold">Timestamp (UTC/IST)</SortTh>
+                  <SortTh sort={logSort} k="source" className="py-2.5 px-4 font-semibold">Source</SortTh>
+                  <SortTh sort={logSort} k="status" className="py-2.5 px-4 font-semibold">Status</SortTh>
+                  <SortTh sort={logSort} k="rows" className="py-2.5 px-4 font-semibold">Rows</SortTh>
+                  <SortTh sort={logSort} k="agents" className="py-2.5 px-4 font-semibold">Agents</SortTh>
+                  <SortTh sort={logSort} k="date" className="py-2.5 px-4 font-semibold">Last Data Date</SortTh>
                   <th className="py-2.5 px-4 font-semibold">Notes & Warnings</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-line font-mono text-[11px]">
-                {syncLogs.map((log: any, idx: number) => (
+                {logSort.sorted.map((log: any, idx: number) => (
                   <tr key={log.id || idx} className="hover:bg-slate-50">
                     <td className="py-2 px-4 text-slate-600 dark:text-fg-2 whitespace-nowrap">
                       {new Date(log.time).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST

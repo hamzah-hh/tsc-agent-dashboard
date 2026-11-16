@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ExportCsvButton } from './ExportCsvButton';
+import { SortTh } from './SortTh';
+import { useSort } from '../utils/useSort';
 import { csvName, csvStamp } from '../utils/csv';
 import { BREAK_COLUMNS, BreakDay, hms, idleAcwPct } from '../shared/teamOps';
 
@@ -40,6 +42,13 @@ export function AgentBreaksSection({ getIdToken, agentName }: AgentBreaksSection
   const isRed = (col: (typeof BREAK_COLUMNS)[number], v: number | null) =>
     v !== null && ((col.limitSec !== undefined && Math.round(v) > col.limitSec) || (col.limitPct !== undefined && v > col.limitPct));
 
+  const sort = useSort<BreakDay>(days || [], {
+    date: (d) => d.date,
+    day: (d) => d.dayType,
+    ...Object.fromEntries(BREAK_COLUMNS.map((c) => [c.key, (d: BreakDay) => valueOf(d, c.key)])),
+  });
+  const rows = sort.sorted;
+
   return (
     <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-6 shadow-xs">
       <div className="flex items-center justify-between mb-1 gap-2">
@@ -73,15 +82,15 @@ export function AgentBreaksSection({ getIdToken, agentName }: AgentBreaksSection
           <table className="w-full text-xs text-left">
             <thead className="sticky top-0 bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400">
               <tr>
-                <th className="py-2 pr-3 font-semibold">Date</th>
-                <th className="py-2 pr-3 font-semibold">Day</th>
+                <SortTh sort={sort} k="date" className="py-2 pr-3 font-semibold">Date</SortTh>
+                <SortTh sort={sort} k="day" className="py-2 pr-3 font-semibold">Day</SortTh>
                 {BREAK_COLUMNS.map((c) => (
-                  <th key={c.key} className="py-2 pr-3 font-semibold text-right">{c.label}</th>
+                  <SortTh key={c.key} sort={sort} k={c.key} right className="py-2 pr-3 font-semibold text-right">{c.label}</SortTh>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {days.map((d) => (
+              {rows.map((d) => (
                 <tr key={d.date} className="border-t border-slate-100 dark:border-slate-800">
                   <td className="py-1.5 pr-3 font-mono">{d.date}</td>
                   <td className="py-1.5 pr-3">{d.dayType === 0.5 ? 'Half Day' : 'Full Day'}</td>

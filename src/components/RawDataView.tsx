@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { SortTh } from './SortTh';
+import { useSort } from '../utils/useSort';
 import { RawOrderRecord, RawVisitRecord } from '../shared/types';
 import { formatCurrencyINR, formatNumberINR } from '../shared/incentive';
 import {
@@ -208,6 +210,26 @@ export function RawDataView({
     document.body.removeChild(link);
   };
 
+  const orderSort = useSort(orders, {
+    orderId: (o) => o.orderId,
+    date: (o) => o.orderTime || o.date,
+    caller: (o) => o.agentName || o.agentEmail,
+    location: (o) => o.location,
+    category: (o) => o.category,
+    channel: (o) => o.channel,
+    phone: (o) => o.orderPhone,
+    cohort: (o) => o.talkTimeCohort,
+    value: (o) => o.orderValue,
+  });
+  const visitSort = useSort(visits, {
+    when: (v) => v.visitDateTime || v.date,
+    caller: (v) => v.agentName || v.agentEmail,
+    type: (v) => v.type,
+    location: (v) => v.location,
+    phone: (v) => v.phoneNumber,
+    talk: (v) => v.talkTimeSeconds,
+    source: (v) => v.visitSource,
+  });
   const isStaff = userRole === 'superAdmin' || userRole === 'manager' || userRole === 'tl';
 
   return (
@@ -478,19 +500,19 @@ export function RawDataView({
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="bg-slate-50 dark:bg-raised border-b border-slate-200 dark:border-line text-[11px] font-mono uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold">
-                    <th className="py-3 px-4">Order ID</th>
-                    <th className="py-3 px-3">Date</th>
-                    <th className="py-3 px-4">Caller</th>
-                    <th className="py-3 px-3">Location</th>
-                    <th className="py-3 px-3">Category</th>
-                    <th className="py-3 px-3">Channel</th>
-                    <th className="py-3 px-3 font-mono">Phone</th>
-                    <th className="py-3 px-3">Talk Cohort</th>
-                    <th className="py-3 px-4 text-right font-black">Order Value</th>
+                    <SortTh sort={orderSort} k="orderId" className="py-3 px-4">Order ID</SortTh>
+                    <SortTh sort={orderSort} k="date" className="py-3 px-3">Date</SortTh>
+                    <SortTh sort={orderSort} k="caller" className="py-3 px-4">Caller</SortTh>
+                    <SortTh sort={orderSort} k="location" className="py-3 px-3">Location</SortTh>
+                    <SortTh sort={orderSort} k="category" className="py-3 px-3">Category</SortTh>
+                    <SortTh sort={orderSort} k="channel" className="py-3 px-3">Channel</SortTh>
+                    <SortTh sort={orderSort} k="phone" className="py-3 px-3 font-mono">Phone</SortTh>
+                    <SortTh sort={orderSort} k="cohort" className="py-3 px-3">Talk Cohort</SortTh>
+                    <SortTh sort={orderSort} k="value" right className="py-3 px-4 text-right font-black">Order Value</SortTh>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-line">
-                  {orders.map((o, i) => (
+                  {orderSort.sorted.map((o, i) => (
                     // One order can be credited to several agents, so the Order ID alone is not a unique key
                     <tr key={`${o.orderId}|${o.agentEmail}|${i}`} className="hover:bg-slate-50/80 transition-colors">
                       <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-fg whitespace-nowrap">
@@ -558,17 +580,17 @@ export function RawDataView({
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="bg-slate-50 dark:bg-raised border-b border-slate-200 dark:border-line text-[11px] font-mono uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold">
-                    <th className="py-3 px-4">Date & Time</th>
-                    <th className="py-3 px-4">Caller</th>
-                    <th className="py-3 px-3">Type</th>
-                    <th className="py-3 px-3">Location</th>
-                    <th className="py-3 px-3 font-mono">Customer Phone</th>
-                    <th className="py-3 px-3 text-right">Talk Before Visit</th>
-                    <th className="py-3 px-3">Source</th>
+                    <SortTh sort={visitSort} k="when" className="py-3 px-4">Date &amp; Time</SortTh>
+                    <SortTh sort={visitSort} k="caller" className="py-3 px-4">Caller</SortTh>
+                    <SortTh sort={visitSort} k="type" className="py-3 px-3">Type</SortTh>
+                    <SortTh sort={visitSort} k="location" className="py-3 px-3">Location</SortTh>
+                    <SortTh sort={visitSort} k="phone" className="py-3 px-3 font-mono">Customer Phone</SortTh>
+                    <SortTh sort={visitSort} k="talk" right className="py-3 px-3 text-right">Talk Before Visit</SortTh>
+                    <SortTh sort={visitSort} k="source" className="py-3 px-3">Source</SortTh>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-line">
-                  {visits.map((v, i) => {
+                  {visitSort.sorted.map((v, i) => {
                     const [visitDay, visitTime] = (v.visitDateTime || v.date).split(' ');
                     return (
                       <tr key={`${v.id}|${i}`} className="hover:bg-slate-50/80 transition-colors">

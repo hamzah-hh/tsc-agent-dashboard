@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { AgentRecord } from '../shared/types';
 import { PRODUCTIVITY_RULES, hms } from '../shared/teamOps';
 import { csvName, csvStamp } from '../utils/csv';
 import { ExportCsvButton } from './ExportCsvButton';
 import { AgentBreaksSection } from './AgentBreaksSection';
+import { SortTh } from './SortTh';
+import { useSort } from '../utils/useSort';
 
 interface CallMetricsTabProps {
   agentRecord: AgentRecord | null;
@@ -15,7 +17,16 @@ interface CallMetricsTabProps {
 /** The agent's Day on Day unique connects and talk time, and their Breaks. */
 export function CallMetricsTab({ agentRecord, getIdToken, showCallMetrics }: CallMetricsTabProps) {
   // Newest day first; days with no Dialer row (day null/0) are not worked days
-  const dodDays = [...(agentRecord?.daily || [])].filter((x) => x.day === 1 || x.day === 0.5).sort((a, b) => b.date.localeCompare(a.date));
+  const dodDays = useMemo(
+    () => [...(agentRecord?.daily || [])].filter((x) => x.day === 1 || x.day === 0.5).sort((a, b) => b.date.localeCompare(a.date)),
+    [agentRecord]
+  );
+  const sort = useSort(dodDays, {
+    date: (d) => d.date,
+    day: (d) => d.day,
+    connects: (d) => d.connects,
+    talk: (d) => d.talkSeconds,
+  });
   const name = agentRecord?.name || 'agent';
 
   return (
@@ -45,14 +56,14 @@ export function CallMetricsTab({ agentRecord, getIdToken, showCallMetrics }: Cal
               <table className="w-full text-xs text-left">
                 <thead className="sticky top-0 bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400">
                   <tr>
-                    <th className="py-2 pr-3 font-semibold">Date</th>
-                    <th className="py-2 pr-3 font-semibold">Day</th>
-                    <th className="py-2 pr-3 font-semibold text-right">Unique Connects</th>
-                    <th className="py-2 font-semibold text-right">Talk Time</th>
+                    <SortTh sort={sort} k="date" className="py-2 pr-3 font-semibold">Date</SortTh>
+                    <SortTh sort={sort} k="day" className="py-2 pr-3 font-semibold">Day</SortTh>
+                    <SortTh sort={sort} k="connects" right className="py-2 pr-3 font-semibold text-right">Unique Connects</SortTh>
+                    <SortTh sort={sort} k="talk" right className="py-2 font-semibold text-right">Talk Time</SortTh>
                   </tr>
                 </thead>
                 <tbody>
-                  {dodDays.map((d) => {
+                  {sort.sorted.map((d) => {
                     const factor = d.day === 0.5 ? 0.5 : 1;
                     const lowC = d.connects < PRODUCTIVITY_RULES.minUniqueConnectsPerDay * factor;
                     const lowT = Math.round(d.talkSeconds) < PRODUCTIVITY_RULES.minTalkSecondsPerDay * factor;

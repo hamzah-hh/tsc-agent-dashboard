@@ -4,6 +4,8 @@ import { formatCurrencyINR, formatNumberINR } from '../shared/incentive';
 import { BusinessOverviewSection } from './BusinessOverviewSection';
 import { ExportCsvButton } from './ExportCsvButton';
 import { csvName, csvStamp } from '../utils/csv';
+import { SortTh } from './SortTh';
+import { useSort } from '../utils/useSort';
 import {
   BREAK_COLUMNS,
   BreakDay,
@@ -298,6 +300,17 @@ export function ProductivitySection({
   const overall = prodStats(activeDays);
   const drillDays = drillAgent ? days.filter((d) => d.agentEmail.toLowerCase() === drillAgent).sort((a, b) => b.date.localeCompare(a.date)) : [];
   const drillStats = prodStats(drillDays);
+  const teamName = (t: { tl: string; location: string }) => `${t.location} · ${t.tl.startsWith('no-tl:') ? 'No TL' : nameFromEmail(t.tl)}`;
+  const teamSort = useSort(shown, {
+    team: (t) => teamName(t),
+    agents: (t) => t.s.agents,
+    agentDays: (t) => t.s.agentDays,
+    connects: (t) => t.s.avgConnects,
+    talk: (t) => t.s.avgTalk,
+    lowC: (t) => t.s.daysLowConnects,
+    lowT: (t) => t.s.daysLowTalk,
+  });
+  const drillSort = useSort(drillDays, { date: (d) => d.date, day: (d) => d.day, connects: (d) => d.connects, talk: (d) => d.talkSeconds });
 
   return (
     <section className={card}>
@@ -329,17 +342,17 @@ export function ProductivitySection({
         <table className="w-full text-xs text-left">
           <thead className="bg-slate-50 dark:bg-slate-800/60">
             <tr>
-              <th className={th}>Team</th>
-              <th className={`${th} text-right`}>Agents</th>
-              <th className={`${th} text-right`}>Agent-days</th>
-              <th className={`${th} text-right`}>Avg Unique Connects / Agent / Day</th>
-              <th className={`${th} text-right`}>Avg Talk Time / Agent / Day</th>
-              <th className={`${th} text-right`}>Days Below Connects</th>
-              <th className={`${th} text-right`}>Days Below Talk Time</th>
+              <SortTh sort={teamSort} k="team" className={th}>Team</SortTh>
+              <SortTh sort={teamSort} k="agents" right className={`${th} text-right`}>Agents</SortTh>
+              <SortTh sort={teamSort} k="agentDays" right className={`${th} text-right`}>Agent-days</SortTh>
+              <SortTh sort={teamSort} k="connects" right className={`${th} text-right`}>Avg Unique Connects / Agent / Day</SortTh>
+              <SortTh sort={teamSort} k="talk" right className={`${th} text-right`}>Avg Talk Time / Agent / Day</SortTh>
+              <SortTh sort={teamSort} k="lowC" right className={`${th} text-right`}>Days Below Connects</SortTh>
+              <SortTh sort={teamSort} k="lowT" right className={`${th} text-right`}>Days Below Talk Time</SortTh>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-            {shown.map((t) => {
+            {teamSort.sorted.map((t) => {
               const s = t.s;
               const open = openTeam === t.tl;
               return (
@@ -412,14 +425,14 @@ export function ProductivitySection({
           <table className="w-full text-xs text-left">
             <thead className="bg-slate-50 dark:bg-slate-800/60">
               <tr>
-                <th className={th}>Date</th>
-                <th className={th}>Day Type</th>
-                <th className={`${th} text-right`}>Unique Connects</th>
-                <th className={`${th} text-right`}>Talk Time</th>
+                <SortTh sort={drillSort} k="date" className={th}>Date</SortTh>
+                <SortTh sort={drillSort} k="day" className={th}>Day Type</SortTh>
+                <SortTh sort={drillSort} k="connects" right className={`${th} text-right`}>Unique Connects</SortTh>
+                <SortTh sort={drillSort} k="talk" right className={`${th} text-right`}>Talk Time</SortTh>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {drillDays.map((d) => (
+              {drillSort.sorted.map((d) => (
                 <tr key={d.date}>
                   <td className={`${td}`}>{d.date}</td>
                   <td className={td}>{dayLabel(d.day)}</td>
@@ -454,21 +467,29 @@ function AgentProductivityTable({
   const rows = emails
     .map((e) => ({ email: e, name: agentsByEmail.get(e)?.name || e, s: prodStats(days.filter((d) => d.agentEmail.toLowerCase() === e)) }))
     .sort((a, b) => (a.s.avgConnects ?? Infinity) - (b.s.avgConnects ?? Infinity));
+  const sort = useSort(rows, {
+    name: (r) => r.name,
+    days: (r) => r.s.agentDays,
+    connects: (r) => r.s.avgConnects,
+    talk: (r) => r.s.avgTalk,
+    lowC: (r) => r.s.daysLowConnects,
+    lowT: (r) => r.s.daysLowTalk,
+  });
   return (
     <table className="w-full text-xs text-left bg-white dark:bg-slate-900 rounded-xl overflow-hidden">
       <thead>
         <tr className="border-b border-slate-200 dark:border-slate-800">
           <th className={th} title="Untick to leave an agent out of the averages">Include</th>
-          <th className={th}>Agent (click for daily data)</th>
-          <th className={`${th} text-right`}>Days</th>
-          <th className={`${th} text-right`}>Avg Unique Connects / Day</th>
-          <th className={`${th} text-right`}>Avg Talk Time / Day</th>
-          <th className={`${th} text-right`}>Days Below Connects</th>
-          <th className={`${th} text-right`}>Days Below Talk Time</th>
+          <SortTh sort={sort} k="name" className={th}>Agent (click for daily data)</SortTh>
+          <SortTh sort={sort} k="days" right className={`${th} text-right`}>Days</SortTh>
+          <SortTh sort={sort} k="connects" right className={`${th} text-right`}>Avg Unique Connects / Day</SortTh>
+          <SortTh sort={sort} k="talk" right className={`${th} text-right`}>Avg Talk Time / Day</SortTh>
+          <SortTh sort={sort} k="lowC" right className={`${th} text-right`}>Days Below Connects</SortTh>
+          <SortTh sort={sort} k="lowT" right className={`${th} text-right`}>Days Below Talk Time</SortTh>
         </tr>
       </thead>
       <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-        {rows.map(({ email, name, s }) => (
+        {sort.sorted.map(({ email, name, s }) => (
           <tr key={email} className={`hover:bg-indigo-50/60 dark:hover:bg-slate-800/60 cursor-pointer ${excluded.has(email) ? 'opacity-50' : ''}`} onClick={() => onOpen(email)}>
             <td className={td} onClick={(e) => e.stopPropagation()}>
               <input type="checkbox" checked={!excluded.has(email)} onChange={() => onToggle(email)} aria-label={`Include ${name} in the averages`} className="w-3.5 h-3.5 accent-indigo-600" />
@@ -479,6 +500,62 @@ function AgentProductivityTable({
             <td className={`${td} text-right ${lowTalk(s.avgTalk) ? RED : ''}`}>{hms(s.avgTalk)}</td>
             <td className={`${td} text-right`}>{s.daysLowConnects}</td>
             <td className={`${td} text-right`}>{s.daysLowTalk}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function BreaksAgentTable({
+  locRows,
+  agentsByEmail,
+  excluded,
+  onToggle,
+  onOpen,
+}: {
+  locRows: BreakDay[];
+  agentsByEmail: Map<string, TeamSummaryAgent>;
+  excluded: Set<string>;
+  onToggle: (email: string) => void;
+  onOpen: (email: string) => void;
+}) {
+  const data = [...new Set(locRows.map((r) => r.agentEmail.toLowerCase()))]
+    .map((email) => ({ email, name: agentsByEmail.get(email)?.name || email, avg: breakAverages(locRows.filter((r) => r.agentEmail.toLowerCase() === email)) }))
+    .sort((x, y) => y.avg.daysOver - x.avg.daysOver);
+  const sort = useSort(data, {
+    name: (x) => x.name,
+    days: (x) => x.avg.days,
+    ...Object.fromEntries(BREAK_COLUMNS.map((c) => [c.key, (x: (typeof data)[number]) => x.avg[c.key]])),
+    daysOver: (x) => x.avg.daysOver,
+  });
+  return (
+    <table className="w-full text-xs text-left bg-white dark:bg-slate-900 rounded-xl overflow-hidden">
+      <thead>
+        <tr className="border-b border-slate-200 dark:border-slate-800">
+          <th className={th} title="Untick to leave an agent out of the averages">Include</th>
+          <SortTh sort={sort} k="name" className={th}>Agent (click for daily data)</SortTh>
+          <SortTh sort={sort} k="days" right className={`${th} text-right`}>Days</SortTh>
+          {BREAK_COLUMNS.map((c) => (
+            <SortTh key={c.key} sort={sort} k={c.key} right className={`${th} text-right`}>
+              {c.label}
+            </SortTh>
+          ))}
+          <SortTh sort={sort} k="daysOver" right className={`${th} text-right`}>Days Over a Limit</SortTh>
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+        {sort.sorted.map(({ email, name, avg }) => (
+          <tr key={email} className={`hover:bg-amber-50/60 dark:hover:bg-slate-800/60 cursor-pointer ${excluded.has(email) ? 'opacity-50' : ''}`} onClick={() => onOpen(email)}>
+            <td className={td} onClick={(e) => e.stopPropagation()}>
+              <input type="checkbox" checked={!excluded.has(email)} onChange={() => onToggle(email)} aria-label={`Include ${name} in the averages`} className="w-3.5 h-3.5 accent-indigo-600" />
+            </td>
+            <td className={`${td} font-semibold text-indigo-700 dark:text-indigo-300 hover:underline`}>{name}</td>
+            <td className={`${td} text-right`}>{avg.days}</td>
+            {BREAK_COLUMNS.map((c) => (
+              <React.Fragment key={c.key}>{breakCell(c.key, avg[c.key])}</React.Fragment>
+            ))}
+            <td className={`${td} text-right ${avg.daysOver > 0 ? 'text-rose-600 dark:text-rose-400 font-bold' : ''}`}>{avg.daysOver}</td>
           </tr>
         ))}
       </tbody>
@@ -507,21 +584,37 @@ export function BreaksSection({
   const locations = useMemo(() => [...new Set(rows.map((r) => locationOf(r.agentEmail)))].sort(), [rows, agentsByEmail]);
   const activeRows = rows.filter((r) => !excluded.has(r.agentEmail.toLowerCase()));
   const drillRows = drillAgent ? rows.filter((r) => r.agentEmail.toLowerCase() === drillAgent).sort((a, b) => b.date.localeCompare(a.date)) : [];
+  const locData = locations.map((loc) => {
+    const locRows = rows.filter((r) => locationOf(r.agentEmail) === loc);
+    return { loc, locRows, a: breakAverages(locRows.filter((r) => !excluded.has(r.agentEmail.toLowerCase()))) };
+  });
+  const locSort = useSort(locData, {
+    loc: (x) => x.loc,
+    agents: (x) => x.a.agents,
+    days: (x) => x.a.days,
+    ...Object.fromEntries(BREAK_COLUMNS.map((c) => [c.key, (x: (typeof locData)[number]) => x.a[c.key]])),
+    daysOver: (x) => x.a.daysOver,
+  });
+  const drillSort = useSort(drillRows, {
+    date: (r) => r.date,
+    day: (r) => r.dayType,
+    ...Object.fromEntries(BREAK_COLUMNS.map((c) => [c.key, (r: BreakDay) => (c.key === 'idleAcwPct' ? idleAcwPct(r.idleAcw, r.staffed) : (r as any)[c.key])])),
+  });
   const limitNote = BREAK_COLUMNS.filter((c) => c.limitSec !== undefined || c.limitPct !== undefined)
     .map((c) => `${c.label} ${c.limitSec !== undefined ? hms(c.limitSec) : `${c.limitPct!.toFixed(2)}%`}`)
     .join(' · ');
 
   const header = (
     <tr>
-      <th className={th}>{'Location'}</th>
-      <th className={`${th} text-right`}>Agents</th>
-      <th className={`${th} text-right`}>Agent-days</th>
+      <SortTh sort={locSort} k="loc" className={th}>Location</SortTh>
+      <SortTh sort={locSort} k="agents" right className={`${th} text-right`}>Agents</SortTh>
+      <SortTh sort={locSort} k="days" right className={`${th} text-right`}>Agent-days</SortTh>
       {BREAK_COLUMNS.map((c) => (
-        <th key={c.key} className={`${th} text-right`}>
+        <SortTh key={c.key} sort={locSort} k={c.key} right className={`${th} text-right`}>
           {c.label}
-        </th>
+        </SortTh>
       ))}
-      <th className={`${th} text-right`}>Days Over a Limit</th>
+      <SortTh sort={locSort} k="daysOver" right className={`${th} text-right`}>Days Over a Limit</SortTh>
     </tr>
   );
 
@@ -564,9 +657,7 @@ export function BreaksSection({
           <table className="w-full text-xs text-left">
             <thead className="bg-slate-50 dark:bg-slate-800/60">{header}</thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {locations.map((loc) => {
-                const locRows = rows.filter((r) => locationOf(r.agentEmail) === loc);
-                const a = breakAverages(locRows.filter((r) => !excluded.has(r.agentEmail.toLowerCase())));
+              {locSort.sorted.map(({ loc, locRows, a }) => {
                 const open = openLoc === loc;
                 return (
                   <React.Fragment key={loc}>
@@ -587,39 +678,13 @@ export function BreaksSection({
                     {open && (
                       <tr>
                         <td colSpan={BREAK_COLUMNS.length + 5} className="bg-slate-50/70 dark:bg-slate-950/40 px-3 py-3">
-                          <table className="w-full text-xs text-left bg-white dark:bg-slate-900 rounded-xl overflow-hidden">
-                            <thead>
-                              <tr className="border-b border-slate-200 dark:border-slate-800">
-                                <th className={th} title="Untick to leave an agent out of the averages">Include</th>
-                                <th className={th}>Agent (click for daily data)</th>
-                                <th className={`${th} text-right`}>Days</th>
-                                {BREAK_COLUMNS.map((c) => (
-                                  <th key={c.key} className={`${th} text-right`}>
-                                    {c.label}
-                                  </th>
-                                ))}
-                                <th className={`${th} text-right`}>Days Over a Limit</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                              {[...new Set(locRows.map((r) => r.agentEmail.toLowerCase()))]
-                                .map((email) => ({ email, avg: breakAverages(locRows.filter((r) => r.agentEmail.toLowerCase() === email)) }))
-                                .sort((x, y) => y.avg.daysOver - x.avg.daysOver)
-                                .map(({ email, avg }) => (
-                                  <tr key={email} className={`hover:bg-amber-50/60 dark:hover:bg-slate-800/60 cursor-pointer ${excluded.has(email) ? 'opacity-50' : ''}`} onClick={() => setDrillAgent(email)}>
-                                    <td className={td} onClick={(e) => e.stopPropagation()}>
-                                      <input type="checkbox" checked={!excluded.has(email)} onChange={() => toggle(email)} aria-label={`Include ${agentsByEmail.get(email)?.name || email} in the averages`} className="w-3.5 h-3.5 accent-indigo-600" />
-                                    </td>
-                                    <td className={`${td} font-semibold text-indigo-700 dark:text-indigo-300 hover:underline`}>{agentsByEmail.get(email)?.name || email}</td>
-                                    <td className={`${td} text-right`}>{avg.days}</td>
-                                    {BREAK_COLUMNS.map((c) => (
-                                      <React.Fragment key={c.key}>{breakCell(c.key, avg[c.key])}</React.Fragment>
-                                    ))}
-                                    <td className={`${td} text-right ${avg.daysOver > 0 ? 'text-rose-600 dark:text-rose-400 font-bold' : ''}`}>{avg.daysOver}</td>
-                                  </tr>
-                                ))}
-                            </tbody>
-                          </table>
+                          <BreaksAgentTable
+                            locRows={locRows}
+                            agentsByEmail={agentsByEmail}
+                            excluded={excluded}
+                            onToggle={toggle}
+                            onOpen={(email) => setDrillAgent(email)}
+                          />
                         </td>
                       </tr>
                     )}
@@ -673,17 +738,17 @@ export function BreaksSection({
           <table className="w-full text-xs text-left">
             <thead className="bg-slate-50 dark:bg-slate-800/60">
               <tr>
-                <th className={th}>Date</th>
-                <th className={th}>Day Type</th>
+                <SortTh sort={drillSort} k="date" className={th}>Date</SortTh>
+                <SortTh sort={drillSort} k="day" className={th}>Day Type</SortTh>
                 {BREAK_COLUMNS.map((c) => (
-                  <th key={c.key} className={`${th} text-right`}>
+                  <SortTh key={c.key} sort={drillSort} k={c.key} right className={`${th} text-right`}>
                     {c.label}
-                  </th>
+                  </SortTh>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {drillRows.map((r) => (
+              {drillSort.sorted.map((r) => (
                 <tr key={r.date}>
                   <td className={`${td}`}>{r.date}</td>
                   <td className={td}>{dayLabel(r.dayType)}</td>
