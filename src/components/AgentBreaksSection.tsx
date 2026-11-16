@@ -3,7 +3,7 @@ import { ExportCsvButton } from './ExportCsvButton';
 import { SortTh } from './SortTh';
 import { useSort } from '../utils/useSort';
 import { csvName, csvStamp } from '../utils/csv';
-import { BREAK_COLUMNS, BreakDay, hms, idleAcwPct } from '../shared/teamOps';
+import { AGENT_BREAK_COLUMNS as BREAK_COLUMNS, BreakDay, hms, idleAcwPct } from '../shared/teamOps';
 
 interface AgentBreaksSectionProps {
   /** The agent's break days in the chosen date range, newest first; null while loading. */

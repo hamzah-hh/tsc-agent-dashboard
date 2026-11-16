@@ -13,7 +13,7 @@ export const PRODUCTIVITY_RULES = {
 /** Breaks: red above these daily limits. Idle Time + ACW may be at most 2h 45m of a 9-hour shift. */
 export const IDLE_ACW_MAX_PCT = ((2 * 3600 + 45 * 60) / (9 * 3600)) * 100; // 30.5555...%
 
-export type BreakMetric = 'bio' | 'first' | 'lunch' | 'last' | 'total' | 'idleAcw' | 'staffed' | 'idleAcwPct';
+export type BreakMetric = 'bio' | 'first' | 'lunch' | 'last' | 'total' | 'acw' | 'idle' | 'idleAcw' | 'staffed' | 'idleAcwPct';
 
 export const BREAK_COLUMNS: Array<{ key: BreakMetric; label: string; limitSec?: number; limitPct?: number }> = [
   { key: 'bio', label: 'Bio or Misc Break', limitSec: 20 * 60 },
@@ -24,6 +24,17 @@ export const BREAK_COLUMNS: Array<{ key: BreakMetric; label: string; limitSec?: 
   { key: 'idleAcw', label: 'Total of Idle Time and ACW' },
   { key: 'staffed', label: 'Staffed Duration' },
   { key: 'idleAcwPct', label: 'Idle Time and ACW %', limitPct: IDLE_ACW_MAX_PCT },
+];
+
+/**
+ * The agent's own Breaks page also shows Idle Time and After Call Work on their own (the Team Summary
+ * tables keep the shorter set above).
+ */
+export const AGENT_BREAK_COLUMNS: Array<{ key: BreakMetric; label: string; limitSec?: number; limitPct?: number }> = [
+  ...BREAK_COLUMNS.slice(0, 5),
+  { key: 'acw', label: 'After Call Work (ACW)' },
+  { key: 'idle', label: 'Idle Time' },
+  ...BREAK_COLUMNS.slice(5),
 ];
 
 /** One agent's day from the Breaks tab (seconds). */
@@ -138,8 +149,8 @@ export const lowTalk = (value: number | null, day = 1) => value !== null && Math
 export type BreakAverages = Record<BreakMetric, number | null> & { days: number; agents: number; daysOver: number };
 
 export function overLimit(key: BreakMetric, value: number | null): boolean {
-  const col = BREAK_COLUMNS.find((c) => c.key === key)!;
-  if (value === null) return false;
+  const col = BREAK_COLUMNS.find((c) => c.key === key);
+  if (!col || value === null) return false;
   if (col.limitSec !== undefined) return Math.round(value) > col.limitSec;
   if (col.limitPct !== undefined) return value > col.limitPct;
   return false;
@@ -164,6 +175,8 @@ export function breakAverages(rows: BreakDay[]): BreakAverages {
     lunch: avg('lunch'),
     last: avg('last'),
     total: avg('total'),
+    acw: avg('acw'),
+    idle: avg('idle'),
     idleAcw: avg('idleAcw'),
     staffed: avg('staffed'),
     idleAcwPct: idleAcwPct(idleAcw, staffed),

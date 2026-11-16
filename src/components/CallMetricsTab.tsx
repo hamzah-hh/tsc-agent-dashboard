@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AgentRecord } from '../shared/types';
 import {
-  BREAK_COLUMNS,
+  AGENT_BREAK_COLUMNS as BREAK_COLUMNS,
   BreakDay,
   PRODUCTIVITY_RULES,
   breakAverages,
@@ -35,6 +35,8 @@ const BREAK_TILE_LABEL: Record<string, string> = {
   lunch: 'Lunch',
   last: 'Last Break',
   total: 'Total Daily Break',
+  acw: 'After Call Work',
+  idle: 'Idle Time',
   idleAcw: 'Idle Time + ACW',
   staffed: 'Staffed Duration',
   idleAcwPct: 'Idle + ACW %',
@@ -60,7 +62,7 @@ function Tile({ label, value, sub, red }: { label: string; value: string; sub?: 
   );
 }
 
-const TILE_GRID = 'grid grid-cols-2 md:grid-cols-4 gap-3 mb-5';
+const TILE_GRID = 'grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5 gap-3 mb-5';
 
 /** The agent's Day on Day unique connects and talk time, and their Breaks, with a summary of each metric. */
 export function CallMetricsTab({ agentRecord, getIdToken, showCallMetrics }: CallMetricsTabProps) {
@@ -75,14 +77,28 @@ export function CallMetricsTab({ agentRecord, getIdToken, showCallMetrics }: Cal
   // The agent's own Breaks tab days (the server only returns them to the agent)
   const [allBreaks, setAllBreaks] = useState<BreakDay[] | null>(null);
   const [breaksError, setBreaksError] = useState<string | null>(null);
+  const agentEmail = (agentRecord?.officialEmail || '').toLowerCase();
   useEffect(() => {
     let live = true;
+    setAllBreaks(null);
+    setBreaksError(null);
     (async () => {
       try {
-        const res = await fetch('/api/my-breaks', { headers: { Authorization: `Bearer ${await getIdToken()}` } });
-        const json = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(res.status === 403 ? 'Breaks are shown to the agent only.' : json.error || `HTTP ${res.status}`);
-        if (live) setAllBreaks([...(json.breaks || [])].sort((a: BreakDay, b: BreakDay) => b.date.localeCompare(a.date)));
+        const headers = { Authorization: `Bearer ${await getIdToken()}` };
+        let res = await fetch('/api/my-breaks', { headers });
+        let json: any = await res.json().catch(() => ({}));
+        let rows: BreakDay[] = json.breaks || [];
+        if (res.status === 403) {
+          // Staff viewing an agent: the agent-only route refuses them, so read the agent's rows from the
+          // Team Summary, which is already limited to the teams they may see.
+          res = await fetch('/api/team-summary', { headers });
+          json = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+          rows = ((json.breaks || []) as BreakDay[]).filter((b) => (b.agentEmail || '').toLowerCase() === agentEmail);
+        } else if (!res.ok) {
+          throw new Error(json.error || `HTTP ${res.status}`);
+        }
+        if (live) setAllBreaks([...rows].sort((a, b) => b.date.localeCompare(a.date)));
       } catch (err: any) {
         if (live) setBreaksError(err?.message || 'Could not load breaks.');
       }
@@ -91,7 +107,7 @@ export function CallMetricsTab({ agentRecord, getIdToken, showCallMetrics }: Cal
       live = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [agentEmail]);
 
   // One range for the whole page: month to date until another one is picked
   const dates = [...allDays.map((d) => d.date), ...(allBreaks || []).map((b) => b.date)];
