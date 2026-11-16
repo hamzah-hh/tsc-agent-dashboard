@@ -2,10 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { SyncLogRecord } from '../shared/types';
 import { formatNumberINR } from '../shared/incentive';
 import { SortTh } from './SortTh';
+import { DateRangeFilter, inDateRange } from './DateRangeFilter';
 import { useSort } from '../utils/useSort';
 import { ExportCsvButton } from './ExportCsvButton';
 import { csvName, csvStamp } from '../utils/csv';
 import { RefreshCw, CheckCircle, AlertTriangle, XCircle, Database, AlertCircle, ExternalLink, FileSpreadsheet } from 'lucide-react';
+
+const istDay = (iso: string) => new Date(new Date(iso).getTime() + 5.5 * 3600e3).toISOString().slice(0, 10);
 
 interface SyncStatusProps {
   getIdToken: () => Promise<string>;
@@ -85,7 +88,15 @@ export function SyncStatus({ getIdToken }: SyncStatusProps) {
     }
   }
 
-  const sort = useSort(logs, {
+  // Sync-day range (IST)
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const logDays = logs.map((l) => istDay(l.time));
+  const minDay = logDays.reduce((m, d) => (!m || d < m ? d : m), '');
+  const maxDay = logDays.reduce((m, d) => (d > m ? d : m), '');
+  const shownLogs = logs.filter((l) => inDateRange(istDay(l.time), from, to));
+
+  const sort = useSort(shownLogs, {
     time: (l) => new Date(l.time).getTime(),
     source: (l) => l.source,
     result: (l) => l.result,
@@ -113,13 +124,14 @@ export function SyncStatus({ getIdToken }: SyncStatusProps) {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <DateRangeFilter from={from} to={to} min={minDay} max={maxDay} onChange={(f, t) => { setFrom(f); setTo(t); }} />
           <ExportCsvButton
             filename={csvName('sync_log', csvStamp())}
             disabled={logs.length === 0}
             getRows={() => [
               ['Time (IST)', 'Source', 'Result', 'Rows', 'Agents', 'Last Data Date', 'AI OK', 'AI Failed', 'Error', 'Warnings'],
-              ...logs.map((l) => [
+              ...shownLogs.map((l) => [
                 new Date(l.time).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' }),
                 l.source === 'apps-script' ? 'Apps Script (Daily)' : l.source === 'import' ? 'Excel Manual Import' : 'Test Suite',
                 l.result === 'ok' ? 'OK' : 'Error',

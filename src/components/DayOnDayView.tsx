@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { SortTh } from './SortTh';
+import { DateRangeFilter, inDateRange } from './DateRangeFilter';
 import { useSort } from '../utils/useSort';
 import { formatCurrencyINR, formatNumberINR } from '../shared/incentive';
 import {
@@ -196,7 +197,7 @@ export function DayOnDayView({
         'Cumulative_Team_Sales_INR',
         'Cumulative_Share_Pct',
       ];
-      const rows = data.dailyComparison.map((r) => [
+      const rows = data.dailyComparison.filter((r) => inDateRange(r.date, from, to)).map((r) => [
         `"${r.date}"`,
         r.dayNumber,
         r.agent.sales,
@@ -242,8 +243,16 @@ export function DayOnDayView({
     document.body.removeChild(link);
   };
 
+  // Data-date range for the ledger and the roster matrix
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const allDates = data?.summary?.dates ?? [];
+  const minDate = [...allDates, ...(data?.dailyComparison ?? []).map((r) => r.date)].reduce((m, d) => (!m || d < m ? d : m), '');
+  const maxDate = [...allDates, ...(data?.dailyComparison ?? []).map((r) => r.date)].reduce((m, d) => (d > m ? d : m), '');
+  const matrixDates = allDates.filter((d) => inDateRange(d, from, to));
+  const rangeOn = matrixDates.length !== allDates.length;
   const baseDate = data?.dailyComparison?.[0]?.date;
-  const dayRows = data?.dailyComparison ?? [];
+  const dayRows = (data?.dailyComparison ?? []).filter((r) => inDateRange(r.date, from, to));
   const daySort = useSort(dayRows, {
     date: (r) => r.date,
     sales: (r) => r.agent.sales,
@@ -260,8 +269,8 @@ export function DayOnDayView({
   const matrixSort = useSort(matrixRows, {
     caller: (a) => a.name,
     cls: (a) => a.className,
-    ...Object.fromEntries((data?.summary?.dates ?? []).map((d) => [`d:${d}`, (a: TeamRosterItem) => a.daySales[d] || 0])),
-    total: (a) => a.totalSales,
+    ...Object.fromEntries(matrixDates.map((d) => [`d:${d}`, (a: TeamRosterItem) => a.daySales[d] || 0])),
+    total: (a) => (rangeOn ? matrixDates.reduce((sum, d) => sum + (a.daySales[d] || 0), 0) : a.totalSales),
     orders: (a) => a.totalOrders,
     share: (a) => a.shareOfTeam,
   });
@@ -477,6 +486,7 @@ export function DayOnDayView({
                 Comparing caller daily sales, orders, and connects against {data.team.location} branch daily revenue.
               </p>
             </div>
+            <DateRangeFilter from={from} to={to} min={minDate} max={maxDate} onChange={(f, t) => { setFrom(f); setTo(t); }} />
           </div>
 
           <div className="overflow-x-auto">
@@ -633,6 +643,7 @@ export function DayOnDayView({
                 Every caller's daily sales side-by-side with overall branch revenue and contribution share.
               </p>
             </div>
+            <DateRangeFilter from={from} to={to} min={minDate} max={maxDate} onChange={(f, t) => { setFrom(f); setTo(t); }} />
           </div>
 
           <div className="overflow-x-auto">
@@ -641,7 +652,7 @@ export function DayOnDayView({
                 <tr className="bg-slate-50 dark:bg-slate-950/60 border-b border-slate-200 dark:border-slate-800 text-[11px] font-mono uppercase font-bold text-slate-500 dark:text-slate-400">
                   <SortTh sort={matrixSort} k="caller" className="py-3.5 px-4">Caller</SortTh>
                   <SortTh sort={matrixSort} k="cls" className="py-3.5 px-3 text-center">Class</SortTh>
-                  {data.summary.dates.map((d) => (
+                  {matrixDates.map((d) => (
                     <SortTh key={d} sort={matrixSort} k={`d:${d}`} right className="py-3.5 px-4 text-right font-mono">
                       {d.slice(5)}
                     </SortTh>
@@ -675,7 +686,7 @@ export function DayOnDayView({
                     </td>
 
                     {/* Daily Sales columns */}
-                    {data.summary.dates.map((d) => {
+                    {matrixDates.map((d) => {
                       const dayVal = agent.daySales[d] || 0;
                       return (
                         <td
@@ -693,18 +704,18 @@ export function DayOnDayView({
 
                     {/* Total Revenue */}
                     <td className="py-3.5 px-4 text-right font-mono font-bold text-slate-950 dark:text-white">
-                      {formatCurrencyINR(agent.totalSales)}
+                      {formatCurrencyINR(rangeOn ? matrixDates.reduce((sum, d) => sum + (agent.daySales[d] || 0), 0) : agent.totalSales)}
                     </td>
 
                     {/* Orders */}
                     <td className="py-3.5 px-3 text-center font-mono font-bold text-slate-700 dark:text-slate-300">
-                      {agent.totalOrders}
+                      {rangeOn ? '—' : agent.totalOrders}
                     </td>
 
                     {/* % of Branch */}
                     <td className="py-3.5 px-4 text-center">
                       <span className="font-mono font-bold text-xs text-amber-600 dark:text-amber-400">
-                        {agent.shareOfTeam}%
+                        {rangeOn ? '—' : `${agent.shareOfTeam}%`}
                       </span>
                     </td>
                   </tr>

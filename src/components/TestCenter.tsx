@@ -1,4 +1,5 @@
 import { SortTh } from './SortTh';
+import { DateRangeFilter, inDateRange } from './DateRangeFilter';
 import { useSort } from '../utils/useSort';
 import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
@@ -43,6 +44,8 @@ import {
   GoogleSheetFetchResult,
 } from '../shared/sheets-service';
 import { LoginTrackerSettings } from './LoginTrackerSettings';
+
+const istDay = (iso: string) => new Date(new Date(iso).getTime() + 5.5 * 3600e3).toISOString().slice(0, 10);
 
 interface TestCenterProps {
   userEmail: string;
@@ -857,7 +860,14 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken, t
     actual: (t) => String(t.actual),
     result: (t) => (t.passed ? 1 : 0),
   });
-  const logSort = useSort(syncLogs, {
+  // Sync-day range (IST)
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const logDays = syncLogs.map((l) => istDay(l.time));
+  const minDay = logDays.reduce((m, d) => (!m || d < m ? d : m), '');
+  const maxDay = logDays.reduce((m, d) => (d > m ? d : m), '');
+  const shownLogs = syncLogs.filter((l) => inDateRange(istDay(l.time), from, to));
+  const logSort = useSort(shownLogs, {
     time: (l) => new Date(l.time).getTime(),
     source: (l) => l.source,
     status: (l) => l.result,
@@ -2176,16 +2186,19 @@ function getRowsAsObjects(sheet) {
 
       {/* Section 7: Sync Logs */}
       <div className="bg-white dark:bg-panel border border-slate-200 dark:border-line rounded-xl overflow-hidden shadow-sm">
-        <div className="px-5 py-4 border-b border-slate-200 dark:border-line bg-slate-50 dark:bg-raised flex items-center justify-between">
+        <div className="px-5 py-4 border-b border-slate-200 dark:border-line bg-slate-50 dark:bg-raised flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Clock className="w-4 h-4 text-slate-600 dark:text-fg-2" />
             <h3 className="text-xs font-bold text-slate-800 dark:text-fg uppercase tracking-wider">
               Sync Logs (Last 30 Records)
             </h3>
           </div>
-          <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-            {syncLogs.length} events logged
-          </span>
+          <div className="flex flex-wrap items-center gap-3">
+            <DateRangeFilter from={from} to={to} min={minDay} max={maxDay} onChange={(f, t) => { setFrom(f); setTo(t); }} />
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+              {shownLogs.length} of {syncLogs.length} events
+            </span>
+          </div>
         </div>
 
         {syncLogs.length === 0 ? (

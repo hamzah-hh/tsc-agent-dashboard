@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { DateRangeFilter, inDateRange } from './DateRangeFilter';
 import { round2 } from '../utils/format';
 import {
   BarChart,
@@ -55,6 +56,9 @@ export function ActualTab({ agentRecord, plan, cycle, onNavigateToSimulator, onN
   // Hooks stay above every early return: when the first sync arrives and the agent taps Refresh, this
   // component goes from "No data yet" to the full screen, and a hook after the return would crash it.
   const [completedItems, setCompletedItems] = React.useState<Record<string, boolean>>({});
+  // Data-date range for the daily chart and its CSV (the headline numbers stay for the whole cycle)
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
 
   if (!agentRecord || !agentRecord.totals || agentRecord.totals.activeDays === 0) {
     return (
@@ -141,8 +145,12 @@ export function ActualTab({ agentRecord, plan, cycle, onNavigateToSimulator, onN
   const headline = suggestions.find((s) => s.type === 'headline');
   const actionSuggestions = suggestions.filter((s) => s.type !== 'headline');
 
+  const workedDays = (daily || []).filter((d) => d.day > 0);
+  const firstDay = workedDays.length ? workedDays.reduce((m, d) => (d.date < m ? d.date : m), workedDays[0].date) : '';
+  const lastDay = workedDays.length ? workedDays.reduce((m, d) => (d.date > m ? d.date : m), workedDays[0].date) : '';
+  const dailyInRange = (daily || []).filter((d) => inDateRange(d.date, from, to));
   // Chart data
-  const chartData = (daily || [])
+  const chartData = dailyInRange
     .filter((d) => d.day > 0)
     .map((d) => ({
       date: d.date.split('-').slice(1).join('/'),
@@ -1109,18 +1117,19 @@ export function ActualTab({ agentRecord, plan, cycle, onNavigateToSimulator, onN
 
       {/* 10. Daily Trend Chart */}
       <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-6 shadow-xs">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-wrap items-center justify-between mb-4 gap-2">
           <span className="text-xs uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 font-mono">
             10. Daily Revenue Trend
           </span>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <DateRangeFilter from={from} to={to} min={firstDay} max={lastDay} onChange={(f, t) => { setFrom(f); setTo(t); }} />
             <ExportCsvButton
               filename={csvName('my_daily_data', agentRecord.name, csvStamp())}
               disabled={!daily || daily.length === 0}
               title="Download your daily numbers as a CSV file"
               getRows={() => [
                 ['Date', 'Day Type', 'Revenue', 'Orders', 'Unique Connects', 'Talk Time (min)', 'Visits Booked', 'Visits Attributed'],
-                ...(daily || []).map((d) => [d.date, d.day === 1 ? 'Full Day' : d.day === 0.5 ? 'Half Day' : d.day, Math.round(d.sales), d.orders, d.connects, Number((d.talkSeconds / 60).toFixed(1)), d.visitsBooked, d.visitsAttributed]),
+                ...dailyInRange.map((d) => [d.date, d.day === 1 ? 'Full Day' : d.day === 0.5 ? 'Half Day' : d.day, Math.round(d.sales), d.orders, d.connects, Number((d.talkSeconds / 60).toFixed(1)), d.visitsBooked, d.visitsAttributed]),
               ]}
             />
             <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">

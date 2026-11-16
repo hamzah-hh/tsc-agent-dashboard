@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { DateRangeFilter, inDateRange } from './DateRangeFilter';
 import {
   BarChart,
   Bar,
@@ -163,6 +164,9 @@ function TierCard({
 export function PreSalesActualTab({ agentRecord, plan, cycle, onNavigateToSimulator }: PreSalesActualTabProps) {
   // Hooks stay above every early return
   const [completedItems, setCompletedItems] = useState<Record<string, boolean>>({});
+  // Data-date range for the daily chart and its CSV (the headline numbers stay for the whole cycle)
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
 
   if (!agentRecord || !agentRecord.totals || agentRecord.totals.activeDays === 0) {
     return (
@@ -224,7 +228,11 @@ export function PreSalesActualTab({ agentRecord, plan, cycle, onNavigateToSimula
   const headline = suggestions.find((s) => s.type === 'headline');
   const actionSuggestions = suggestions.filter((s) => s.type !== 'headline');
 
-  const chartData = (daily || [])
+  const workedDays = (daily || []).filter((d) => d.day > 0);
+  const firstDay = workedDays.length ? workedDays.reduce((m, d) => (d.date < m ? d.date : m), workedDays[0].date) : '';
+  const lastDay = workedDays.length ? workedDays.reduce((m, d) => (d.date > m ? d.date : m), workedDays[0].date) : '';
+  const dailyInRange = (daily || []).filter((d) => inDateRange(d.date, from, to));
+  const chartData = dailyInRange
     .filter((d) => d.day > 0)
     .map((d) => ({
       date: d.date.split('-').slice(1).join('/'),
@@ -549,18 +557,19 @@ export function PreSalesActualTab({ agentRecord, plan, cycle, onNavigateToSimula
 
       {/* Daily calls */}
       <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-6 shadow-xs">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-wrap items-center justify-between mb-4 gap-2">
           <span className="text-xs uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 font-mono">
             Daily Inbound Calls
           </span>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <DateRangeFilter from={from} to={to} min={firstDay} max={lastDay} onChange={(f, t) => { setFrom(f); setTo(t); }} />
             <ExportCsvButton
               filename={csvName('my_daily_calls', agentRecord.name, csvStamp())}
               disabled={!daily || daily.length === 0}
               title="Download your daily numbers as a CSV file"
               getRows={() => [
                 ['Date', 'Day Type', 'Inbound Calls', 'Avg Talk Time (sec)', 'Total Talk Time (min)'],
-                ...(daily || []).map((d) => [d.date, d.day === 1 ? 'Full Day' : d.day === 0.5 ? 'Half Day' : d.day, d.calls ?? 0, Math.round(d.avgTalkSec || 0), Number((d.talkSeconds / 60).toFixed(1))]),
+                ...dailyInRange.map((d) => [d.date, d.day === 1 ? 'Full Day' : d.day === 0.5 ? 'Half Day' : d.day, d.calls ?? 0, Math.round(d.avgTalkSec || 0), Number((d.talkSeconds / 60).toFixed(1))]),
               ]}
             />
             <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">

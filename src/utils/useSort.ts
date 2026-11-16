@@ -45,9 +45,9 @@ export function useSort<T>(
         return sign * compare(x.v, y.v) || x.i - y.i;
       })
       .map((x) => x.row);
-    // accessors are defined inline by the caller; the rows and the chosen column decide the order
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, sortKey, dir]);
+    // accessors are usually defined inline, so this re-sorts on each render while a column is chosen
+    // (cheap at these sizes) and always sees the caller's latest date range / filters
+  }, [rows, accessors, sortKey, dir]);
 
   const toggle = useCallback(
     (key: string) => {
