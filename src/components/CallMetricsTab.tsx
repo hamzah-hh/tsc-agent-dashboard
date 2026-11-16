@@ -1,11 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { AgentRecord } from '../shared/types';
 import { PRODUCTIVITY_RULES, hms } from '../shared/teamOps';
 import { csvName, csvStamp } from '../utils/csv';
 import { ExportCsvButton } from './ExportCsvButton';
 import { AgentBreaksSection } from './AgentBreaksSection';
 import { SortTh } from './SortTh';
-import { DateRangeFilter, inDateRange } from './DateRangeFilter';
+import { DateRangeFilter, inDateRange, useDateRange } from './DateRangeFilter';
 import { useSort } from '../utils/useSort';
 
 interface CallMetricsTabProps {
@@ -22,12 +22,11 @@ export function CallMetricsTab({ agentRecord, getIdToken, showCallMetrics }: Cal
     () => [...(agentRecord?.daily || [])].filter((x) => x.day === 1 || x.day === 0.5).sort((a, b) => b.date.localeCompare(a.date)),
     [agentRecord]
   );
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
-  const dodDays = useMemo(() => allDays.filter((d) => inDateRange(d.date, from, to)), [allDays, from, to]);
   // The days that have data (newest first), so the pickers and quick ranges stay inside them
   const firstDay = allDays.length ? allDays[allDays.length - 1].date : '';
   const lastDay = allDays.length ? allDays[0].date : '';
+  const { from, to, set: setRange } = useDateRange(firstDay, lastDay);
+  const dodDays = useMemo(() => allDays.filter((d) => inDateRange(d.date, from, to)), [allDays, from, to]);
   const sort = useSort(dodDays, {
     date: (d) => d.date,
     day: (d) => d.day,
@@ -45,7 +44,7 @@ export function CallMetricsTab({ agentRecord, getIdToken, showCallMetrics }: Cal
               Day on Day: Connects & Talk Time
             </span>
             <div className="flex flex-wrap items-center gap-2">
-              <DateRangeFilter from={from} to={to} min={firstDay} max={lastDay} onChange={(f, t) => { setFrom(f); setTo(t); }} />
+              <DateRangeFilter from={from} to={to} min={firstDay} max={lastDay} onChange={setRange} />
             <ExportCsvButton
               filename={csvName('call-metrics', name, csvStamp())}
               disabled={dodDays.length === 0}
@@ -92,7 +91,7 @@ export function CallMetricsTab({ agentRecord, getIdToken, showCallMetrics }: Cal
           )}
         </div>
       )}
-      <AgentBreaksSection getIdToken={getIdToken} agentName={name} from={from} to={to} onRange={(f, t) => { setFrom(f); setTo(t); }} />
+      <AgentBreaksSection getIdToken={getIdToken} agentName={name} from={from} to={to} onRange={setRange} />
     </div>
   );
 }

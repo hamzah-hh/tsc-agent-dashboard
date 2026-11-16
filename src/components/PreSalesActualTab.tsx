@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { DateRangeFilter, inDateRange } from './DateRangeFilter';
+import { DateRangeFilter, inDateRange, useDateRange } from './DateRangeFilter';
 import {
   BarChart,
   Bar,
@@ -165,8 +165,10 @@ export function PreSalesActualTab({ agentRecord, plan, cycle, onNavigateToSimula
   // Hooks stay above every early return
   const [completedItems, setCompletedItems] = useState<Record<string, boolean>>({});
   // Data-date range for the daily chart and its CSV (the headline numbers stay for the whole cycle)
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
+  const workedDays = (agentRecord?.daily || []).filter((d) => d.day > 0);
+  const firstDay = workedDays.reduce((m, d) => (!m || d.date < m ? d.date : m), '');
+  const lastDay = workedDays.reduce((m, d) => (d.date > m ? d.date : m), '');
+  const { from, to, set: setRange } = useDateRange(firstDay, lastDay);
 
   if (!agentRecord || !agentRecord.totals || agentRecord.totals.activeDays === 0) {
     return (
@@ -228,9 +230,6 @@ export function PreSalesActualTab({ agentRecord, plan, cycle, onNavigateToSimula
   const headline = suggestions.find((s) => s.type === 'headline');
   const actionSuggestions = suggestions.filter((s) => s.type !== 'headline');
 
-  const workedDays = (daily || []).filter((d) => d.day > 0);
-  const firstDay = workedDays.length ? workedDays.reduce((m, d) => (d.date < m ? d.date : m), workedDays[0].date) : '';
-  const lastDay = workedDays.length ? workedDays.reduce((m, d) => (d.date > m ? d.date : m), workedDays[0].date) : '';
   const dailyInRange = (daily || []).filter((d) => inDateRange(d.date, from, to));
   const chartData = dailyInRange
     .filter((d) => d.day > 0)
@@ -562,7 +561,7 @@ export function PreSalesActualTab({ agentRecord, plan, cycle, onNavigateToSimula
             Daily Inbound Calls
           </span>
           <div className="flex flex-wrap items-center gap-3">
-            <DateRangeFilter from={from} to={to} min={firstDay} max={lastDay} onChange={(f, t) => { setFrom(f); setTo(t); }} />
+            <DateRangeFilter from={from} to={to} min={firstDay} max={lastDay} onChange={setRange} />
             <ExportCsvButton
               filename={csvName('my_daily_calls', agentRecord.name, csvStamp())}
               disabled={!daily || daily.length === 0}

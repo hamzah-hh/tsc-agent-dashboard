@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { DateRangeFilter, inDateRange } from './DateRangeFilter';
+import React from 'react';
+import { DateRangeFilter, inDateRange, useDateRange } from './DateRangeFilter';
 import { round2 } from '../utils/format';
 import {
   BarChart,
@@ -57,8 +57,10 @@ export function ActualTab({ agentRecord, plan, cycle, onNavigateToSimulator, onN
   // component goes from "No data yet" to the full screen, and a hook after the return would crash it.
   const [completedItems, setCompletedItems] = React.useState<Record<string, boolean>>({});
   // Data-date range for the daily chart and its CSV (the headline numbers stay for the whole cycle)
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
+  const workedDays = (agentRecord?.daily || []).filter((d) => d.day > 0);
+  const firstDay = workedDays.reduce((m, d) => (!m || d.date < m ? d.date : m), '');
+  const lastDay = workedDays.reduce((m, d) => (d.date > m ? d.date : m), '');
+  const { from, to, set: setRange } = useDateRange(firstDay, lastDay);
 
   if (!agentRecord || !agentRecord.totals || agentRecord.totals.activeDays === 0) {
     return (
@@ -145,9 +147,6 @@ export function ActualTab({ agentRecord, plan, cycle, onNavigateToSimulator, onN
   const headline = suggestions.find((s) => s.type === 'headline');
   const actionSuggestions = suggestions.filter((s) => s.type !== 'headline');
 
-  const workedDays = (daily || []).filter((d) => d.day > 0);
-  const firstDay = workedDays.length ? workedDays.reduce((m, d) => (d.date < m ? d.date : m), workedDays[0].date) : '';
-  const lastDay = workedDays.length ? workedDays.reduce((m, d) => (d.date > m ? d.date : m), workedDays[0].date) : '';
   const dailyInRange = (daily || []).filter((d) => inDateRange(d.date, from, to));
   // Chart data
   const chartData = dailyInRange
@@ -1122,7 +1121,7 @@ export function ActualTab({ agentRecord, plan, cycle, onNavigateToSimulator, onN
             10. Daily Revenue Trend
           </span>
           <div className="flex flex-wrap items-center gap-3">
-            <DateRangeFilter from={from} to={to} min={firstDay} max={lastDay} onChange={(f, t) => { setFrom(f); setTo(t); }} />
+            <DateRangeFilter from={from} to={to} min={firstDay} max={lastDay} onChange={setRange} />
             <ExportCsvButton
               filename={csvName('my_daily_data', agentRecord.name, csvStamp())}
               disabled={!daily || daily.length === 0}

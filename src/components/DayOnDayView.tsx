@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { SortTh } from './SortTh';
-import { DateRangeFilter, inDateRange } from './DateRangeFilter';
+import { DateRangeFilter, inDateRange, useDateRange } from './DateRangeFilter';
 import { useSort } from '../utils/useSort';
 import { formatCurrencyINR, formatNumberINR } from '../shared/incentive';
 import {
@@ -244,11 +244,10 @@ export function DayOnDayView({
   };
 
   // Data-date range for the ledger and the roster matrix
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
   const allDates = data?.summary?.dates ?? [];
   const minDate = [...allDates, ...(data?.dailyComparison ?? []).map((r) => r.date)].reduce((m, d) => (!m || d < m ? d : m), '');
   const maxDate = [...allDates, ...(data?.dailyComparison ?? []).map((r) => r.date)].reduce((m, d) => (d > m ? d : m), '');
+  const { from, to, set: setRange } = useDateRange(minDate, maxDate);
   const matrixDates = allDates.filter((d) => inDateRange(d, from, to));
   const rangeOn = matrixDates.length !== allDates.length;
   const baseDate = data?.dailyComparison?.[0]?.date;
@@ -486,7 +485,7 @@ export function DayOnDayView({
                 Comparing caller daily sales, orders, and connects against {data.team.location} branch daily revenue.
               </p>
             </div>
-            <DateRangeFilter from={from} to={to} min={minDate} max={maxDate} onChange={(f, t) => { setFrom(f); setTo(t); }} />
+            <DateRangeFilter from={from} to={to} min={minDate} max={maxDate} onChange={setRange} />
           </div>
 
           <div className="overflow-x-auto">
@@ -643,7 +642,7 @@ export function DayOnDayView({
                 Every caller's daily sales side-by-side with overall branch revenue and contribution share.
               </p>
             </div>
-            <DateRangeFilter from={from} to={to} min={minDate} max={maxDate} onChange={(f, t) => { setFrom(f); setTo(t); }} />
+            <DateRangeFilter from={from} to={to} min={minDate} max={maxDate} onChange={setRange} />
           </div>
 
           <div className="overflow-x-auto">

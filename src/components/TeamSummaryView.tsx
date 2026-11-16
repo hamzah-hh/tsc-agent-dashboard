@@ -5,7 +5,7 @@ import { BusinessOverviewSection } from './BusinessOverviewSection';
 import { ExportCsvButton } from './ExportCsvButton';
 import { csvName, csvStamp } from '../utils/csv';
 import { SortTh } from './SortTh';
-import { DateRangeFilter } from './DateRangeFilter';
+import { DateRangeFilter, mtdRange } from './DateRangeFilter';
 import { useSort } from '../utils/useSort';
 import {
   BREAK_COLUMNS,
@@ -195,8 +195,10 @@ export function TeamSummaryView({ userRole, getIdToken }: TeamSummaryViewProps) 
 
   useEffect(() => {
     if (data && !from) {
-      setFrom(data.cycle.startDate);
-      setTo(latest);
+      // Month to date by default
+      const [f, t] = mtdRange(data.cycle.startDate, latest);
+      setFrom(f);
+      setTo(t);
     }
   }, [data, latest, from]);
 
@@ -220,6 +222,7 @@ export function TeamSummaryView({ userRole, getIdToken }: TeamSummaryViewProps) 
   }
 
   const presets: Array<[string, string, string]> = [
+    ['Month to date', ...mtdRange(data.cycle.startDate, latest)],
     ['Cycle to date', data.cycle.startDate, latest],
     ['Last 7 days', addDays(latest, -6) < data.cycle.startDate ? data.cycle.startDate : addDays(latest, -6), latest],
     ['Latest day', latest, latest],

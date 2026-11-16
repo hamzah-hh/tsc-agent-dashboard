@@ -1,5 +1,5 @@
 import { SortTh } from './SortTh';
-import { DateRangeFilter, inDateRange } from './DateRangeFilter';
+import { DateRangeFilter, inDateRange, useDateRange } from './DateRangeFilter';
 import { useSort } from '../utils/useSort';
 import React, { useState, useEffect } from 'react';
 import { TeamRevenueDoc } from '../shared/types';
@@ -33,8 +33,6 @@ export function TeamRevenueTab({ getIdToken, agentLocation, agentType }: TeamRev
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
 
   const fetchRevenue = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -70,9 +68,10 @@ export function TeamRevenueTab({ getIdToken, agentLocation, agentType }: TeamRev
   }, [agentLocation]);
 
   const dailyList = data?.daily || [];
-  const filteredDaily = dailyList.filter((d) => inDateRange(d.date, from, to));
   const firstDay = dailyList.reduce((m, d) => (!m || d.date < m ? d.date : m), '');
   const lastDay = dailyList.reduce((m, d) => (d.date > m ? d.date : m), '');
+  const { from, to, set: setRange } = useDateRange(firstDay, lastDay);
+  const filteredDaily = dailyList.filter((d) => inDateRange(d.date, from, to));
 
   const categories = data?.categories || {
     shopify: { orders: 0, sales: 0, pctOfSales: 0 },
@@ -408,7 +407,7 @@ export function TeamRevenueTab({ getIdToken, agentLocation, agentType }: TeamRev
                 </p>
               </div>
 
-              <DateRangeFilter from={from} to={to} min={firstDay} max={lastDay} onChange={(f, t) => { setFrom(f); setTo(t); }} />
+              <DateRangeFilter from={from} to={to} min={firstDay} max={lastDay} onChange={setRange} />
             </div>
 
             <div className="overflow-x-auto">

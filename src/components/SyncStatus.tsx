@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { SyncLogRecord } from '../shared/types';
 import { formatNumberINR } from '../shared/incentive';
 import { SortTh } from './SortTh';
-import { DateRangeFilter, inDateRange } from './DateRangeFilter';
+import { DateRangeFilter, inDateRange, useDateRange } from './DateRangeFilter';
 import { useSort } from '../utils/useSort';
 import { ExportCsvButton } from './ExportCsvButton';
 import { csvName, csvStamp } from '../utils/csv';
@@ -89,11 +89,10 @@ export function SyncStatus({ getIdToken }: SyncStatusProps) {
   }
 
   // Sync-day range (IST)
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
   const logDays = logs.map((l) => istDay(l.time));
   const minDay = logDays.reduce((m, d) => (!m || d < m ? d : m), '');
   const maxDay = logDays.reduce((m, d) => (d > m ? d : m), '');
+  const { from, to, set: setRange } = useDateRange(minDay, maxDay);
   const shownLogs = logs.filter((l) => inDateRange(istDay(l.time), from, to));
 
   const sort = useSort(shownLogs, {
@@ -125,7 +124,7 @@ export function SyncStatus({ getIdToken }: SyncStatusProps) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 shrink-0">
-          <DateRangeFilter from={from} to={to} min={minDay} max={maxDay} onChange={(f, t) => { setFrom(f); setTo(t); }} />
+          <DateRangeFilter from={from} to={to} min={minDay} max={maxDay} onChange={setRange} />
           <ExportCsvButton
             filename={csvName('sync_log', csvStamp())}
             disabled={logs.length === 0}

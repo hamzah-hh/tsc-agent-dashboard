@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { DateRangeFilter, inDateRange } from './DateRangeFilter';
+import { DateRangeFilter, inDateRange, useDateRange } from './DateRangeFilter';
 import { SortTh } from './SortTh';
 import { useSort } from '../utils/useSort';
 import { RawOrderRecord, RawVisitRecord } from '../shared/types';
@@ -74,10 +74,6 @@ export function RawDataView({
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
   // Data-date range: applied to the rows already loaded, so changing it needs no new request
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
-  const orders = useMemo(() => allOrders.filter((o) => inDateRange(o.date, from, to)), [allOrders, from, to]);
-  const visits = useMemo(() => allVisits.filter((v) => inDateRange(v.date, from, to)), [allVisits, from, to]);
   const { minDate, maxDate } = useMemo(() => {
     let lo = '';
     let hi = '';
@@ -89,6 +85,9 @@ export function RawDataView({
     }
     return { minDate: lo, maxDate: hi };
   }, [allOrders, allVisits]);
+  const { from, to, set: setRange } = useDateRange(minDate, maxDate);
+  const orders = useMemo(() => allOrders.filter((o) => inDateRange(o.date, from, to)), [allOrders, from, to]);
+  const visits = useMemo(() => allVisits.filter((v) => inDateRange(v.date, from, to)), [allVisits, from, to]);
   const rangeOn = Boolean(from || to) && !(from === minDate && to === maxDate);
 
   useEffect(() => {
@@ -358,7 +357,7 @@ export function RawDataView({
 
           {/* Quick Filters */}
           <div className="flex flex-wrap items-center gap-3">
-            <DateRangeFilter from={from} to={to} min={minDate} max={maxDate} onChange={(f, t) => { setFrom(f); setTo(t); }} />
+            <DateRangeFilter from={from} to={to} min={minDate} max={maxDate} onChange={setRange} />
             {/* Location filter for Manager / Super Admin */}
             {(userRole === 'superAdmin' || userRole === 'manager') && (
               <div className="flex items-center gap-1.5 bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200">

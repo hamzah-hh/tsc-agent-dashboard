@@ -1,5 +1,5 @@
 import { SortTh } from './SortTh';
-import { DateRangeFilter, inDateRange } from './DateRangeFilter';
+import { DateRangeFilter, inDateRange, useDateRange } from './DateRangeFilter';
 import { useSort } from '../utils/useSort';
 import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
@@ -861,11 +861,10 @@ export const TestCenter: React.FC<TestCenterProps> = ({ userEmail, getIdToken, t
     result: (t) => (t.passed ? 1 : 0),
   });
   // Sync-day range (IST)
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
   const logDays = syncLogs.map((l) => istDay(l.time));
   const minDay = logDays.reduce((m, d) => (!m || d < m ? d : m), '');
   const maxDay = logDays.reduce((m, d) => (d > m ? d : m), '');
+  const { from, to, set: setRange } = useDateRange(minDay, maxDay);
   const shownLogs = syncLogs.filter((l) => inDateRange(istDay(l.time), from, to));
   const logSort = useSort(shownLogs, {
     time: (l) => new Date(l.time).getTime(),
@@ -2194,7 +2193,7 @@ function getRowsAsObjects(sheet) {
             </h3>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <DateRangeFilter from={from} to={to} min={minDay} max={maxDay} onChange={(f, t) => { setFrom(f); setTo(t); }} />
+            <DateRangeFilter from={from} to={to} min={minDay} max={maxDay} onChange={setRange} />
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
               {shownLogs.length} of {syncLogs.length} events
             </span>

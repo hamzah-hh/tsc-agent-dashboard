@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { CalendarDays } from 'lucide-react';
 
 const addDays = (day: string, n: number) => new Date(Date.parse(day + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
@@ -8,6 +8,20 @@ export function inDateRange(date: string | undefined, from: string, to: string):
   if (!date) return !from && !to;
   const d = date.slice(0, 10);
   return (!from || d >= from) && (!to || d <= to);
+}
+
+/** Month to date: the 1st of the month of the newest data day (never before the first data day) up to that day. */
+export function mtdRange(min: string, max: string): [string, string] {
+  if (!max) return ['', ''];
+  const start = max.slice(0, 8) + '01';
+  return [start < min ? min : start, max];
+}
+
+/** The range a page filters by: month to date until the viewer picks another one. */
+export function useDateRange(min: string, max: string) {
+  const [custom, setCustom] = useState<[string, string] | null>(null);
+  const [from, to] = custom ?? mtdRange(min, max);
+  return { from, to, set: (f: string, t: string) => setCustom([f, t]) };
 }
 
 interface DateRangeFilterProps {
@@ -26,7 +40,9 @@ const input =
 /** From / to data-date pickers with quick ranges, for tables that list one row per day. */
 export function DateRangeFilter({ from, to, min, max, onChange, className = '' }: DateRangeFilterProps) {
   const last7 = max ? (addDays(max, -6) < min ? min : addDays(max, -6)) : '';
+  const [mtdFrom, mtdTo] = mtdRange(min, max);
   const quick: Array<[string, string, string]> = [
+    ['MTD', mtdFrom, mtdTo],
     ['All dates', min, max],
     ['Last 7 days', last7, max],
     ['Latest day', max, max],
@@ -37,7 +53,7 @@ export function DateRangeFilter({ from, to, min, max, onChange, className = '' }
       <CalendarDays className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 shrink-0" aria-hidden />
       <span className="text-[10px] uppercase tracking-wide font-bold text-slate-500 dark:text-slate-400">Data date</span>
       {quick.map(([label, f, t]) => {
-        const active = label === 'All dates' ? isAll : from === f && to === t;
+        const active = label === 'All dates' ? isAll && !(mtdFrom === min) : from === f && to === t;
         return (
           <button
             key={label}
