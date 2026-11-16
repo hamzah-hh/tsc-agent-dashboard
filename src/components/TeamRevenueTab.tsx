@@ -1,4 +1,5 @@
 import { SortTh } from './SortTh';
+import { DateRangeFilter, inDateRange } from './DateRangeFilter';
 import { useSort } from '../utils/useSort';
 import React, { useState, useEffect } from 'react';
 import { TeamRevenueDoc } from '../shared/types';
@@ -32,7 +33,8 @@ export function TeamRevenueTab({ getIdToken, agentLocation, agentType }: TeamRev
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [searchDate, setSearchDate] = useState('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
 
   const fetchRevenue = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -68,9 +70,9 @@ export function TeamRevenueTab({ getIdToken, agentLocation, agentType }: TeamRev
   }, [agentLocation]);
 
   const dailyList = data?.daily || [];
-  const filteredDaily = dailyList.filter(
-    (d) => !searchDate || d.date.includes(searchDate) || String(d.day).includes(searchDate)
-  );
+  const filteredDaily = dailyList.filter((d) => inDateRange(d.date, from, to));
+  const firstDay = dailyList.reduce((m, d) => (!m || d.date < m ? d.date : m), '');
+  const lastDay = dailyList.reduce((m, d) => (d.date > m ? d.date : m), '');
 
   const categories = data?.categories || {
     shopify: { orders: 0, sales: 0, pctOfSales: 0 },
@@ -406,16 +408,7 @@ export function TeamRevenueTab({ getIdToken, agentLocation, agentType }: TeamRev
                 </p>
               </div>
 
-              <div className="relative w-full sm:w-56">
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={searchDate}
-                  onChange={(e) => setSearchDate(e.target.value)}
-                  placeholder="Filter by date (YYYY-MM-DD)..."
-                  className="w-full bg-white dark:bg-panel border border-slate-300 dark:border-line-strong rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-900 dark:text-fg placeholder-slate-400 focus:outline-none focus:border-indigo-500"
-                />
-              </div>
+              <DateRangeFilter from={from} to={to} min={firstDay} max={lastDay} onChange={(f, t) => { setFrom(f); setTo(t); }} />
             </div>
 
             <div className="overflow-x-auto">

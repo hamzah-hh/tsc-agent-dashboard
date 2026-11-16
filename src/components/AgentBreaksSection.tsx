@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ExportCsvButton } from './ExportCsvButton';
 import { SortTh } from './SortTh';
+import { DateRangeFilter, inDateRange } from './DateRangeFilter';
 import { useSort } from '../utils/useSort';
 import { csvName, csvStamp } from '../utils/csv';
 import { BREAK_COLUMNS, BreakDay, hms, idleAcwPct } from '../shared/teamOps';
@@ -8,13 +9,20 @@ import { BREAK_COLUMNS, BreakDay, hms, idleAcwPct } from '../shared/teamOps';
 interface AgentBreaksSectionProps {
   getIdToken: () => Promise<string>;
   agentName: string;
+  /** The data-date range, shared with the Connects & Talk Time table above. */
+  from?: string;
+  to?: string;
+  onRange?: (from: string, to: string) => void;
 }
 
 const RED = 'text-red-600 dark:text-red-400 font-semibold';
 
 /** The agent's own Breaks tab days, newest first; a value past its daily limit is red. */
-export function AgentBreaksSection({ getIdToken, agentName }: AgentBreaksSectionProps) {
-  const [days, setDays] = useState<BreakDay[] | null>(null);
+export function AgentBreaksSection({ getIdToken, agentName, from = '', to = '', onRange }: AgentBreaksSectionProps) {
+  const [allDays, setDays] = useState<BreakDay[] | null>(null);
+  const days = useMemo(() => (allDays ? allDays.filter((d) => inDateRange(d.date, from, to)) : null), [allDays, from, to]);
+  const firstDay = allDays && allDays.length ? allDays[allDays.length - 1].date : '';
+  const lastDay = allDays && allDays.length ? allDays[0].date : '';
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -51,10 +59,12 @@ export function AgentBreaksSection({ getIdToken, agentName }: AgentBreaksSection
 
   return (
     <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-6 shadow-xs">
-      <div className="flex items-center justify-between mb-1 gap-2">
+      <div className="flex flex-wrap items-center justify-between mb-1 gap-2">
         <span className="text-xs uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 font-mono">
           12. Day on Day: Breaks
         </span>
+        <div className="flex flex-wrap items-center gap-2">
+          {onRange && <DateRangeFilter from={from} to={to} min={firstDay} max={lastDay} onChange={onRange} />}
         <ExportCsvButton
           filename={csvName('breaks', agentName, csvStamp())}
           disabled={!days || days.length === 0}
@@ -67,6 +77,7 @@ export function AgentBreaksSection({ getIdToken, agentName }: AgentBreaksSection
             ]),
           ]}
         />
+        </div>
       </div>
       <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-4">
         Red means over the daily limit: Bio 20m, First 15m, Lunch 30m, Last 15m, Total break 1h 20m, Idle + ACW 30.6% of staffed time.

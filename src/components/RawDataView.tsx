@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { DateRangeFilter, inDateRange } from './DateRangeFilter';
 import { SortTh } from './SortTh';
 import { useSort } from '../utils/useSort';
 import { RawOrderRecord, RawVisitRecord } from '../shared/types';
@@ -49,8 +50,8 @@ export function RawDataView({
   const [error, setError] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<{ ok: boolean; at: string; error?: string } | null>(null);
 
-  const [orders, setOrders] = useState<RawOrderRecord[]>([]);
-  const [visits, setVisits] = useState<RawVisitRecord[]>([]);
+  const [allOrders, setOrders] = useState<RawOrderRecord[]>([]);
+  const [allVisits, setVisits] = useState<RawVisitRecord[]>([]);
   const [allowedAgents, setAllowedAgents] = useState<
     Array<{ officialEmail: string; name: string; location: string }>
   >([]);
@@ -71,6 +72,24 @@ export function RawDataView({
   const [selectedLocation, setSelectedLocation] = useState<string>('all');
   const [selectedAgent, setSelectedAgent] = useState<string>(targetAgentEmail || 'all');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+
+  // Data-date range: applied to the rows already loaded, so changing it needs no new request
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const orders = useMemo(() => allOrders.filter((o) => inDateRange(o.date, from, to)), [allOrders, from, to]);
+  const visits = useMemo(() => allVisits.filter((v) => inDateRange(v.date, from, to)), [allVisits, from, to]);
+  const { minDate, maxDate } = useMemo(() => {
+    let lo = '';
+    let hi = '';
+    for (const d of [...allOrders.map((o) => o.date), ...allVisits.map((v) => v.date)]) {
+      const day = (d || '').slice(0, 10);
+      if (!day) continue;
+      if (!lo || day < lo) lo = day;
+      if (!hi || day > hi) hi = day;
+    }
+    return { minDate: lo, maxDate: hi };
+  }, [allOrders, allVisits]);
+  const rangeOn = Boolean(from || to) && !(from === minDate && to === maxDate);
 
   useEffect(() => {
     if (targetAgentEmail) {
@@ -310,7 +329,7 @@ export function RawDataView({
                   activeTab === 'orders' ? 'bg-slate-950/20 text-slate-950 dark:text-fg' : 'bg-slate-800 text-slate-300'
                 }`}
               >
-                {summary.totalOrders}
+                {rangeOn ? orders.length : summary.totalOrders}
               </span>
             </button>
 
@@ -332,13 +351,14 @@ export function RawDataView({
                   activeTab === 'visits' ? 'bg-slate-950/20 text-slate-950 dark:text-fg' : 'bg-slate-800 text-slate-300'
                 }`}
               >
-                {summary.totalVisits}
+                {rangeOn ? visits.length : summary.totalVisits}
               </span>
             </button>
           </div>
 
           {/* Quick Filters */}
           <div className="flex flex-wrap items-center gap-3">
+            <DateRangeFilter from={from} to={to} min={minDate} max={maxDate} onChange={(f, t) => { setFrom(f); setTo(t); }} />
             {/* Location filter for Manager / Super Admin */}
             {(userRole === 'superAdmin' || userRole === 'manager') && (
               <div className="flex items-center gap-1.5 bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200">
@@ -418,7 +438,7 @@ export function RawDataView({
             <ShoppingBag className="w-4 h-4 text-amber-500" />
           </div>
           <span className="text-2xl font-black text-slate-900 dark:text-fg font-mono">
-            {summary.totalOrders}
+            {rangeOn ? orders.length : summary.totalOrders}
           </span>
           <span className="text-[11px] text-slate-400 block mt-0.5">Matching current view</span>
         </div>
@@ -429,7 +449,7 @@ export function RawDataView({
             <FileSpreadsheet className="w-4 h-4 text-indigo-500" />
           </div>
           <span className="text-2xl font-black text-slate-900 dark:text-fg font-mono">
-            {formatCurrencyINR(summary.totalRevenue)}
+            {formatCurrencyINR(rangeOn ? orders.reduce((a, o) => a + (o.orderValue || 0), 0) : summary.totalRevenue)}
           </span>
           <span className="text-[11px] text-slate-400 block mt-0.5">Gross revenue sum</span>
         </div>
@@ -440,7 +460,7 @@ export function RawDataView({
             <CheckCircle2 className="w-4 h-4 text-emerald-500" />
           </div>
           <span className="text-2xl font-black text-slate-900 dark:text-fg font-mono">
-            {formatCurrencyINR(summary.aov)}
+            {formatCurrencyINR(rangeOn ? (orders.length ? orders.reduce((a, o) => a + (o.orderValue || 0), 0) / orders.length : 0) : summary.aov)}
           </span>
           <span className="text-[11px] text-slate-400 block mt-0.5">Avg across orders</span>
         </div>
@@ -451,7 +471,7 @@ export function RawDataView({
             <Store className="w-4 h-4 text-purple-500" />
           </div>
           <span className="text-2xl font-black text-slate-900 dark:text-fg font-mono">
-            {summary.totalVisits}
+            {rangeOn ? visits.length : summary.totalVisits}
           </span>
           <span className="text-[11px] text-slate-400 block mt-0.5">Store footfalls credited</span>
         </div>

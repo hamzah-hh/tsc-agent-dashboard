@@ -5,6 +5,7 @@ import { BusinessOverviewSection } from './BusinessOverviewSection';
 import { ExportCsvButton } from './ExportCsvButton';
 import { csvName, csvStamp } from '../utils/csv';
 import { SortTh } from './SortTh';
+import { DateRangeFilter } from './DateRangeFilter';
 import { useSort } from '../utils/useSort';
 import {
   BREAK_COLUMNS,
@@ -152,6 +153,8 @@ function breakCell(key: BreakMetric, value: number | null) {
   return <td className={`${td} text-right ${overLimit(key, value) ? RED : 'text-slate-800 dark:text-slate-200'}`}>{text}</td>;
 }
 
+type DateRange = { from: string; to: string; min: string; max: string; onChange: (from: string, to: string) => void };
+
 // ------------------------------------------------------------------ page
 
 export function TeamSummaryView({ userRole, getIdToken }: TeamSummaryViewProps) {
@@ -222,6 +225,17 @@ export function TeamSummaryView({ userRole, getIdToken }: TeamSummaryViewProps) 
     ['Latest day', latest, latest],
   ];
 
+  const range: DateRange = {
+    from,
+    to,
+    min: data.cycle.startDate,
+    max: latest,
+    onChange: (f, t) => {
+      setFrom(f);
+      setTo(t);
+    },
+  };
+
   return (
     <div className="space-y-6">
       <div className={`${card} p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4`}>
@@ -258,8 +272,8 @@ export function TeamSummaryView({ userRole, getIdToken }: TeamSummaryViewProps) 
       </div>
 
       <BusinessOverviewSection rows={data.businessOverview || []} />
-      <ProductivitySection agents={data.agents} days={productivity} agentsByEmail={agentsByEmail} />
-      <BreaksSection agents={data.agents} rows={breaks} agentsByEmail={agentsByEmail} hasData={data.breaks.length > 0} />
+      <ProductivitySection agents={data.agents} days={productivity} agentsByEmail={agentsByEmail} range={range} />
+      <BreaksSection agents={data.agents} rows={breaks} agentsByEmail={agentsByEmail} hasData={data.breaks.length > 0} range={range} />
       <TargetsSection targets={data.targets} agents={data.agents} cycle={data.cycle} />
     </div>
   );
@@ -271,10 +285,12 @@ export function ProductivitySection({
   agents,
   days,
   agentsByEmail,
+  range,
 }: {
   agents: TeamSummaryAgent[];
   days: ProductivityDay[];
   agentsByEmail: Map<string, TeamSummaryAgent>;
+  range: DateRange;
 }) {
   const [openTeam, setOpenTeam] = useState<string | null>(null);
   const [drillAgent, setDrillAgent] = useState<string | null>(null);
@@ -319,7 +335,9 @@ export function ProductivitySection({
         title="Average Productivity"
         note={`Per agent per worked day, from the Dialer tab. Red: below ${PRODUCTIVITY_RULES.minUniqueConnectsPerDay} unique connects or below ${hms(PRODUCTIVITY_RULES.minTalkSecondsPerDay)} talk time (half for a half day).`}
         action={
-          <ExportCsvButton
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <DateRangeFilter {...range} />
+            <ExportCsvButton
             filename={csvName('productivity', csvStamp())}
             disabled={shown.length === 0}
             title="One row per agent for the range shown (agents left out of the averages are marked)"
@@ -334,7 +352,8 @@ export function ProductivitySection({
                   })
               ),
             ]}
-          />
+            />
+          </div>
         }
       />
       <ExcludedNote count={excluded.size} onReset={reset} />
@@ -570,11 +589,13 @@ export function BreaksSection({
   rows,
   agentsByEmail,
   hasData,
+  range,
 }: {
   agents: TeamSummaryAgent[];
   rows: BreakDay[];
   agentsByEmail: Map<string, TeamSummaryAgent>;
   hasData: boolean;
+  range: DateRange;
 }) {
   const [openLoc, setOpenLoc] = useState<string | null>(null);
   const [drillAgent, setDrillAgent] = useState<string | null>(null);
@@ -626,7 +647,9 @@ export function BreaksSection({
         note={`Per agent per day (hh:mm:ss), from the Breaks tab. Red above the daily limit: ${limitNote}.`}
         action={
           hasData ? (
-            <ExportCsvButton
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <DateRangeFilter {...range} />
+              <ExportCsvButton
               filename={csvName('breaks', csvStamp())}
               disabled={rows.length === 0}
               title="One row per agent for the range shown (agents left out of the averages are marked)"
@@ -642,7 +665,8 @@ export function BreaksSection({
                     }),
                 ];
               }}
-            />
+              />
+            </div>
           ) : undefined
         }
       />

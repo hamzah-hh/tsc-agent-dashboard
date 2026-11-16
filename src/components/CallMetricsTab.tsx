@@ -1,10 +1,11 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { AgentRecord } from '../shared/types';
 import { PRODUCTIVITY_RULES, hms } from '../shared/teamOps';
 import { csvName, csvStamp } from '../utils/csv';
 import { ExportCsvButton } from './ExportCsvButton';
 import { AgentBreaksSection } from './AgentBreaksSection';
 import { SortTh } from './SortTh';
+import { DateRangeFilter, inDateRange } from './DateRangeFilter';
 import { useSort } from '../utils/useSort';
 
 interface CallMetricsTabProps {
@@ -17,10 +18,16 @@ interface CallMetricsTabProps {
 /** The agent's Day on Day unique connects and talk time, and their Breaks. */
 export function CallMetricsTab({ agentRecord, getIdToken, showCallMetrics }: CallMetricsTabProps) {
   // Newest day first; days with no Dialer row (day null/0) are not worked days
-  const dodDays = useMemo(
+  const allDays = useMemo(
     () => [...(agentRecord?.daily || [])].filter((x) => x.day === 1 || x.day === 0.5).sort((a, b) => b.date.localeCompare(a.date)),
     [agentRecord]
   );
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const dodDays = useMemo(() => allDays.filter((d) => inDateRange(d.date, from, to)), [allDays, from, to]);
+  // The days that have data (newest first), so the pickers and quick ranges stay inside them
+  const firstDay = allDays.length ? allDays[allDays.length - 1].date : '';
+  const lastDay = allDays.length ? allDays[0].date : '';
   const sort = useSort(dodDays, {
     date: (d) => d.date,
     day: (d) => d.day,
@@ -33,10 +40,12 @@ export function CallMetricsTab({ agentRecord, getIdToken, showCallMetrics }: Cal
     <div className="space-y-6">
       {showCallMetrics && (
         <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-6 shadow-xs">
-          <div className="flex items-center justify-between mb-1 gap-2">
+          <div className="flex flex-wrap items-center justify-between mb-1 gap-2">
             <span className="text-xs uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 font-mono">
               Day on Day: Connects & Talk Time
             </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <DateRangeFilter from={from} to={to} min={firstDay} max={lastDay} onChange={(f, t) => { setFrom(f); setTo(t); }} />
             <ExportCsvButton
               filename={csvName('call-metrics', name, csvStamp())}
               disabled={dodDays.length === 0}
@@ -45,6 +54,7 @@ export function CallMetricsTab({ agentRecord, getIdToken, showCallMetrics }: Cal
                 ...dodDays.map((d) => [d.date, d.day === 0.5 ? 'Half Day' : 'Full Day', d.connects, hms(d.talkSeconds)]),
               ]}
             />
+            </div>
           </div>
           <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-4">
             Daily target: {PRODUCTIVITY_RULES.minUniqueConnectsPerDay} unique connects and {hms(PRODUCTIVITY_RULES.minTalkSecondsPerDay)} talk time (half for a half day). Red means below target.
@@ -82,7 +92,7 @@ export function CallMetricsTab({ agentRecord, getIdToken, showCallMetrics }: Cal
           )}
         </div>
       )}
-      <AgentBreaksSection getIdToken={getIdToken} agentName={name} />
+      <AgentBreaksSection getIdToken={getIdToken} agentName={name} from={from} to={to} onRange={(f, t) => { setFrom(f); setTo(t); }} />
     </div>
   );
 }
