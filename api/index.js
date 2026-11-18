@@ -4778,7 +4778,7 @@ function registerRosterRoutes(api, ctx) {
     let visible = everyone;
     if (!appConfig.testMode && identity.role !== "superAdmin") visible = visible.filter((a) => !isTestAgent(a));
     const role = identity.role;
-    const base = { login: user.email, name: identity.access?.name || user.name, role, everyone, appConfig };
+    const base = { login: user.email, name: user.name || identity.access?.name || user.email, role, everyone, appConfig };
     if (role === "agent") {
       const mine = norm2(identity.access?.officialEmail);
       const agent = everyone.find((a) => norm2(a.officialEmail) === mine);
