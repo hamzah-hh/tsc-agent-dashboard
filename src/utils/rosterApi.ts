@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RosterStatusResponse } from '../shared/roster';
 
 export class RosterApiError extends Error {
@@ -36,10 +36,15 @@ export function newRequestId(): string {
  */
 export function useRosterStatus(getIdToken: () => Promise<string>) {
   const [status, setStatus] = useState<RosterStatusResponse | null>(null);
+  // While rostering is off for this person there is nothing to refresh: check once, then stop asking
+  const off = useRef(false);
   const refresh = useCallback(async () => {
     try {
-      setStatus(await rosterApi<RosterStatusResponse>(getIdToken, 'GET', '/api/roster/status'));
+      const next = await rosterApi<RosterStatusResponse>(getIdToken, 'GET', '/api/roster/status');
+      off.current = !next.enabled;
+      setStatus(next);
     } catch (_err) {
+      off.current = true;
       setStatus({ enabled: false });
     }
   }, [getIdToken]);
@@ -47,7 +52,7 @@ export function useRosterStatus(getIdToken: () => Promise<string>) {
   useEffect(() => {
     refresh();
     const timer = setInterval(() => {
-      if (typeof document === 'undefined' || document.visibilityState === 'visible') refresh();
+      if (!off.current && (typeof document === 'undefined' || document.visibilityState === 'visible')) refresh();
     }, 60000);
     return () => clearInterval(timer);
   }, [refresh]);

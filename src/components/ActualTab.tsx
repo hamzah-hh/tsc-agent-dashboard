@@ -459,7 +459,7 @@ export function ActualTab({ agentRecord, plan, cycle, onNavigateToSimulator, onN
                         }`}
                       />
                       {/* Target Flag Callout (Top) */}
-                      <div className="absolute -top-7 -translate-x-1/2 whitespace-nowrap">
+                      <div className={`absolute -top-7 whitespace-nowrap ${(nextClass ? nextClass.abovePct : topStep?.abovePct ?? 100) <= 100 ? 'left-0' : 'right-0'}`}>
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black font-mono shadow-md bg-slate-900 text-emerald-300 dark:bg-black dark:text-emerald-300 border-2 border-emerald-500 dark:border-emerald-400">
                           <Target className="w-2.5 h-2.5 text-emerald-400 shrink-0" />
                           <span>Target: 100%</span>
@@ -483,7 +483,7 @@ export function ActualTab({ agentRecord, plan, cycle, onNavigateToSimulator, onN
                       {/* Vertical Pulsing Next Class Pin */}
                       <div className="w-1 h-6 -mt-1 rounded-full bg-amber-400 animate-pulse" />
                       {/* Next Class Flag Callout (Top) */}
-                      <div className="absolute -top-7 -translate-x-1/2 whitespace-nowrap">
+                      <div className={`absolute -top-7 whitespace-nowrap ${(nextClass ? nextClass.abovePct : topStep?.abovePct ?? 100) <= 100 ? 'right-0' : 'left-0'}`}>
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black font-mono shadow-md bg-amber-500 text-slate-950 dark:bg-amber-400 dark:text-slate-950 border-2 border-amber-300 dark:border-amber-500/30">
                           <Sparkles className="w-2.5 h-2.5 shrink-0" />
                           <span>{nextClass ? `Next: Class ${nextClass.name}` : `Pinnacle: Class ${topStep?.name ?? ''}`}</span>
@@ -1145,20 +1145,20 @@ export function ActualTab({ agentRecord, plan, cycle, onNavigateToSimulator, onN
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.25} />
-                <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--line)" />
+                <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'var(--fg-muted)' }} tickLine={false} />
                 <YAxis
-                  tick={{ fontSize: 11, fill: '#94a3b8' }}
+                  tick={{ fontSize: 11, fill: 'var(--fg-muted)' }}
                   tickFormatter={(val) => `₹${(val / 100000).toFixed(1)}L`}
                   tickLine={false}
                   axisLine={false}
                 />
                 <Tooltip
-                  contentStyle={{ backgroundColor: '#020617', borderColor: '#334155', borderRadius: '12px', color: '#f8fafc' }}
+                  contentStyle={{ backgroundColor: 'var(--panel)', borderColor: 'var(--line-strong)', borderRadius: '8px', color: 'var(--fg)' }}
                   formatter={(val: any) => [formatCurrencyINR(Number(val)), 'Sales']}
                   labelFormatter={(lbl) => `Date: ${lbl}`}
                 />
-                <Bar dataKey="sales" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="sales" fill="var(--color-amber-500)" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

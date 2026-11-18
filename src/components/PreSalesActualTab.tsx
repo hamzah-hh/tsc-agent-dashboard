@@ -585,15 +585,15 @@ export function PreSalesActualTab({ agentRecord, plan, cycle, onNavigateToSimula
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.25} />
-                <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--line)" />
+                <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'var(--fg-muted)' }} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: 'var(--fg-muted)' }} tickLine={false} axisLine={false} />
                 <Tooltip
-                  contentStyle={{ backgroundColor: '#020617', borderColor: '#334155', borderRadius: '12px', color: '#f8fafc' }}
+                  contentStyle={{ backgroundColor: 'var(--panel)', borderColor: 'var(--line-strong)', borderRadius: '8px', color: 'var(--fg)' }}
                   formatter={(val: any) => [formatNumberINR(Number(val)), 'Calls']}
                   labelFormatter={(lbl) => `Date: ${lbl}`}
                 />
-                <Bar dataKey="calls" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="calls" fill="var(--color-amber-500)" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

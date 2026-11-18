@@ -15,3 +15,6 @@ local-db.json
 service-account.json
 monitor-report.md
 .neon
+
+# Claude Code local settings and agent worktrees
+.claude/

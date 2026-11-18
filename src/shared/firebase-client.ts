@@ -1,6 +1,5 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
 import { firebaseConfig } from './firebase-config';
 
 // Initialize Firebase app for client
@@ -16,6 +15,5 @@ googleProvider.setCustomParameters({
   prompt: 'select_account',
 });
 
-export const db = firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)'
-  ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
-  : getFirestore(app);
+// The browser never talks to Firestore or any database directly: every read and write goes through the API
+// (server-routes.ts) with the signed-in user's token. So the Firestore client library is not loaded at all.
