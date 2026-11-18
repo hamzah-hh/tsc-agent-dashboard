@@ -213,6 +213,7 @@ export interface RosterMeResponse {
   woLastDay: string;
   plLastDay: string;
   agentName: string;
+  agentEmail: string;
   teamSize: number;
   entries: RosterEntryDTO[];
   days: RosterDayInfo[];
@@ -266,4 +267,63 @@ export function feasibilityWarning(teamSize: number, weekdayLimits: number[]): s
     return `${teamSize} agents, but the limits allow only ${capacity} weekday weekly offs this week. Raise a limit or some agents cannot get a WO.`;
   }
   return undefined;
+}
+
+// ------------------------------------------------------------------ swaps (phase 2)
+
+export type SwapStatus = 'awaiting_partner' | 'awaiting_tl' | 'applied' | 'declined' | 'rejected' | 'cancelled' | 'expired' | 'failed';
+export const OPEN_SWAP_STATUSES: SwapStatus[] = ['awaiting_partner', 'awaiting_tl'];
+
+export const ROSTER_SWAP = {
+  /** An agent may send at most this many swap requests in a week. */
+  maxRequestsPerWeek: 2,
+  /** A swap request lapses after this long if nobody finishes it. */
+  expiryHours: 72,
+};
+
+const normLoc = (s: unknown) => String(s ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+
+export const sameWeek = (a: string, b: string) => weekStart(a) === weekStart(b);
+
+/**
+ * Two agents may swap only when they are the same caller type, in the same location, under the same TL.
+ * (A Dighe HO caller and a Dighe Pre Sales caller differ in both type and location; Andheri and Bangalore Store
+ * callers differ in location.)
+ */
+export function swapEligible(
+  a: { agentType?: string; location?: string; tlOfficialEmail?: string; tlPersonalEmail?: string },
+  b: { agentType?: string; location?: string; tlOfficialEmail?: string; tlPersonalEmail?: string }
+): boolean {
+  return Boolean(a.agentType) && a.agentType === b.agentType && normLoc(a.location) === normLoc(b.location) && teamKeyOf(a) === teamKeyOf(b);
+}
+
+/** When a swap request lapses: when either day closes to agents, or after 72 hours, whichever is first. */
+export function swapExpiryMs(dayA: string, dayB: string, nowMs: number): number {
+  return Math.min(cutoffMs(dayA, 'agent'), cutoffMs(dayB, 'agent'), nowMs + ROSTER_SWAP.expiryHours * 3600000);
+}
+
+export interface RosterSwapDTO {
+  id: string;
+  requesterEmail: string;
+  requesterName: string;
+  partnerEmail: string;
+  partnerName: string;
+  /** the requester's WO date (they give it up) and the partner's WO date (the requester takes it) */
+  requesterDay: string;
+  partnerDay: string;
+  requesterEntryId: string;
+  partnerEntryId: string;
+  status: SwapStatus;
+  note?: string | null;
+  decisionNote?: string | null;
+  failReason?: string | null;
+  createdAt: string;
+  expiresAt: string;
+}
+
+export interface SwapCandidateDTO {
+  entryId: string;
+  agentEmail: string;
+  agentName: string;
+  day: string;
 }

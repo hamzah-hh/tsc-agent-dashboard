@@ -23,7 +23,10 @@ import {
   RosterNotificationDTO,
   RosterRole,
   RosterStatusResponse,
+  RosterSwapDTO,
   RosterTeamResponse,
+  ROSTER_SWAP,
+  SwapCandidateDTO,
   addDays,
   bookingOutcome,
   canChangeDay,
@@ -38,6 +41,9 @@ import {
   istDay,
   istMidnightMs,
   lastBookableDay,
+  sameWeek,
+  swapEligible,
+  swapExpiryMs,
   teamKeyOf,
   weekEnd,
   weekStart,
@@ -244,6 +250,21 @@ export function registerRosterRoutes(api: Express, ctx: RosterContext): void {
                SELECT 'system', 'system', 'expire', id, agent_email, team_key, day, '{}'::jsonb
                FROM roster_entry WHERE status = 'expired' AND updated_at = now()`,
       },
+      // A swap request nobody finished before it lapsed
+      { text: `UPDATE roster_swap SET status = 'expired', updated_at = now() WHERE status IN ('awaiting_partner','awaiting_tl') AND expires_at <= $1::timestamptz`, params: [new Date(nowMs).toISOString()] },
+      {
+        text: `INSERT INTO app_notification (recipient, kind, title, body)
+               SELECT requester_email, 'swap_expired', 'Swap request expired', 'The swap of ' || requester_day::text || ' and ' || partner_day::text || ' was not finished in time.' FROM roster_swap WHERE status = 'expired' AND updated_at = now()`,
+      },
+      {
+        text: `INSERT INTO app_notification (recipient, kind, title, body)
+               SELECT partner_email, 'swap_expired', 'Swap request expired', 'The swap of ' || requester_day::text || ' and ' || partner_day::text || ' was not finished in time.' FROM roster_swap WHERE status = 'expired' AND updated_at = now()`,
+      },
+      {
+        text: `INSERT INTO roster_audit (actor, actor_role, action, entry_id, agent_email, team_key, day, detail)
+               SELECT 'system', 'system', 'swap_expire', requester_entry, requester_email, team_key, requester_day, jsonb_build_object('swapId', id::text)
+               FROM roster_swap WHERE status = 'expired' AND updated_at = now()`,
+      },
     ]);
   }
 
@@ -306,6 +327,8 @@ export function registerRosterRoutes(api: Express, ctx: RosterContext): void {
           if (actor.teamKeys.length) {
             const p = await db.query(`SELECT count(*)::int AS n FROM roster_entry WHERE status = 'pending' AND team_key = ANY($1::text[]) AND day > $2::date`, [actor.teamKeys, istDay(clock())]);
             badge = p[0]?.n ?? 0;
+            const sw = await db.query(`SELECT count(*)::int AS n FROM roster_swap WHERE status = 'awaiting_tl' AND team_key = ANY($1::text[])`, [actor.teamKeys]);
+            badge += sw[0]?.n ?? 0;
           }
         } else {
           badge = await unreadCount(db, actor.inboxKeys);
@@ -362,6 +385,7 @@ export function registerRosterRoutes(api: Express, ctx: RosterContext): void {
         woLastDay: woLast,
         plLastDay: plLast,
         agentName: agent.name,
+        agentEmail: norm(agent.officialEmail),
         teamSize: teamSizeOf(actor, key, test),
         entries,
         days,
@@ -540,6 +564,24 @@ export function registerRosterRoutes(api: Express, ctx: RosterContext): void {
         params: [entry.id, notify.recipient, notify.kind, notify.title, notify.body, to],
       });
     }
+    if (to === 'cancelled' || to === 'revoked') {
+      // A weekly off that is part of an open swap request: the swap cannot go ahead, so it is cancelled too
+      const reason = 'A weekly off in this swap was withdrawn.';
+      stmts.push({
+        text: `UPDATE roster_swap SET status = 'cancelled', fail_reason = $2::text, updated_at = now()
+               WHERE status IN ('awaiting_partner','awaiting_tl') AND (requester_entry = $1::uuid OR partner_entry = $1::uuid)
+                 AND EXISTS (SELECT 1 FROM roster_entry WHERE id = $1::uuid AND status IN ('cancelled','revoked') AND updated_at = now())`,
+        params: [entry.id, reason],
+      });
+      for (const col of ['requester_email', 'partner_email']) {
+        stmts.push({
+          text: `INSERT INTO app_notification (recipient, kind, title, body)
+                 SELECT ${col}, 'swap_cancelled', 'Swap cancelled', 'A weekly off in your swap (' || requester_day::text || ' and ' || partner_day::text || ') was withdrawn, so the swap was cancelled.'
+                 FROM roster_swap WHERE status = 'cancelled' AND fail_reason = $1::text AND updated_at = now()`,
+          params: [reason],
+        });
+      }
+    }
     const results = await db.batch(stmts);
     return results[1].length === 1;
   }
@@ -556,6 +598,8 @@ export function registerRosterRoutes(api: Express, ctx: RosterContext): void {
       if (!canChangeDay(entry.day, actor.role, nowMs)) throw new RosterError(409, 'CUTOFF', `Changes for ${dayLabel(entry.day)} have closed. Ask your TL.`);
       const note = clean(req.body?.note, 300, 'The note');
       if (actor.role === 'agent') {
+        const inSwap = await db.query(`SELECT 1 FROM roster_swap WHERE status IN ('awaiting_partner','awaiting_tl') AND (requester_entry = $1::uuid OR partner_entry = $1::uuid)`, [entry.id]);
+        if (inSwap.length) throw new RosterError(409, 'SWAP_OPEN', 'This day is part of a swap request. Cancel the swap request first.');
         const today = istDay(nowMs);
         const changes = await db.query(`SELECT count(*)::int AS n FROM roster_audit WHERE actor = $1 AND actor_role = 'agent' AND action IN ('book','cancel') AND at >= $2::timestamptz`, [actor.login, new Date(istMidnightMs(weekStart(today))).toISOString()]);
         if ((changes[0]?.n ?? 0) >= ROSTER_RULES.maxChangesPerWeek) throw new RosterError(409, 'CHURN_LIMIT', `You have changed your days off ${ROSTER_RULES.maxChangesPerWeek} times this week. Ask your TL.`);
@@ -890,6 +934,410 @@ export function registerRosterRoutes(api: Express, ctx: RosterContext): void {
       ]);
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       return res.send(csv);
+    })
+  );
+
+  // ------------------------------------------------------------------ swaps (phase 2)
+
+  const SWAP_COLS = `s.id::text AS id, s.requester_email, s.partner_email, s.requester_entry::text AS requester_entry, s.partner_entry::text AS partner_entry,
+    s.requester_day::text AS requester_day, s.partner_day::text AS partner_day, s.team_key, s.is_test, s.status, s.note, s.decision_note, s.fail_reason,
+    to_char(s.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at, to_char(s.expires_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS expires_at`;
+
+  const toSwap = (row: any, name: (e: string) => string): RosterSwapDTO => ({
+    id: row.id,
+    requesterEmail: row.requester_email,
+    requesterName: name(row.requester_email),
+    partnerEmail: row.partner_email,
+    partnerName: name(row.partner_email),
+    requesterDay: row.requester_day,
+    partnerDay: row.partner_day,
+    requesterEntryId: row.requester_entry,
+    partnerEntryId: row.partner_entry,
+    status: row.status,
+    note: row.note,
+    decisionNote: row.decision_note,
+    failReason: row.fail_reason,
+    createdAt: row.created_at,
+    expiresAt: row.expires_at,
+  });
+
+  async function getSwap(db: Queryable, id: string): Promise<any | null> {
+    if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+    const rows = await db.query(`SELECT ${SWAP_COLS} FROM roster_swap s WHERE s.id = $1::uuid`, [id]);
+    return rows[0] ?? null;
+  }
+
+  const isOpenSwap = (status: string) => status === 'awaiting_partner' || status === 'awaiting_tl';
+  const iso = (ms: number) => new Date(ms).toISOString();
+  const myEmail = (actor: Actor) => norm(actor.agent?.officialEmail);
+  const lockDays = (team: string, a: string, b: string): Stmt[] =>
+    [a, b].sort().map((d) => ({ text: `SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))`, params: [`roster:teamday:${team}:${d}`] }));
+
+  /** Agents (and the TL) of a swap, for the screens. */
+  const swapInScope = (actor: Actor, s: any) =>
+    actor.role === 'agent' ? myEmail(actor) === s.requester_email || myEmail(actor) === s.partner_email : inScope(actor, s.requester_email, s.team_key);
+
+  async function notifyBoth(db: Queryable, swapId: string, kind: string, title: string, body: string): Promise<void> {
+    await db.batch([
+      { text: `INSERT INTO app_notification (recipient, kind, title, body) SELECT requester_email, $2::text, $3::text, $4::text FROM roster_swap WHERE id = $1::uuid`, params: [swapId, kind, title, body] },
+      { text: `INSERT INTO app_notification (recipient, kind, title, body) SELECT partner_email, $2::text, $3::text, $4::text FROM roster_swap WHERE id = $1::uuid`, params: [swapId, kind, title, body] },
+    ]);
+  }
+
+  api.get(
+    '/api/roster/swap-candidates',
+    route(async (req, res) => {
+      const actor = await actorOrRefuse(req);
+      if (actor.role !== 'agent' || !actor.agent) throw new RosterError(403, 'FORBIDDEN', 'Only an agent can ask for a swap.');
+      const db = needDb();
+      const nowMs = clock();
+      const mine = await getEntry(db, String(req.query.entryId ?? ''));
+      if (!mine || norm(mine.agent_email) !== myEmail(actor)) throw new RosterError(404, 'NOT_FOUND', 'Entry not found.');
+      if (mine.kind !== 'WO' || mine.status !== 'approved') throw new RosterError(409, 'NOT_ALLOWED', 'Only a confirmed weekly off can be swapped.');
+      if (!canChangeDay(mine.day, 'agent', nowMs)) throw new RosterError(409, 'CUTOFF', `Changes for ${dayLabel(mine.day)} have closed. Ask your TL.`);
+      const me = actor.agent;
+      const key = teamKeyOf(me);
+      const test = isTestAgent(me);
+      const ws = weekStart(mine.day);
+      const we = weekEnd(mine.day);
+      const [rows, busy] = await Promise.all([
+        db.query(
+          `SELECT ${ENTRY_COLS} FROM roster_entry e
+           WHERE e.kind = 'WO' AND e.status = 'approved' AND e.team_key = $1::text AND e.is_test = $2::boolean AND e.agent_email <> $3::text
+             AND e.day BETWEEN $4::date AND $5::date AND e.day <> $6::date
+             AND NOT EXISTS (SELECT 1 FROM roster_swap s WHERE s.status IN ('awaiting_partner','awaiting_tl') AND (s.requester_entry = e.id OR s.partner_entry = e.id))
+           ORDER BY e.day, e.agent_email`,
+          [key, test, myEmail(actor), ws, we, mine.day]
+        ),
+        db.query(`SELECT agent_email, day::text AS day FROM roster_entry WHERE team_key = $1::text AND is_test = $2::boolean AND status IN ('pending','approved') AND day BETWEEN $3::date AND $4::date`, [key, test, ws, we]),
+      ]);
+      const taken = new Set(busy.map((b) => `${b.agent_email}|${b.day}`));
+      const name = nameOf(actor);
+      const candidates: SwapCandidateDTO[] = [];
+      for (const r of rows) {
+        const other = actor.everyone.find((a) => norm(a.officialEmail) === r.agent_email);
+        if (!other || !swapEligible(me, other)) continue;
+        if (!canChangeDay(r.day, 'agent', nowMs)) continue;
+        // each would end up on a day where they already have something else: not possible
+        if (taken.has(`${r.agent_email}|${mine.day}`) || taken.has(`${myEmail(actor)}|${r.day}`)) continue;
+        candidates.push({ entryId: r.id, agentEmail: r.agent_email, agentName: name(r.agent_email), day: r.day });
+      }
+      return res.json({ myDay: mine.day, candidates });
+    })
+  );
+
+  api.get(
+    '/api/roster/swaps',
+    route(async (req, res) => {
+      const actor = await actorOrRefuse(req);
+      const db = needDb();
+      await expireOverdue(db, clock());
+      const name = nameOf(actor);
+      let rows: any[];
+      if (actor.role === 'agent') {
+        rows = await db.query(
+          `SELECT ${SWAP_COLS} FROM roster_swap s WHERE s.requester_email = $1::text OR s.partner_email = $1::text
+           ORDER BY (s.status IN ('awaiting_partner','awaiting_tl')) DESC, s.created_at DESC LIMIT 20`,
+          [myEmail(actor)]
+        );
+      } else {
+        rows = actor.teamKeys.length
+          ? await db.query(
+              `SELECT ${SWAP_COLS} FROM roster_swap s WHERE s.team_key = ANY($1::text[])
+               ORDER BY (s.status = 'awaiting_tl') DESC, (s.status = 'awaiting_partner') DESC, s.created_at DESC LIMIT 40`,
+              [actor.teamKeys]
+            )
+          : [];
+      }
+      const items = rows.map((r) => toSwap(r, name));
+      const count = actor.role === 'agent' ? items.filter((s) => s.status === 'awaiting_partner' && s.partnerEmail === myEmail(actor)).length : items.filter((s) => s.status === 'awaiting_tl').length;
+      return res.json({ items, count });
+    })
+  );
+
+  api.post(
+    '/api/roster/swaps',
+    route(async (req, res) => {
+      const actor = await actorOrRefuse(req);
+      if (actor.role !== 'agent' || !actor.agent) throw new RosterError(403, 'FORBIDDEN', 'Only an agent can ask for a swap.');
+      const db = needDb();
+      const nowMs = clock();
+      const body = req.body || {};
+      const requestId = String(body.requestId ?? '');
+      if (!/^[A-Za-z0-9_-]{8,64}$/.test(requestId)) throw new RosterError(400, 'BAD_REQUEST', 'requestId is required (8 to 64 letters, digits, - or _).');
+      const note = clean(body.note, 300, 'The note');
+      const [mine, theirs] = await Promise.all([getEntry(db, String(body.myEntryId ?? '')), getEntry(db, String(body.partnerEntryId ?? ''))]);
+      const me = actor.agent;
+      if (!mine || norm(mine.agent_email) !== myEmail(actor)) throw new RosterError(404, 'NOT_FOUND', 'Your weekly off was not found.');
+      if (!theirs || theirs.agent_email === mine.agent_email) throw new RosterError(404, 'NOT_FOUND', 'That colleague\'s weekly off was not found.');
+      for (const e of [mine, theirs]) {
+        if (e.kind !== 'WO' || e.status !== 'approved') throw new RosterError(409, 'NOT_ALLOWED', 'Only confirmed weekly offs can be swapped.');
+        if (!canChangeDay(e.day, 'agent', nowMs)) throw new RosterError(409, 'CUTOFF', `Changes for ${dayLabel(e.day)} have closed. Ask your TL.`);
+      }
+      const partner = actor.everyone.find((a) => norm(a.officialEmail) === theirs.agent_email);
+      if (!partner || !swapEligible(me, partner) || mine.team_key !== theirs.team_key || Boolean(mine.is_test) !== Boolean(theirs.is_test)) {
+        throw new RosterError(409, 'NOT_ELIGIBLE', 'You can only swap with an agent of the same caller type, location and team leader.');
+      }
+      if (!sameWeek(mine.day, theirs.day)) throw new RosterError(409, 'NOT_ELIGIBLE', 'Both weekly offs must be in the same week.');
+      if (mine.day === theirs.day) throw new RosterError(409, 'NOT_ELIGIBLE', 'Pick a weekly off on a different day.');
+
+      const ws = istMidnightMs(weekStart(istDay(nowMs)));
+      const [open, recent] = await Promise.all([
+        db.query(`SELECT count(*)::int AS n FROM roster_swap WHERE requester_email = $1::text AND status IN ('awaiting_partner','awaiting_tl')`, [myEmail(actor)]),
+        db.query(`SELECT count(*)::int AS n FROM roster_audit WHERE actor = $1::text AND action = 'swap_request' AND at >= $2::timestamptz`, [actor.login, iso(ws)]),
+      ]);
+      if ((open[0]?.n ?? 0) >= 1) throw new RosterError(409, 'SWAP_OPEN', 'You already have a swap request waiting. Cancel it or wait for the answer.');
+      if ((recent[0]?.n ?? 0) >= ROSTER_SWAP.maxRequestsPerWeek) throw new RosterError(409, 'CHURN_LIMIT', `You have sent ${ROSTER_SWAP.maxRequestsPerWeek} swap requests this week. Ask your TL.`);
+
+      const expires = swapExpiryMs(mine.day, theirs.day, nowMs);
+      const requesterName = actor.agent.name;
+      const results = await db.batch([
+        ...lockDays(mine.team_key, mine.day, theirs.day),
+        {
+          text: `INSERT INTO roster_swap (requester_email, partner_email, requester_entry, partner_entry, requester_day, partner_day, team_key, agent_type, location, is_test,
+                                         status, note, expires_at, created_by, request_id)
+                 SELECT $1::text, $2::text, $3::uuid, $4::uuid, $5::date, $6::date, $7::text, $8::text, $9::text, $10::boolean, 'awaiting_partner', $11::text, $12::timestamptz, $13::text, $14::text
+                 WHERE (SELECT count(*) FROM roster_entry WHERE id = $3::uuid AND agent_email = $1::text AND kind = 'WO' AND status = 'approved' AND day = $5::date) = 1
+                   AND (SELECT count(*) FROM roster_entry WHERE id = $4::uuid AND agent_email = $2::text AND kind = 'WO' AND status = 'approved' AND day = $6::date) = 1
+                   AND NOT EXISTS (SELECT 1 FROM roster_swap s WHERE s.status IN ('awaiting_partner','awaiting_tl')
+                                   AND (s.requester_entry IN ($3::uuid, $4::uuid) OR s.partner_entry IN ($3::uuid, $4::uuid)))
+                   AND NOT EXISTS (SELECT 1 FROM roster_entry WHERE agent_email = $1::text AND day = $6::date AND status IN ('pending','approved') AND id <> $3::uuid)
+                   AND NOT EXISTS (SELECT 1 FROM roster_entry WHERE agent_email = $2::text AND day = $5::date AND status IN ('pending','approved') AND id <> $4::uuid)
+                 ON CONFLICT DO NOTHING
+                 RETURNING id::text AS id`,
+          params: [myEmail(actor), theirs.agent_email, mine.id, theirs.id, mine.day, theirs.day, mine.team_key, partner.agentType, partner.location, Boolean(mine.is_test), note, iso(expires), actor.login, requestId],
+        },
+        {
+          text: `INSERT INTO roster_audit (actor, actor_role, action, entry_id, agent_email, team_key, day, detail, note)
+                 SELECT $2::text, 'agent', 'swap_request', requester_entry, requester_email, team_key, requester_day,
+                        jsonb_build_object('swapId', id::text, 'partner', partner_email, 'partnerDay', partner_day::text), $3::text
+                 FROM roster_swap WHERE request_id = $1::text AND created_at = now()`,
+          params: [requestId, actor.login, note],
+        },
+        {
+          text: `INSERT INTO app_notification (recipient, kind, title, body)
+                 SELECT partner_email, 'swap_request', $2::text, $3::text FROM roster_swap WHERE request_id = $1::text AND created_at = now()`,
+          params: [requestId, `${requesterName} wants to swap weekly offs`, `They give up ${dayLabel(mine.day)} and would take your ${dayLabel(theirs.day)}. Open Roster to accept or decline.`],
+        },
+      ]);
+      const inserted = results[2][0];
+      const name = nameOf(actor);
+      const row = (await db.query(`SELECT ${SWAP_COLS} FROM roster_swap s WHERE s.request_id = $1::text`, [requestId]))[0];
+      if (inserted && row) return res.json({ swap: toSwap(row, name) });
+      if (row) {
+        if (row.requester_email === myEmail(actor)) return res.json({ swap: toSwap(row, name), replayed: true });
+        throw new RosterError(409, 'REQUEST_REUSED', 'That request id was already used.');
+      }
+      throw new RosterError(409, 'SWAP_STALE', 'One of the weekly offs changed or is already in another swap. Reload and try again.');
+    })
+  );
+
+  /** A swap the caller may act on, with the day/state checks every action shares. */
+  async function loadSwapFor(db: Queryable, actor: Actor, id: string): Promise<any> {
+    const s = await getSwap(db, id);
+    if (!s || !swapInScope(actor, s)) throw new RosterError(404, 'NOT_FOUND', 'Swap not found.');
+    return s;
+  }
+
+  api.post(
+    '/api/roster/swaps/:id/accept',
+    route(async (req, res) => {
+      const actor = await actorOrRefuse(req);
+      const db = needDb();
+      const nowMs = clock();
+      const s = await loadSwapFor(db, actor, String(req.params.id));
+      if (actor.role !== 'agent' || s.partner_email !== myEmail(actor)) throw new RosterError(403, 'FORBIDDEN', 'Only the colleague who was asked can accept.');
+      if (s.status !== 'awaiting_partner') throw new RosterError(409, 'STATE', 'This swap is no longer waiting for you.');
+      if (Date.parse(s.expires_at) <= nowMs) throw new RosterError(409, 'EXPIRED', 'This swap request has expired.');
+      const name = nameOf(actor);
+      const results = await db.batch([
+        {
+          text: `UPDATE roster_swap SET status = 'awaiting_tl', partner_confirmed_at = now(), updated_at = now()
+                 WHERE id = $1::uuid AND status = 'awaiting_partner' AND partner_email = $2::text AND expires_at > $3::timestamptz RETURNING id::text AS id`,
+          params: [s.id, myEmail(actor), iso(nowMs)],
+        },
+        {
+          text: `INSERT INTO roster_audit (actor, actor_role, action, entry_id, agent_email, team_key, day, detail)
+                 SELECT $2::text, 'agent', 'swap_accept', partner_entry, partner_email, team_key, partner_day, jsonb_build_object('swapId', id::text)
+                 FROM roster_swap WHERE id = $1::uuid AND status = 'awaiting_tl' AND updated_at = now()`,
+          params: [s.id, actor.login],
+        },
+        {
+          text: `INSERT INTO app_notification (recipient, kind, title, body)
+                 SELECT team_key, 'swap_approval_needed', $2::text, $3::text FROM roster_swap WHERE id = $1::uuid AND status = 'awaiting_tl' AND updated_at = now()`,
+          params: [s.id, `${name(s.requester_email)} and ${name(s.partner_email)} want to swap weekly offs`, `${dayLabel(s.requester_day)} and ${dayLabel(s.partner_day)}. Both agreed. Open Roster to approve.`],
+        },
+        {
+          text: `INSERT INTO app_notification (recipient, kind, title, body)
+                 SELECT requester_email, 'swap_accepted', $2::text, $3::text FROM roster_swap WHERE id = $1::uuid AND status = 'awaiting_tl' AND updated_at = now()`,
+          params: [s.id, `${name(s.partner_email)} accepted your swap`, 'It now waits for your TL to approve.'],
+        },
+      ]);
+      if (results[0].length !== 1) throw new RosterError(409, 'STATE', 'This swap changed. Reload and try again.');
+      return res.json({ swap: toSwap((await getSwap(db, s.id))!, name) });
+    })
+  );
+
+  /** Decline (the partner) or cancel (the requester, or a TL's rejection): one open swap to a closed state, with notices. */
+  async function closeSwap(db: Queryable, s: any, actor: Actor, to: 'declined' | 'cancelled' | 'rejected', note: string | null, notify: Array<{ to: 'requester' | 'partner'; kind: string; title: string; body: string }>): Promise<boolean> {
+    const action = to === 'declined' ? 'swap_decline' : to === 'cancelled' ? 'swap_cancel' : 'swap_reject';
+    const stmts: Stmt[] = [
+      {
+        text: `UPDATE roster_swap SET status = $2::text, decided_by = $3::text, decided_at = now(), decision_note = $4::text, updated_at = now()
+               WHERE id = $1::uuid AND status IN ('awaiting_partner','awaiting_tl') RETURNING id::text AS id`,
+        params: [s.id, to, actor.login, note],
+      },
+      {
+        text: `INSERT INTO roster_audit (actor, actor_role, action, entry_id, agent_email, team_key, day, detail, note)
+               SELECT $2::text, $3::text, $4::text, requester_entry, requester_email, team_key, requester_day, jsonb_build_object('swapId', id::text), $5::text
+               FROM roster_swap WHERE id = $1::uuid AND status = $6::text AND updated_at = now()`,
+        params: [s.id, actor.login, actor.role, action, note, to],
+      },
+    ];
+    for (const n of notify) {
+      stmts.push({
+        text: `INSERT INTO app_notification (recipient, kind, title, body)
+               SELECT ${n.to === 'requester' ? 'requester_email' : 'partner_email'}, $2::text, $3::text, $4::text FROM roster_swap WHERE id = $1::uuid AND status = $5::text AND updated_at = now()`,
+        params: [s.id, n.kind, n.title, n.body, to],
+      });
+    }
+    const results = await db.batch(stmts);
+    return results[0].length === 1;
+  }
+
+  api.post(
+    '/api/roster/swaps/:id/decline',
+    route(async (req, res) => {
+      const actor = await actorOrRefuse(req);
+      const db = needDb();
+      const s = await loadSwapFor(db, actor, String(req.params.id));
+      if (actor.role !== 'agent' || s.partner_email !== myEmail(actor)) throw new RosterError(403, 'FORBIDDEN', 'Only the colleague who was asked can decline.');
+      if (s.status !== 'awaiting_partner') throw new RosterError(409, 'STATE', 'This swap is no longer waiting for you.');
+      const name = nameOf(actor);
+      const ok = await closeSwap(db, s, actor, 'declined', clean(req.body?.note, 300, 'The note'), [
+        { to: 'requester', kind: 'swap_declined', title: `${name(s.partner_email)} declined your swap`, body: `Your weekly off on ${dayLabel(s.requester_day)} stays as it is.` },
+      ]);
+      if (!ok) throw new RosterError(409, 'STATE', 'This swap changed. Reload and try again.');
+      return res.json({ swap: toSwap((await getSwap(db, s.id))!, name) });
+    })
+  );
+
+  api.post(
+    '/api/roster/swaps/:id/cancel',
+    route(async (req, res) => {
+      const actor = await actorOrRefuse(req);
+      const db = needDb();
+      const s = await loadSwapFor(db, actor, String(req.params.id));
+      if (actor.role !== 'agent' || s.requester_email !== myEmail(actor)) throw new RosterError(403, 'FORBIDDEN', 'Only the agent who asked can cancel the request.');
+      if (!isOpenSwap(s.status)) throw new RosterError(409, 'STATE', 'This swap is already closed.');
+      const name = nameOf(actor);
+      const ok = await closeSwap(db, s, actor, 'cancelled', null, [
+        { to: 'partner', kind: 'swap_cancelled', title: `${name(s.requester_email)} cancelled the swap request`, body: `Your weekly off on ${dayLabel(s.partner_day)} stays as it is.` },
+      ]);
+      if (!ok) throw new RosterError(409, 'STATE', 'This swap changed. Reload and try again.');
+      return res.json({ swap: toSwap((await getSwap(db, s.id))!, name) });
+    })
+  );
+
+  api.post(
+    '/api/roster/swaps/:id/decision',
+    route(async (req, res) => {
+      const actor = await actorOrRefuse(req);
+      if (!isStaff(actor)) throw new RosterError(403, 'FORBIDDEN', 'Only a TL or manager can approve or reject a swap.');
+      const db = needDb();
+      const nowMs = clock();
+      const s = await loadSwapFor(db, actor, String(req.params.id));
+      if (s.status !== 'awaiting_tl') throw new RosterError(409, 'STATE', s.status === 'awaiting_partner' ? 'The colleague has not accepted yet.' : 'This swap has already been decided.');
+      if (!canChangeDay(s.requester_day, actor.role, nowMs) || !canChangeDay(s.partner_day, actor.role, nowMs)) {
+        throw new RosterError(409, 'CUTOFF', 'One of the days has started, so this swap can no longer be decided.');
+      }
+      if (Date.parse(s.expires_at) <= nowMs) throw new RosterError(409, 'EXPIRED', 'This swap request has expired.');
+      const decision = String(req.body?.decision ?? '');
+      const note = clean(req.body?.note, 300, 'The note');
+      const name = nameOf(actor);
+      const when = `${dayLabel(s.requester_day)} and ${dayLabel(s.partner_day)}`;
+
+      if (decision === 'reject') {
+        if (!note) throw new RosterError(400, 'NOTE_REQUIRED', 'Say why you are rejecting this swap.');
+        const ok = await closeSwap(db, s, actor, 'rejected', note, [
+          { to: 'requester', kind: 'swap_rejected', title: 'Swap not approved', body: `Your swap (${when}) was not approved: ${note}` },
+          { to: 'partner', kind: 'swap_rejected', title: 'Swap not approved', body: `The swap (${when}) was not approved: ${note}` },
+        ]);
+        if (!ok) throw new RosterError(409, 'STATE', 'This swap has already been decided.');
+        return res.json({ swap: toSwap((await getSwap(db, s.id))!, name) });
+      }
+      if (decision !== 'approve') throw new RosterError(400, 'BAD_REQUEST', 'decision must be approve or reject.');
+
+      // Apply: both weekly offs trade places in one transaction, after checking that nothing changed since the request
+      const entryCols = `agent_email, day, kind, status, needs_approval, team_key, agent_type, location, source, swap_id, created_by, request_id, is_test, decided_by, decided_at`;
+      const results = await db.batch([
+        ...lockDays(s.team_key, s.requester_day, s.partner_day),
+        {
+          text: `UPDATE roster_swap s SET status = 'applied', decided_by = $2::text, decided_at = now(), decision_note = $3::text, updated_at = now()
+                 WHERE s.id = $1::uuid AND s.status = 'awaiting_tl' AND s.expires_at > $4::timestamptz
+                   AND (SELECT count(*) FROM roster_entry e WHERE e.id = s.requester_entry AND e.agent_email = s.requester_email AND e.kind = 'WO' AND e.status = 'approved' AND e.day = s.requester_day) = 1
+                   AND (SELECT count(*) FROM roster_entry e WHERE e.id = s.partner_entry AND e.agent_email = s.partner_email AND e.kind = 'WO' AND e.status = 'approved' AND e.day = s.partner_day) = 1
+                   AND NOT EXISTS (SELECT 1 FROM roster_entry e WHERE e.agent_email = s.requester_email AND e.day = s.partner_day AND e.status IN ('pending','approved') AND e.id <> s.requester_entry)
+                   AND NOT EXISTS (SELECT 1 FROM roster_entry e WHERE e.agent_email = s.partner_email AND e.day = s.requester_day AND e.status IN ('pending','approved') AND e.id <> s.partner_entry)
+                 RETURNING s.id::text AS id`,
+          params: [s.id, actor.login, note, iso(nowMs)],
+        },
+        {
+          text: `UPDATE roster_entry SET status = 'cancelled', swap_id = $1::uuid, decided_by = $2::text, decided_at = now(), decision_note = 'Swapped', updated_at = now()
+                 WHERE id IN (SELECT requester_entry FROM roster_swap WHERE id = $1::uuid AND status = 'applied' AND updated_at = now()
+                              UNION SELECT partner_entry FROM roster_swap WHERE id = $1::uuid AND status = 'applied' AND updated_at = now())`,
+          params: [s.id, actor.login],
+        },
+        {
+          text: `INSERT INTO roster_entry (${entryCols})
+                 SELECT s.requester_email, s.partner_day, 'WO', 'approved', false, s.team_key, s.agent_type, s.location, 'swap', s.id, $2::text, 'swap-' || s.id::text || '-r', s.is_test, $2::text, now()
+                 FROM roster_swap s WHERE s.id = $1::uuid AND s.status = 'applied' AND s.updated_at = now()`,
+          params: [s.id, actor.login],
+        },
+        {
+          text: `INSERT INTO roster_entry (${entryCols})
+                 SELECT s.partner_email, s.requester_day, 'WO', 'approved', false, s.team_key, s.agent_type, s.location, 'swap', s.id, $2::text, 'swap-' || s.id::text || '-p', s.is_test, $2::text, now()
+                 FROM roster_swap s WHERE s.id = $1::uuid AND s.status = 'applied' AND s.updated_at = now()`,
+          params: [s.id, actor.login],
+        },
+        {
+          text: `INSERT INTO roster_audit (actor, actor_role, action, entry_id, agent_email, team_key, day, detail, note)
+                 SELECT $2::text, $3::text, 'swap_apply', requester_entry, requester_email, team_key, requester_day,
+                        jsonb_build_object('swapId', id::text, 'partner', partner_email, 'partnerDay', partner_day::text), $4::text
+                 FROM roster_swap WHERE id = $1::uuid AND status = 'applied' AND updated_at = now()`,
+          params: [s.id, actor.login, actor.role, note],
+        },
+        {
+          text: `INSERT INTO app_notification (recipient, kind, title, body)
+                 SELECT requester_email, 'swap_applied', 'Swap approved', 'Your weekly off is now on ' || partner_day::text || '.' FROM roster_swap WHERE id = $1::uuid AND status = 'applied' AND updated_at = now()`,
+          params: [s.id],
+        },
+        {
+          text: `INSERT INTO app_notification (recipient, kind, title, body)
+                 SELECT partner_email, 'swap_applied', 'Swap approved', 'Your weekly off is now on ' || requester_day::text || '.' FROM roster_swap WHERE id = $1::uuid AND status = 'applied' AND updated_at = now()`,
+          params: [s.id],
+        },
+      ]);
+      if (results[lockDays(s.team_key, s.requester_day, s.partner_day).length][0] === undefined) {
+        // Something changed since the request (a weekly off was cancelled, revoked or covered by another entry)
+        const stale = 'One of the weekly offs changed after the request was made, so the swap could not be applied.';
+        await db.batch([
+          { text: `UPDATE roster_swap SET status = 'failed', fail_reason = $2::text, updated_at = now() WHERE id = $1::uuid AND status = 'awaiting_tl'`, params: [s.id, stale] },
+          {
+            text: `INSERT INTO roster_audit (actor, actor_role, action, entry_id, agent_email, team_key, day, detail, note)
+                   SELECT $2::text, $3::text, 'swap_fail', requester_entry, requester_email, team_key, requester_day, jsonb_build_object('swapId', id::text), $4::text
+                   FROM roster_swap WHERE id = $1::uuid AND status = 'failed' AND updated_at = now()`,
+            params: [s.id, actor.login, actor.role, stale],
+          },
+        ]);
+        const fresh = await getSwap(db, s.id);
+        if (fresh?.status === 'failed') {
+          await notifyBoth(db, s.id, 'swap_failed', 'Swap could not be applied', `${when}: ${stale}`);
+          throw new RosterError(409, 'SWAP_STALE', stale);
+        }
+        throw new RosterError(409, 'STATE', 'This swap has already been decided.');
+      }
+      return res.json({ swap: toSwap((await getSwap(db, s.id))!, name) });
     })
   );
 

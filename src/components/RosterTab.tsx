@@ -5,6 +5,8 @@ import {
   RosterEntryDTO,
   RosterMeResponse,
   RosterNotificationDTO,
+  RosterSwapDTO,
+  SwapCandidateDTO,
   addDays,
   bookingOutcome,
   dayLabel,
@@ -49,6 +51,11 @@ export function RosterTab({ getIdToken, agentEmail, readOnly = false, onChanged 
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [notes, setNotes] = useState<RosterNotificationDTO[]>([]);
   const [unread, setUnread] = useState(0);
+  const [swaps, setSwaps] = useState<RosterSwapDTO[]>([]);
+  const [swapEntry, setSwapEntry] = useState<RosterEntryDTO | null>(null);
+  const [candidates, setCandidates] = useState<SwapCandidateDTO[] | null>(null);
+  const [partnerPick, setPartnerPick] = useState('');
+  const [swapNote, setSwapNote] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -59,6 +66,7 @@ export function RosterTab({ getIdToken, agentEmail, readOnly = false, onChanged 
         const inbox = await rosterApi<{ items: RosterNotificationDTO[]; unread: number }>(getIdToken, 'GET', '/api/notifications?limit=15');
         setNotes(inbox.items);
         setUnread(inbox.unread);
+        setSwaps((await rosterApi<{ items: RosterSwapDTO[] }>(getIdToken, 'GET', '/api/roster/swaps')).items);
       }
     } catch (err: any) {
       setError(err instanceof RosterApiError ? err : new RosterApiError(0, err?.message || 'Could not load the roster.'));
@@ -72,6 +80,12 @@ export function RosterTab({ getIdToken, agentEmail, readOnly = false, onChanged 
   const dayInfo = useMemo(() => new Map((data?.days || []).map((d) => [d.day, d])), [data]);
   const active = useMemo(() => (data?.entries || []).filter((e) => e.status === 'pending' || e.status === 'approved'), [data]);
   const entryOn = (day: string) => active.find((e) => e.day === day);
+  // weekly offs that are part of a swap request still waiting: they cannot be cancelled until it is settled
+  const openSwapEntries = useMemo(() => {
+    const ids = new Set<string>();
+    for (const s of swaps) if (s.status === 'awaiting_partner' || s.status === 'awaiting_tl') { ids.add(s.requesterEntryId); ids.add(s.partnerEntryId); }
+    return ids;
+  }, [swaps]);
 
   const act = async (fn: () => Promise<{ message?: string } | void>, okText: string) => {
     setBusy(true);
@@ -92,6 +106,27 @@ export function RosterTab({ getIdToken, agentEmail, readOnly = false, onChanged 
   const book = (day: string, kind: 'WO' | 'PL') =>
     act(() => rosterApi(getIdToken, 'POST', '/api/roster/entries', { day, kind, requestId: newRequestId(), reason: note.trim() || undefined }), 'Saved.');
   const cancel = (e: RosterEntryDTO) => act(() => rosterApi(getIdToken, 'POST', `/api/roster/entries/${e.id}/cancel`, {}), 'Cancelled.');
+  const startSwap = async (e: RosterEntryDTO) => {
+    setSwapEntry(e);
+    setCandidates(null);
+    setPartnerPick('');
+    setSwapNote('');
+    setMessage(null);
+    try {
+      setCandidates((await rosterApi<{ candidates: SwapCandidateDTO[] }>(getIdToken, 'GET', `/api/roster/swap-candidates?entryId=${e.id}`)).candidates);
+    } catch (err: any) {
+      setMessage({ ok: false, text: err?.message || 'Could not load colleagues to swap with.' });
+      setSwapEntry(null);
+    }
+  };
+  const sendSwap = () =>
+    act(async () => {
+      await rosterApi(getIdToken, 'POST', '/api/roster/swaps', { myEntryId: swapEntry!.id, partnerEntryId: partnerPick, requestId: newRequestId(), note: swapNote.trim() || undefined });
+      setSwapEntry(null);
+      return { message: 'Swap request sent. Your colleague has to accept, then your TL approves.' };
+    }, 'Swap request sent.');
+  const swapAction = (s: RosterSwapDTO, what: 'accept' | 'decline' | 'cancel') =>
+    act(() => rosterApi(getIdToken, 'POST', `/api/roster/swaps/${s.id}/${what}`, {}), what === 'accept' ? 'Accepted. Your TL approves next.' : what === 'decline' ? 'Declined.' : 'Cancelled.');
   const markRead = async () => {
     try {
       await rosterApi(getIdToken, 'POST', '/api/notifications/read', {});
@@ -210,7 +245,15 @@ export function RosterTab({ getIdToken, agentEmail, readOnly = false, onChanged 
             <div className="flex flex-wrap items-center gap-3">
               <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${chipClass(selEntry)}`}>{statusText(selEntry)}</span>
               {selEntry.reason && <span className="text-xs text-slate-500 dark:text-slate-400">Note: {selEntry.reason}</span>}
-              {!readOnly && !sel?.locked && (
+              {!readOnly && !sel?.locked && openSwapEntries.has(selEntry.id) && (
+                <span className="text-xs text-slate-500 dark:text-slate-400">In a swap request: settle it below first.</span>
+              )}
+              {!readOnly && !sel?.locked && !openSwapEntries.has(selEntry.id) && selEntry.kind === 'WO' && selEntry.status === 'approved' && (
+                <button disabled={busy} onClick={() => startSwap(selEntry)} className="px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-300 dark:border-line text-slate-700 dark:text-fg-2 hover:bg-slate-50 dark:hover:bg-hover disabled:opacity-50">
+                  Swap with a colleague
+                </button>
+              )}
+              {!readOnly && !sel?.locked && !openSwapEntries.has(selEntry.id) && (
                 <button disabled={busy} onClick={() => cancel(selEntry)} className="px-3 py-1.5 rounded-lg text-xs font-bold border border-rose-300 text-rose-700 dark:border-rose-500/40 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-500/10 disabled:opacity-50">
                   Cancel
                 </button>
@@ -265,6 +308,75 @@ export function RosterTab({ getIdToken, agentEmail, readOnly = false, onChanged 
         </div>
       )}
 
+      {swapEntry && (
+        <div className={CARD}>
+          <h3 className="text-sm font-bold text-slate-950 dark:text-fg mb-1">Swap your weekly off on {dayLabel(swapEntry.day)}</h3>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-3">
+            You can swap with a colleague of the same caller type and location, under the same team leader, in the same week. They have to accept, then your TL approves.
+          </p>
+          {candidates === null ? (
+            <p className="text-xs text-slate-500 dark:text-slate-400">Looking for colleagues...</p>
+          ) : candidates.length === 0 ? (
+            <p className="text-xs text-slate-500 dark:text-slate-400">Nobody can swap with you this week: no colleague of your type and team has a different weekly off in the same week.</p>
+          ) : (
+            <fieldset className="space-y-1.5">
+              <legend className="sr-only">Pick a colleague and their weekly off</legend>
+              {candidates.map((c) => (
+                <label key={c.entryId} className="flex items-center gap-2 text-xs text-slate-800 dark:text-fg cursor-pointer">
+                  <input type="radio" name="swap-partner" value={c.entryId} checked={partnerPick === c.entryId} onChange={() => setPartnerPick(c.entryId)} />
+                  <span className="font-semibold">{c.agentName}</span>
+                  <span className="text-slate-500 dark:text-slate-400">has {dayLabel(c.day)} off</span>
+                </label>
+              ))}
+            </fieldset>
+          )}
+          {candidates && candidates.length > 0 && (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <input value={swapNote} maxLength={300} onChange={(e) => setSwapNote(e.target.value)} placeholder="Note for your colleague (optional)" aria-label="Note for your colleague" className="flex-1 min-w-[14rem] border border-slate-300 dark:border-line bg-white dark:bg-panel text-slate-800 dark:text-fg rounded-lg px-3 py-1.5 text-xs" />
+              <button disabled={busy || !partnerPick} onClick={sendSwap} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-brand-900 text-white dark:bg-accent dark:text-on-accent disabled:opacity-50">
+                Send swap request
+              </button>
+            </div>
+          )}
+          <button onClick={() => setSwapEntry(null)} className="mt-3 text-xs text-slate-500 hover:underline">Close</button>
+        </div>
+      )}
+
+      {!readOnly && swaps.length > 0 && (
+        <div className={CARD}>
+          <h3 className="text-sm font-bold text-slate-950 dark:text-fg mb-3">Swaps</h3>
+          <ul className="divide-y divide-slate-100 dark:divide-line">
+            {swaps.map((s) => {
+              const mineIsRequester = s.requesterEmail === data.agentEmail;
+              const other = mineIsRequester ? s.partnerName : s.requesterName;
+              const give = mineIsRequester ? s.requesterDay : s.partnerDay;
+              const take = mineIsRequester ? s.partnerDay : s.requesterDay;
+              const open = s.status === 'awaiting_partner' || s.status === 'awaiting_tl';
+              return (
+                <li key={s.id} className="py-2 text-xs flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span className="font-semibold text-slate-900 dark:text-fg">{mineIsRequester ? `You asked ${other}` : `${other} asked you`}</span>
+                  <span className="text-slate-600 dark:text-slate-300">give {dayLabel(give)}, take {dayLabel(take)}</span>
+                  <span className={`px-2 py-0.5 rounded font-bold ${open ? CHIP.pending : s.status === 'applied' ? CHIP.approved : CHIP.closed}`}>
+                    {s.status === 'awaiting_partner' ? (mineIsRequester ? 'waiting for ' + other : 'waiting for you') : s.status === 'awaiting_tl' ? 'waiting for the TL' : s.status}
+                  </span>
+                  {s.decisionNote && <span className="text-slate-500 dark:text-slate-400">"{s.decisionNote}"</span>}
+                  {s.failReason && <span className="text-slate-500 dark:text-slate-400">{s.failReason}</span>}
+                  {s.status === 'awaiting_partner' && !mineIsRequester && (
+                    <span className="ml-auto flex gap-2">
+                      <button disabled={busy} onClick={() => swapAction(s, 'accept')} className="px-3 py-1 rounded-lg font-bold bg-brand-900 text-white dark:bg-accent dark:text-on-accent disabled:opacity-50">Accept</button>
+                      <button disabled={busy} onClick={() => swapAction(s, 'decline')} className="px-3 py-1 rounded-lg font-bold border border-slate-300 dark:border-line disabled:opacity-50">Decline</button>
+                    </span>
+                  )}
+                  {open && mineIsRequester && (
+                    <button disabled={busy} onClick={() => swapAction(s, 'cancel')} className="ml-auto text-rose-700 dark:text-rose-300 font-semibold hover:underline disabled:opacity-50">Cancel request</button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
       <div className={CARD}>
         <h3 className="text-sm font-bold text-slate-950 dark:text-fg mb-3">My requests</h3>
         {data.entries.filter((e) => e.day >= data.today || e.status === 'pending').length === 0 ? (
@@ -279,7 +391,7 @@ export function RosterTab({ getIdToken, agentEmail, readOnly = false, onChanged 
                   <span className={`px-2 py-0.5 rounded font-bold ${chipClass(e)}`}>{statusText(e)}</span>
                   {e.source !== 'self' && <span className="text-slate-500 dark:text-slate-400">set by {e.source === 'tl' ? 'your TL' : 'a manager'}</span>}
                   {e.decisionNote && <span className="text-slate-500 dark:text-slate-400">"{e.decisionNote}"</span>}
-                  {!readOnly && (e.status === 'pending' || e.status === 'approved') && !(dayInfo.get(e.day)?.locked ?? true) && (
+                  {!readOnly && (e.status === 'pending' || e.status === 'approved') && !openSwapEntries.has(e.id) && !(dayInfo.get(e.day)?.locked ?? true) && (
                     <button disabled={busy} onClick={() => cancel(e)} className="ml-auto text-rose-700 dark:text-rose-300 font-semibold hover:underline disabled:opacity-50">
                       Cancel
                     </button>

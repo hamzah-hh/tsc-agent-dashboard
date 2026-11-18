@@ -1,6 +1,6 @@
 # Rostering: final plan (mail last)
 
-Status: **P0 and P1 are built** (18 Nov 2026, not yet deployed); swaps (P2), hardening (P3) and mail (P4) are not. See "Switching it on" at the end.
+Status: **P0, P1 and P2 are built** (P0/P1 live for the pilot since 18 Nov 2026; P2 swaps added the same day); hardening (P3) and mail (P4) are not. See "Switching it on" at the end.
 This document **replaces the open questions** of `docs/ROSTERING_PLAN.md` with the owner's decisions and rewrites the rules, scope and phases accordingly. The first plan stays as the technical reference (data model sketch in C, API table in D, concurrency design in D.4, swap state machine in F, screens in G): where this document differs, this one wins.
 
 **Mail is deliberately the last phase.** Phases 0 to 3 need no mail at all: every notification and approval lives in the app (badge and inbox). Mail (from `crmsales@thesleepcompany.in`, through Netcore) is Phase 4, after IT has answered the request for Netcore details.
@@ -114,3 +114,7 @@ Total about 16 to 20 developer days. The pilot team goes live at the end of P1 (
 2. Run the migration once against Neon with the owner connection: `npm run db:migrate` (it uses `DATABASE_URL_UNPOOLED`, else `DATABASE_URL`). It only adds four tables and records itself in `schema_migrations`.
 3. Super Admin, Admin tab, Rostering: tick **Rostering is on**, put the Dighe HO TL's official email in the pilot list, Save. The Roster tab then appears for that TL, their agents, managers and the Super Admin only.
 4. To roll back, untick the switch. The tables can stay.
+
+## 9. Phase 2 (swaps): switching it on
+
+After deploying, run the migration again (npm run db:migrate): it applies only 011_roster_swap.sql. Until then the Swaps button shows an error and everything else keeps working.

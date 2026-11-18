@@ -24,12 +24,15 @@ const L = {
   manager: 'roster.manager@gmail.com',
   tlA: 'tl.a.login@gmail.com',
   tlB: 'tl.b.login@gmail.com',
+  tlC: 'tl.c.login@gmail.com',
   stranger: 'nobody.at.all@gmail.com',
 };
 const A = (i: number) => ({ official: `a${i}@co.in`, login: `a${i}.login@gmail.com`, name: `Agent ${i}` });
 const B = (i: number) => ({ official: `b${i}@co.in`, login: `b${i}.login@gmail.com`, name: `Store ${i}` });
 const TEAM_A = 'tl.a@x.in';
 const TEAM_B = 'tl.b@x.in';
+const TEAM_C = 'tl.c@x.in';
+const C = (i: number) => ({ official: `c${i}@co.in`, login: `c${i}.login@gmail.com`, name: `Caller ${i}` });
 
 function row(o: Record<string, any>) {
   return {
@@ -47,6 +50,12 @@ function rows() {
     for (let i = 1; i <= 2; i++) {
       out.push(row({ Date, Agent_Name: B(i).name, Agent_Email_Official: B(i).official, Agent_Email_Personal: B(i).login, Agent_Location: 'Andheri', Agent_Tier: 'Store Callers', TL_Official_Email: TEAM_B, TL_Personal_Email: L.tlB }));
     }
+  }
+  // Team C (swap scenarios): c1, c2, c3, c5 are HO callers in Dighe; c4 is a Store caller in Andheri, under the same TL
+  for (let d = 1; d <= 2; d++) {
+    const Date = `2026-10-0${d}`;
+    for (const i of [1, 2, 3, 5]) out.push(row({ Date, Agent_Name: C(i).name, Agent_Email_Official: C(i).official, Agent_Email_Personal: C(i).login, TL_Official_Email: TEAM_C, TL_Personal_Email: L.tlC }));
+    out.push(row({ Date, Agent_Name: C(4).name, Agent_Email_Official: C(4).official, Agent_Email_Personal: C(4).login, Agent_Location: 'Andheri', Agent_Tier: 'Store Callers', TL_Official_Email: TEAM_C, TL_Personal_Email: L.tlC }));
   }
   return out;
 }
@@ -94,7 +103,7 @@ export async function runRosterTests() {
     // ------------------------------------------------------------------
     section('rostering: setup, the switch and the pilot');
     let r = await call('POST', '/api/sync', { headers: { 'X-Sync-Key': process.env.SYNC_KEY! }, body: { mainRows: rows() } });
-    check('sync: 8 agents in two teams', r.status === 200 && r.json.agents === 8, r.text.slice(0, 200));
+    check('sync: 13 agents in three teams', r.status === 200 && r.json.agents === 13, r.text.slice(0, 200));
     await call('POST', '/api/admin/config', { token: tok(L.admin), body: { managers: [L.manager] } });
 
     r = await call('GET', '/api/roster/status');
@@ -126,7 +135,7 @@ export async function runRosterTests() {
     check('the rest of the app still works without it', r.status === 200 && r.json.role === 'agent');
     setRosterDbForTests(rosterDb);
 
-    await call('POST', '/api/admin/config', { token: tok(L.admin), body: { roster: { enabled: true, pilotTeams: [TEAM_A, TEAM_B] } } });
+    await call('POST', '/api/admin/config', { token: tok(L.admin), body: { roster: { enabled: true, pilotTeams: [TEAM_A, TEAM_B, TEAM_C] } } });
 
     // ------------------------------------------------------------------
     section('rostering: booking rules (team A has 6 agents: default weekday limit 2)');
@@ -371,6 +380,152 @@ export async function runRosterTests() {
     check('and the agent was told', r.json.items.some((x: any) => x.kind === 'expired'));
     r = await call('GET', '/api/roster/me', { token: tok(asAgent(5)) });
     check('the window moved with the clock: WOs now run to Sun 13 Dec', r.json.woLastDay === '2026-12-13' && r.json.today === '2026-11-23', JSON.stringify([r.json.woLastDay, r.json.today]));
+
+    // ------------------------------------------------------------------
+    section('rostering: swaps (team C: 5 agents, limit 1 a day; c1-c3 HO Dighe, c4 Store Andheri)');
+    const loginC = (i: number) => C(i).login;
+    const wo = async (login: string, day: string) => {
+      const x = await book(login, day);
+      return x.json?.entry as any;
+    };
+    const mine = async (login: string, day: string) => {
+      const x = await call('GET', '/api/roster/me', { token: tok(login) });
+      return (x.json.entries as any[]).find((e) => e.day === day && e.status === 'approved');
+    };
+    const inboxOf = async (login: string) => (await call('GET', '/api/notifications?limit=50', { token: tok(login) })).json.items as any[];
+    const swapsOf = async (login: string) => (await call('GET', '/api/roster/swaps', { token: tok(login) })).json;
+
+    const e1 = await wo(loginC(1), '2026-11-24');
+    const e2 = await wo(loginC(2), '2026-11-25');
+    const e3 = await wo(loginC(3), '2026-11-26');
+    const e4 = await wo(loginC(4), '2026-11-27');
+    check('four weekly offs on four days, each confirmed (team C limit is 1 a day)', [e1, e2, e3, e4].every((e) => e?.status === 'approved'), JSON.stringify([e1, e2, e3, e4].map((e) => e?.status)));
+
+    r = await call('GET', `/api/roster/swap-candidates?entryId=${e1.id}`, { token: tok(loginC(1)) });
+    check('c1 can swap with c2 and c3 (same type, location and TL, same week) but not with c4 (a Store caller)',
+      r.status === 200 && r.json.candidates.map((c: any) => c.agentName + ':' + c.day).join() === 'Caller 2:2026-11-25,Caller 3:2026-11-26', JSON.stringify(r.json));
+    r = await call('GET', `/api/roster/swap-candidates?entryId=${e4.id}`, { token: tok(loginC(4)) });
+    check('the Store caller has nobody to swap with', r.status === 200 && r.json.candidates.length === 0, r.text);
+    r = await call('GET', `/api/roster/swap-candidates?entryId=${e1.id}`, { token: tok(loginC(2)) });
+    check('nobody else can ask for candidates for your day (404)', r.status === 404);
+    r = await call('GET', `/api/roster/swap-candidates?entryId=${e1.id}`, { token: tok(L.tlC) });
+    check('a TL cannot ask for a swap (403)', r.status === 403);
+    const a1Entry = await (async () => {
+      const x = await call('GET', '/api/roster/me', { token: tok(asAgent(1)) });
+      return (x.json.entries as any[]).find((e) => e.day === '2026-11-26' && e.status === 'approved');
+    })();
+    const swapBody = (my: any, partner: any, extra: any = {}) => ({ myEntryId: my.id, partnerEntryId: partner.id, requestId: rid(), ...extra });
+    r = await call('POST', '/api/roster/swaps', { token: tok(loginC(1)), body: swapBody(e1, e4) });
+    check('swapping with a Store caller is refused (NOT_ELIGIBLE: type and location differ)', r.status === 409 && r.json.code === 'NOT_ELIGIBLE', msg(r));
+    r = await call('POST', '/api/roster/swaps', { token: tok(loginC(1)), body: swapBody(e1, a1Entry) });
+    check('swapping with another team\'s agent is refused', r.status === 409 && r.json.code === 'NOT_ELIGIBLE', msg(r));
+    r = await call('POST', '/api/roster/swaps', { token: tok(loginC(1)), body: swapBody(e1, e1) });
+    check('swapping with yourself is refused', r.status === 404 || r.status === 409, msg(r));
+
+    // request, accept, approve
+    r = await call('POST', '/api/roster/swaps', { token: tok(loginC(1)), body: swapBody(e1, e2, { note: 'Doctor visit' }) });
+    const sw1 = r.json?.swap;
+    check('c1 asks c2 to swap Tue 24 for Wed 25 (waits for c2)', r.status === 200 && sw1?.status === 'awaiting_partner' && sw1.requesterDay === '2026-11-24' && sw1.partnerDay === '2026-11-25', r.text);
+    check('c2 is told in the app', (await inboxOf(loginC(2))).some((n) => n.kind === 'swap_request' && /Tue 24 Nov/.test(n.body)));
+    const again = await call('POST', '/api/roster/swaps', { token: tok(loginC(1)), body: { myEntryId: e1.id, partnerEntryId: e2.id, requestId: r.json && sw1 ? 'req-swap-replay' : rid() } });
+    check('a second request while one is open is refused (SWAP_OPEN)', again.status === 409 && again.json.code === 'SWAP_OPEN', msg(again));
+    r = await call('POST', `/api/roster/entries/${e1.id}/cancel`, { token: tok(loginC(1)), body: {} });
+    check('a weekly off that is in an open swap cannot be cancelled by the agent (SWAP_OPEN)', r.status === 409 && r.json.code === 'SWAP_OPEN', msg(r));
+    r = await call('POST', '/api/roster/swaps', { token: tok(loginC(3)), body: swapBody(e3, e2) });
+    check('a third agent cannot take a weekly off that is already in a swap (SWAP_STALE)', r.status === 409 && r.json.code === 'SWAP_STALE', msg(r));
+    r = await call('POST', `/api/roster/swaps/${sw1.id}/accept`, { token: tok(loginC(3)), body: {} });
+    check('someone outside the swap cannot even see it (404)', r.status === 404);
+    r = await call('POST', `/api/roster/swaps/${sw1.id}/accept`, { token: tok(loginC(1)), body: {} });
+    check('the requester cannot accept their own request (403)', r.status === 403);
+    r = await call('POST', `/api/roster/swaps/${sw1.id}/decision`, { token: tok(L.tlC), body: { decision: 'approve' } });
+    check('the TL cannot approve before the colleague accepts (409)', r.status === 409 && r.json.code === 'STATE', msg(r));
+    r = await call('POST', `/api/roster/swaps/${sw1.id}/accept`, { token: tok(loginC(2)), body: {} });
+    check('c2 accepts: now it waits for the TL', r.status === 200 && r.json.swap.status === 'awaiting_tl', r.text);
+    check('the TL and c1 are told', (await inboxOf(L.tlC)).some((n) => n.kind === 'swap_approval_needed') && (await inboxOf(loginC(1))).some((n) => n.kind === 'swap_accepted'));
+    r = await call('GET', '/api/roster/swaps', { token: tok(L.tlC) });
+    check('the TL sees it in their swap list, counted as waiting for them', r.json.count === 1 && r.json.items[0].id === sw1.id, r.text.slice(0, 200));
+    r = await call('GET', '/api/roster/swaps', { token: tok(L.tlA) });
+    check('another team\'s TL sees none of team C\'s swaps', r.json.items.length === 0);
+    r = await call('POST', `/api/roster/swaps/${sw1.id}/decision`, { token: tok(L.tlA), body: { decision: 'approve' } });
+    check('and cannot decide it (404)', r.status === 404);
+    r = await call('POST', `/api/roster/swaps/${sw1.id}/decision`, { token: tok(loginC(1)), body: { decision: 'approve' } });
+    check('an agent cannot approve a swap (403)', r.status === 403);
+    r = await call('POST', `/api/roster/swaps/${sw1.id}/decision`, { token: tok(L.tlC), body: { decision: 'approve' } });
+    check('the TL approves: the swap is applied', r.status === 200 && r.json.swap.status === 'applied', r.text);
+    const c1Now = await mine(loginC(1), '2026-11-25');
+    const c2Now = await mine(loginC(2), '2026-11-24');
+    check('c1 now has Wed 25 and c2 has Tue 24 (confirmed, source swap); the old days are gone', c1Now?.source === 'swap' && c2Now?.source === 'swap' && !(await mine(loginC(1), '2026-11-24')) && !(await mine(loginC(2), '2026-11-25')));
+    r = await call('GET', '/api/roster/team', { token: tok(L.tlC) });
+    const d24 = r.json.days.find((d: any) => d.day === '2026-11-24');
+    const d25 = r.json.days.find((d: any) => d.day === '2026-11-25');
+    check('the team count is unchanged: still 1 off on each of the two days', d24.used === 1 && d25.used === 1, JSON.stringify([d24.used, d25.used]));
+    check('both agents were told', (await inboxOf(loginC(1))).some((n) => n.kind === 'swap_applied') && (await inboxOf(loginC(2))).some((n) => n.kind === 'swap_applied'));
+    r = await call('GET', '/api/roster/audit', { token: tok(L.tlC) });
+    check('the history records the request, the acceptance and the approval', ['swap_request', 'swap_accept', 'swap_apply'].every((a) => (r.json.items as any[]).some((x) => x.action === a)), (r.json.items as any[]).map((x) => x.action).join());
+    r = await call('POST', `/api/roster/swaps/${sw1.id}/decision`, { token: tok(L.tlC), body: { decision: 'approve' } });
+    check('deciding it again is a 409', r.status === 409);
+
+    // decline
+    r = await call('POST', '/api/roster/swaps', { token: tok(loginC(3)), body: swapBody(e3, c2Now) });
+    const sw2 = r.json?.swap;
+    check('c3 asks c2 (who now has Tue 24) to swap', r.status === 200 && sw2?.status === 'awaiting_partner', r.text);
+    r = await call('POST', `/api/roster/swaps/${sw2.id}/decline`, { token: tok(loginC(2)), body: {} });
+    check('c2 declines', r.status === 200 && r.json.swap.status === 'declined');
+    check('c3 is told', (await inboxOf(loginC(3))).some((n) => n.kind === 'swap_declined'));
+    check('nothing changed: c3 still has Thu 26', Boolean(await mine(loginC(3), '2026-11-26')));
+
+    // cancel by the requester
+    r = await call('POST', '/api/roster/swaps', { token: tok(loginC(3)), body: swapBody(e3, c1Now) });
+    const sw3 = r.json?.swap;
+    r = await call('POST', `/api/roster/swaps/${sw3.id}/cancel`, { token: tok(loginC(1)), body: {} });
+    check('only the requester can cancel the request, not the colleague who was asked (403)', r.status === 403);
+    r = await call('POST', `/api/roster/swaps/${sw3.id}/cancel`, { token: tok(loginC(3)), body: {} });
+    check('c3 cancels their own request', r.status === 200 && r.json.swap.status === 'cancelled');
+    check('c1 is told', (await inboxOf(loginC(1))).some((n) => n.kind === 'swap_cancelled'));
+
+    // TL rejects
+    r = await call('POST', '/api/roster/swaps', { token: tok(loginC(2)), body: swapBody(c2Now, c1Now) });
+    const sw4 = r.json?.swap;
+    await call('POST', `/api/roster/swaps/${sw4.id}/accept`, { token: tok(loginC(1)), body: {} });
+    r = await call('POST', `/api/roster/swaps/${sw4.id}/decision`, { token: tok(L.tlC), body: { decision: 'reject' } });
+    check('rejecting a swap needs a reason (400)', r.status === 400 && r.json.code === 'NOTE_REQUIRED');
+    r = await call('POST', `/api/roster/swaps/${sw4.id}/decision`, { token: tok(L.tlC), body: { decision: 'reject', note: 'Both needed on those days' } });
+    check('the TL rejects with a reason', r.status === 200 && r.json.swap.status === 'rejected' && r.json.swap.decisionNote === 'Both needed on those days');
+    check('both agents are told why', (await inboxOf(loginC(1))).some((n) => n.kind === 'swap_rejected' && /needed on those days/.test(n.body)) && (await inboxOf(loginC(2))).some((n) => n.kind === 'swap_rejected'));
+
+    // the TL withdraws a weekly off that is in an open swap: the swap is cancelled with it
+    r = await call('POST', '/api/roster/swaps', { token: tok(loginC(1)), body: swapBody(c1Now, e3) });
+    const sw5 = r.json?.swap;
+    await call('POST', `/api/roster/swaps/${sw5.id}/accept`, { token: tok(loginC(3)), body: {} });
+    r = await call('POST', `/api/roster/entries/${e3.id}/revoke`, { token: tok(L.tlC), body: { note: 'Short-staffed' } });
+    check('the TL can still revoke a weekly off that is in an open swap', r.status === 200 && r.json.entry.status === 'revoked', r.text);
+    r = await call('GET', '/api/roster/swaps', { token: tok(loginC(1)) });
+    check('and that swap is cancelled with it (c1 is told)', r.json.items.find((x: any) => x.id === sw5.id)?.status === 'cancelled' && (await inboxOf(loginC(1))).some((n) => n.kind === 'swap_cancelled' && /withdrawn/.test(n.body)));
+
+    // something changed behind the swap's back: it cannot be applied
+    const f1 = await wo(loginC(3), '2026-11-26');
+    r = await call('POST', '/api/roster/swaps', { token: tok(loginC(2)), body: swapBody(c2Now, f1) });
+    const sw6 = r.json?.swap;
+    await call('POST', `/api/roster/swaps/${sw6.id}/accept`, { token: tok(loginC(3)), body: {} });
+    await rosterDb.query(`UPDATE roster_entry SET status = 'cancelled' WHERE id = $1::uuid`, [f1.id]);
+    r = await call('POST', `/api/roster/swaps/${sw6.id}/decision`, { token: tok(L.tlC), body: { decision: 'approve' } });
+    check('the TL approves, but a weekly off changed meanwhile: not applied (SWAP_STALE), both are told', r.status === 409 && r.json.code === 'SWAP_STALE' && (await inboxOf(loginC(2))).some((n) => n.kind === 'swap_failed'), msg(r));
+    r = await call('GET', '/api/roster/swaps', { token: tok(loginC(2)) });
+    check('the swap is marked failed, with the reason', r.json.items.find((x: any) => x.id === sw6.id)?.status === 'failed' && /changed/.test(r.json.items.find((x: any) => x.id === sw6.id)?.failReason || ''));
+    check('c2 still has Tue 24', Boolean(await mine(loginC(2), '2026-11-24')));
+
+    // a request nobody finishes lapses (after 72 hours, or at the agent cut-off of its first day if that comes sooner)
+    const g5 = await wo(loginC(5), '2026-12-01');
+    const g3 = await wo(loginC(3), '2026-12-02');
+    check('c5 and c3 each get a weekly off in the week of 30 Nov', g5?.status === 'approved' && g3?.status === 'approved', JSON.stringify([g5?.status, g3?.status]));
+    r = await call('POST', '/api/roster/swaps', { token: tok(loginC(5)), body: swapBody(g5, g3) });
+    const sw7 = r.json?.swap;
+    check('c5 asks c3 to swap Tue 1 Dec for Wed 2 Dec; with both days far off, the request lapses after 72 hours (Thu 26 Nov, 10:00 IST)', r.status === 200 && sw7.expiresAt === new Date(ist('2026-11-26', 10, 0)).toISOString().slice(0, 19) + 'Z', r.text);
+    now = ist('2026-11-26', 10, 1);
+    r = await call('POST', `/api/roster/swaps/${sw7.id}/accept`, { token: tok(loginC(3)), body: {} });
+    check('after that it can no longer be accepted (EXPIRED)', r.status === 409 && r.json.code === 'EXPIRED', msg(r));
+    r = await call('GET', '/api/roster/swaps', { token: tok(loginC(5)) });
+    check('it shows as expired, and both agents were told', r.json.items.find((x: any) => x.id === sw7.id)?.status === 'expired' && (await inboxOf(loginC(3))).some((n) => n.kind === 'swap_expired'));
   } finally {
     server.close();
     setRosterClockForTests(null);

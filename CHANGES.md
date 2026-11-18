@@ -4,6 +4,19 @@ Newest first. How to demo and go live: [docs/GUIDELINE.md](docs/GUIDELINE.md).
 
 ---
 
+## Rostering, phase 2 (weekly off swaps), 18 Nov 2026
+
+An agent can swap a confirmed weekly off with a colleague. Rules: [docs/ROSTERING_FINAL_PLAN.md](docs/ROSTERING_FINAL_PLAN.md) (R15 to R19).
+
+- **Who:** the same caller type, the same location and the same TL, with both weekly offs in the same week (Mon to Sun). A Dighe HO caller and a Dighe Pre Sales caller cannot swap; nor can Andheri and Bangalore Store callers. Agents see colleagues' names and WO dates only inside the swap screen, never leave.
+- **Flow:** the agent picks a colleague and their day, the colleague accepts or declines in the app, then the TL approves or rejects (a reason is needed to reject). On approval the two weekly offs trade places in one step, after checking that nothing changed (both still confirmed and owned, no clash with another entry). The number of agents off on each day does not change. If something did change, the swap is marked failed and both agents are told why.
+- **Limits:** one open request per agent, at most 2 requests a week; a request lapses after 72 hours or at the agent cut-off of its first day, whichever comes first. A weekly off inside an open swap cannot be cancelled by the agent; if the TL revokes it, the swap is cancelled with it.
+- **In the app:** a Swaps card for agents (accept, decline, cancel request) and for TLs (approve, reject), notices in the inbox, and the TL badge now counts swaps waiting for a decision. History and CSV include the swap steps.
+- **Data:** one new table, roster_swap (db/migrations/011_roster_swap.sql); run it with npm run db:migrate before switching on, same as phase 1.
+- Not yet: OTP between the two agents (comes with mail, phase 4) and swaps across TLs or weeks.
+
+---
+
 ## Rostering, phase 1 (weekly offs and planned leave), 18 Nov 2026
 
 New **Roster** tab (agents, TLs, managers, Super Admin), off until the Super Admin switches it on in Admin, and then only for the pilot teams listed there. Rules are in [docs/ROSTERING_FINAL_PLAN.md](docs/ROSTERING_FINAL_PLAN.md).

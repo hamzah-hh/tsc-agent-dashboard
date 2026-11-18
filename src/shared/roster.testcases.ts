@@ -10,6 +10,9 @@ import {
   firstChangeableDay,
   istDay,
   lastBookableDay,
+  sameWeek,
+  swapEligible,
+  swapExpiryMs,
   teamKeyOf,
   weekEnd,
   weekStart,
@@ -115,6 +118,36 @@ export const rosterTestCases: TestCaseDefinition[] = [
       const keys = [teamKeyOf({ tlOfficialEmail: ' TL@x.in ', tlPersonalEmail: 'a@b.c', location: 'Dighe' }), teamKeyOf({ tlPersonalEmail: 'A@B.c' }), teamKeyOf({ location: 'Dighe (Pre Sales)' })];
       const warn = [feasibilityWarning(17, [4, 4, 4, 4, 4]), feasibilityWarning(17, [3, 3, 3, 3, 3]), feasibilityWarning(0, [0, 0, 0, 0, 0])].map((w) => (w ? 'warn' : 'ok'));
       return same(`${keys.join()} ${warn.join()} ${cutoffMs('2026-11-19', 'superAdmin')}`, 'tl@x.in,a@b.c,loc:dighe (pre sales) ok,warn,ok Infinity');
+    },
+  },
+  {
+    id: 110,
+    description: 'Swap eligibility: same type, location and TL only (Dighe HO with Dighe HO yes; with Dighe Pre Sales no; Andheri Store with Bangalore Store no; a different TL no; case and spacing in the location do not matter)',
+    run: () => {
+      const ho = { agentType: 'HO', location: 'Dighe', tlOfficialEmail: 'tl@x.in' };
+      const rows = [
+        swapEligible(ho, { agentType: 'HO', location: ' dighe ', tlOfficialEmail: 'TL@x.in' }),
+        swapEligible(ho, { agentType: 'PRE_SALES', location: 'Dighe (Pre Sales)', tlOfficialEmail: 'tl@x.in' }),
+        swapEligible({ agentType: 'STORE', location: 'Andheri', tlOfficialEmail: 't@x.in' }, { agentType: 'STORE', location: 'Bangalore', tlOfficialEmail: 't@x.in' }),
+        swapEligible(ho, { agentType: 'HO', location: 'Dighe', tlOfficialEmail: 'other@x.in' }),
+        swapEligible({ location: 'Dighe' }, { location: 'Dighe' }),
+      ];
+      return same(rows.join(), 'true,false,false,false,false');
+    },
+  },
+  {
+    id: 111,
+    description: 'Swaps stay inside one week (Mon-Sun): Thu 19 and Sat 21 Nov yes; Sun 22 and Mon 23 Nov no',
+    run: () => same([sameWeek('2026-11-19', '2026-11-21'), sameWeek('2026-11-22', '2026-11-23'), sameWeek('2026-11-16', '2026-11-22')].join(), 'true,false,true'),
+  },
+  {
+    id: 112,
+    description: 'A swap request lapses at the earlier agent cut-off of its two days, or after 72 hours',
+    run: () => {
+      const now = ist('2026-11-18', 10, 0);
+      const soon = swapExpiryMs('2026-11-19', '2026-11-21', now); // Thu 19 cut-off: Wed 18:00
+      const later = swapExpiryMs('2026-11-27', '2026-11-28', now); // 72 hours from now wins
+      return same(`${soon === ist('2026-11-18', 18, 0)} ${later === now + 72 * 3600000}`, 'true true');
     },
   },
 ];

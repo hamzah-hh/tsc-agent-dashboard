@@ -1,9 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Download, History, Users } from 'lucide-react';
-import { RosterDayInfo, RosterEntryDTO, RosterTeamResponse, dayLabel, defaultWeekdayLimit, isWeekend } from '../shared/roster';
+import { RosterDayInfo, RosterEntryDTO, RosterSwapDTO, RosterTeamResponse, dayLabel, defaultWeekdayLimit, isWeekend } from '../shared/roster';
 import { RosterApiError, newRequestId, rosterApi } from '../utils/rosterApi';
 import { CARD } from './MetricTile';
-import { chipClass, statusText } from './RosterTab';
+import { CHIP, chipClass, statusText } from './RosterTab';
+
+const CHIP_PENDING = CHIP.pending;
+const CHIP_CLOSED = CHIP.closed;
 
 interface StaffRosterTabProps {
   getIdToken: () => Promise<string>;
@@ -41,6 +44,8 @@ const danger = `${btn} border border-rose-300 dark:border-rose-500/40 text-rose-
 export function StaffRosterTab({ getIdToken, userRole, onChanged }: StaffRosterTabProps) {
   const [team, setTeam] = useState<TeamData | null>(null);
   const [approvals, setApprovals] = useState<ApprovalsData | null>(null);
+  const [swaps, setSwaps] = useState<RosterSwapDTO[]>([]);
+  const [rejectingSwap, setRejectingSwap] = useState<string | null>(null);
   const [error, setError] = useState<RosterApiError | null>(null);
   const [teamKey, setTeamKey] = useState('');
   const [cell, setCell] = useState<{ email: string; day: string } | null>(null);
@@ -62,6 +67,7 @@ export function StaffRosterTab({ getIdToken, userRole, onChanged }: StaffRosterT
       setAllDaysValue(t.allDaysLimit === null ? '' : String(t.allDaysLimit));
       if (!teamKey) setTeamKey(t.teamKey);
       setApprovals(await rosterApi<ApprovalsData>(getIdToken, 'GET', '/api/roster/approvals'));
+      setSwaps((await rosterApi<{ items: RosterSwapDTO[] }>(getIdToken, 'GET', '/api/roster/swaps')).items);
       setError(null);
     } catch (err: any) {
       setError(err instanceof RosterApiError ? err : new RosterApiError(0, err?.message || 'Could not load the roster.'));
@@ -107,6 +113,8 @@ export function StaffRosterTab({ getIdToken, userRole, onChanged }: StaffRosterT
 
   const decide = (e: RosterEntryDTO, decision: 'approve' | 'reject', withOverride = false) =>
     run(() => rosterApi(getIdToken, 'POST', `/api/roster/entries/${e.id}/decision`, { decision, note: note.trim() || undefined, override: withOverride || undefined }), decision === 'approve' ? 'Approved.' : 'Rejected.');
+  const decideSwap = (s: RosterSwapDTO, decision: 'approve' | 'reject') =>
+    run(() => rosterApi(getIdToken, 'POST', `/api/roster/swaps/${s.id}/decision`, { decision, note: note.trim() || undefined }), decision === 'approve' ? 'Swap approved: the two weekly offs have traded places.' : 'Swap rejected.');
   const revoke = (e: RosterEntryDTO) => run(() => rosterApi(getIdToken, 'POST', `/api/roster/entries/${e.id}/revoke`, { note: note.trim() }), 'Revoked.');
   const setDayOff = (email: string, day: string, kind: 'WO' | 'PL') =>
     run(() => rosterApi(getIdToken, 'POST', '/api/roster/entries', { agentEmail: email, day, kind, requestId: newRequestId(), reason: note.trim() || undefined, override: override || undefined }), 'Saved.');
@@ -226,6 +234,40 @@ export function StaffRosterTab({ getIdToken, userRole, onChanged }: StaffRosterT
           </ul>
         )}
       </div>
+
+      {swaps.some((s) => s.status === 'awaiting_tl' || s.status === 'awaiting_partner') && (
+        <div className={CARD}>
+          <h3 className="text-sm font-bold text-slate-950 dark:text-fg mb-3">
+            Swaps {swaps.filter((s) => s.status === 'awaiting_tl').length > 0 && <span className="ml-1 px-1.5 py-0.5 rounded-full bg-amber-500 text-slate-950 text-[10px] font-bold">{swaps.filter((s) => s.status === 'awaiting_tl').length}</span>}
+          </h3>
+          <ul className="divide-y divide-slate-100 dark:divide-line">
+            {swaps.filter((s) => s.status === 'awaiting_tl' || s.status === 'awaiting_partner').map((s) => (
+              <li key={s.id} className="py-3 text-xs space-y-2">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span className="font-bold text-slate-950 dark:text-fg">{s.requesterName} and {s.partnerName}</span>
+                  <span className="text-slate-700 dark:text-slate-300">{s.requesterName} gives {dayLabel(s.requesterDay)} and takes {dayLabel(s.partnerDay)}; {s.partnerName} the other way round</span>
+                  <span className={`px-2 py-0.5 rounded font-bold ${s.status === 'awaiting_tl' ? CHIP_PENDING : CHIP_CLOSED}`}>{s.status === 'awaiting_tl' ? 'both agreed' : 'waiting for ' + s.partnerName}</span>
+                  {s.note && <span className="text-slate-500 dark:text-slate-400">"{s.note}"</span>}
+                </div>
+                {s.status === 'awaiting_tl' &&
+                  (rejectingSwap === s.id ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input value={note} onChange={(ev) => setNote(ev.target.value)} placeholder="Why? (both agents see this)" maxLength={300} className={`${input} flex-1 min-w-[12rem]`} aria-label="Reason for rejecting the swap" />
+                      <button disabled={busy || !note.trim()} onClick={() => decideSwap(s, 'reject').then(() => setRejectingSwap(null))} className={danger}>Reject</button>
+                      <button onClick={() => { setRejectingSwap(null); setNote(''); }} className={outline}>Back</button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      <button disabled={busy} onClick={() => decideSwap(s, 'approve')} className={primary}>Approve swap</button>
+                      <button disabled={busy} onClick={() => { setRejectingSwap(s.id); setNote(''); }} className={outline}>Reject</button>
+                    </div>
+                  ))}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-[10px] text-slate-500 dark:text-slate-400">A swap does not change how many are off on either day.</p>
+        </div>
+      )}
 
       <div className={CARD}>
         <div className="flex flex-wrap items-end gap-3 mb-4">
