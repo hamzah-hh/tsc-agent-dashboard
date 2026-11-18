@@ -19,7 +19,10 @@ const TeamRevenueTab = lazyView<React.ComponentProps<typeof import('./TeamRevenu
 const RawDataView = lazyView<React.ComponentProps<typeof import('./RawDataView')['RawDataView']>>(() => import('./RawDataView'), 'RawDataView');
 const DayOnDayView = lazyView<React.ComponentProps<typeof import('./DayOnDayView')['DayOnDayView']>>(() => import('./DayOnDayView'), 'DayOnDayView');
 const CallMetricsTab = lazyView<React.ComponentProps<typeof import('./CallMetricsTab')['CallMetricsTab']>>(() => import('./CallMetricsTab'), 'CallMetricsTab');
+const HomeTab = lazyView<React.ComponentProps<typeof import('./HomeTab')['HomeTab']>>(() => import('./HomeTab'), 'HomeTab');
+const BreaksAdherenceTab = lazyView<React.ComponentProps<typeof import('./BreaksAdherenceTab')['BreaksAdherenceTab']>>(() => import('./BreaksAdherenceTab'), 'BreaksAdherenceTab');
 import { StaleBanner } from './StaleBanner';
+import { StackedSection, StackedSections } from './StackedSections';
 import { calculateProjection, calculateRemainingWorkingDays } from '../shared/planning';
 import {
   RotateCcw,
@@ -27,15 +30,12 @@ import {
   MapPin,
   Briefcase,
   AlertCircle,
-  LayoutDashboard,
-  Calculator,
+  Home,
   ArrowLeft,
-  Target,
-  Trophy,
   TrendingUp,
   FileSpreadsheet,
-  CalendarDays,
   PhoneCall,
+  Timer,
 } from 'lucide-react';
 import { soundFx } from '../utils/audio';
 
@@ -46,7 +46,13 @@ interface AgentViewProps {
 }
 
 export function AgentView({ officialEmail, getIdToken, onBack }: AgentViewProps) {
-  const [activeTab, setActiveTab] = useState<'actual' | 'target' | 'simulator' | 'leaderboard' | 'revenue' | 'rawData' | 'dod' | 'metrics'>('actual');
+  const [activeTab, setActiveTab] = useState<'home' | 'revenue' | 'calls' | 'breaks' | 'rawData'>('home');
+  // Scrolls the Revenue page to a section from a button inside another section
+  const [jumpTo, setJumpTo] = useState<{ id: string; n: number } | null>(null);
+  const jump = (id: string) => {
+    soundFx.playPop();
+    setJumpTo((prev) => ({ id, n: (prev?.n ?? 0) + 1 }));
+  };
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -206,6 +212,113 @@ export function AgentView({ officialEmail, getIdToken, onBack }: AgentViewProps)
 
   const actualTotalIncentive = agentRecord?.result?.total || 0;
 
+  const leaderboardSection: StackedSection = {
+    id: 'leaderboard',
+    title: 'Leaderboard',
+    node: (
+      <AgentLeaderboardTab
+        getIdToken={getIdToken}
+        currentAgentEmail={agentRecord?.officialEmail || officialEmail}
+        currentLocation={agentRecord?.location || ''}
+        currentAgentType={agentType}
+      />
+    ),
+  };
+  const revenueSections: StackedSection[] = isPreSales
+    ? [
+        {
+          id: 'actual',
+          title: 'Actual',
+          node: <PreSalesActualTab agentRecord={agentRecord} plan={preSalesPlan} cycle={activeCycle} onNavigateToSimulator={() => jump('simulator')} />,
+        },
+        {
+          id: 'simulator',
+          title: 'Simulator',
+          node: (
+            <PreSalesSimulatorTab
+              plan={preSalesPlan}
+              initialCalls={initialPsCalls}
+              initialTalkSeconds={initialPsTalk}
+              initialQualityScore={initialPsQuality}
+              actualTotalIncentive={actualTotalIncentive}
+            />
+          ),
+        },
+        leaderboardSection,
+      ]
+    : [
+        {
+          id: 'actual',
+          title: 'Actual',
+          node: (
+            <ActualTab
+              agentRecord={agentRecord}
+              plan={plan}
+              cycle={activeCycle}
+              onNavigateToSimulator={(targetSales) => {
+                setSimPresetSales(targetSales);
+                jump('simulator');
+              }}
+              onNavigateToTarget={() => jump('target')}
+            />
+          ),
+        },
+        {
+          id: 'target',
+          title: 'Targets & Goals',
+          node: (
+            <TargetTab
+              agentRecord={agentRecord}
+              plan={plan}
+              cycle={activeCycle}
+              onNavigateToSimulator={(targetSales) => {
+                setSimPresetSales(targetSales);
+                jump('simulator');
+              }}
+              onNavigateToActual={() => jump('actual')}
+            />
+          ),
+        },
+        {
+          id: 'simulator',
+          title: 'Simulator',
+          node: (
+            <SimulatorTab
+              plan={plan}
+              agentType={agentType}
+              initialSales={initialSales}
+              initialAvgConnects={initialAvgConnects}
+              initialAvgTalkMinutes={initialAvgTalkMinutes}
+              initialQualityScore={initialQualityScore}
+              initialVisits={initialVisits}
+              actualTotalIncentive={actualTotalIncentive}
+              presetSales={simPresetSales}
+            />
+          ),
+        },
+        leaderboardSection,
+        {
+          id: 'team-revenue',
+          title: 'Team Revenue',
+          node: <TeamRevenueTab getIdToken={getIdToken} agentLocation={agentRecord?.location || 'Dighe'} agentType={agentType} />,
+        },
+        {
+          id: 'day-on-day',
+          title: 'Day-on-Day',
+          node: (
+            <DayOnDayView
+              userRole="agent"
+              userEmail={agentRecord?.officialEmail || officialEmail}
+              targetAgentEmail={agentRecord?.officialEmail || officialEmail}
+              targetAgentName={agentRecord?.name}
+              lockAgent={true}
+              userLocation={agentRecord?.location}
+              getIdToken={getIdToken}
+            />
+          ),
+        },
+      ];
+
   return (
     <div className="space-y-6">
       {/* Outdated data warning: latest data date more than 2 days old */}
@@ -248,110 +361,62 @@ export function AgentView({ officialEmail, getIdToken, onBack }: AgentViewProps)
             <button
               onClick={() => {
                 soundFx.playPop();
-                setActiveTab('actual');
+                setActiveTab('home');
               }}
               className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition shrink-0 ${
-                activeTab === 'actual'
+                activeTab === 'home'
                   ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs font-bold'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              <LayoutDashboard className="w-3.5 h-3.5" />
-              Actual
+              <Home className="w-3.5 h-3.5" />
+              <span className="sm:hidden">Home</span>
+              <span className="hidden sm:inline">Home</span>
             </button>
-            {!isPreSales && (
-              <button
-                onClick={() => {
-                  soundFx.playPop();
-                  setActiveTab('target');
-                }}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition shrink-0 ${
-                  activeTab === 'target'
-                    ? 'bg-white dark:bg-slate-800 text-amber-600 dark:text-amber-400 shadow-xs font-bold'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                <Target className="w-3.5 h-3.5" />
-                <span className="sm:hidden">Target</span>
-                <span className="hidden sm:inline">Target & Goals</span>
-              </button>
-            )}
             <button
               onClick={() => {
                 soundFx.playPop();
-                setActiveTab('simulator');
+                setActiveTab('revenue');
               }}
               className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition shrink-0 ${
-                activeTab === 'simulator'
+                activeTab === 'revenue'
                   ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs font-bold'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              <Calculator className="w-3.5 h-3.5" />
-              Simulator
+              <TrendingUp className="w-3.5 h-3.5" />
+              <span className="sm:hidden">Revenue</span>
+              <span className="hidden sm:inline">Revenue</span>
             </button>
             <button
               onClick={() => {
                 soundFx.playPop();
-                setActiveTab('leaderboard');
+                setActiveTab('calls');
               }}
               className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition shrink-0 ${
-                activeTab === 'leaderboard'
-                  ? 'bg-white dark:bg-slate-800 text-amber-600 dark:text-amber-400 shadow-xs font-bold'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <Trophy className="w-3.5 h-3.5" />
-              Leaderboard
-            </button>
-            {!isPreSales && (
-              <button
-                onClick={() => {
-                  soundFx.playPop();
-                  setActiveTab('revenue');
-                }}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition shrink-0 ${
-                  activeTab === 'revenue'
-                    ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs font-bold'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                <TrendingUp className="w-3.5 h-3.5" />
-                <span className="sm:hidden">Revenue</span>
-                <span className="hidden sm:inline">Team Revenue</span>
-              </button>
-            )}
-            {!isPreSales && (
-              <button
-                onClick={() => {
-                  soundFx.playPop();
-                  setActiveTab('dod');
-                }}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition shrink-0 ${
-                  activeTab === 'dod'
-                    ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs font-bold'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                <CalendarDays className="w-3.5 h-3.5" />
-                <span className="sm:hidden">D-o-D</span>
-                <span className="hidden sm:inline">Day-on-Day</span>
-              </button>
-            )}
-            <button
-              onClick={() => {
-                soundFx.playPop();
-                setActiveTab('metrics');
-              }}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition shrink-0 ${
-                activeTab === 'metrics'
-                  ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs font-bold'
+                activeTab === 'calls'
+                  ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs font-bold'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               <PhoneCall className="w-3.5 h-3.5" />
               <span className="sm:hidden">Calls</span>
-              <span className="hidden sm:inline">Call Metrics & Breaks</span>
+              <span className="hidden sm:inline">Call Metrics</span>
+            </button>
+            <button
+              onClick={() => {
+                soundFx.playPop();
+                setActiveTab('breaks');
+              }}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition shrink-0 ${
+                activeTab === 'breaks'
+                  ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs font-bold'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Timer className="w-3.5 h-3.5" />
+              <span className="sm:hidden">Breaks</span>
+              <span className="hidden sm:inline">Breaks & Adherence</span>
             </button>
             <button
               onClick={() => {
@@ -360,13 +425,13 @@ export function AgentView({ officialEmail, getIdToken, onBack }: AgentViewProps)
               }}
               className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition shrink-0 ${
                 activeTab === 'rawData'
-                  ? 'bg-white dark:bg-slate-800 text-amber-600 dark:text-amber-400 shadow-xs font-bold'
+                  ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs font-bold'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               <FileSpreadsheet className="w-3.5 h-3.5" />
-              <span className="sm:hidden">Orders</span>
-              <span className="hidden sm:inline">Orders & Visits</span>
+              <span className="sm:hidden">Raw</span>
+              <span className="hidden sm:inline">Raw Data</span>
             </button>
           </div>
 
@@ -385,8 +450,15 @@ export function AgentView({ officialEmail, getIdToken, onBack }: AgentViewProps)
         </div>
       </div>
 
+      {/* Revenue: Actual, Targets & Goals, Simulator, Leaderboard, Team Revenue and Day-on-Day in one view */}
       {/* Main Tab Body */}
-      {activeTab === 'rawData' ? (
+      {activeTab === 'home' ? (
+        <HomeTab agentRecord={agentRecord} plan={isPreSales ? null : plan} isPreSales={isPreSales} getIdToken={getIdToken} />
+      ) : activeTab === 'calls' ? (
+        <CallMetricsTab agentRecord={agentRecord} isPreSales={isPreSales} />
+      ) : activeTab === 'breaks' ? (
+        <BreaksAdherenceTab agentRecord={agentRecord} getIdToken={getIdToken} />
+      ) : activeTab === 'rawData' ? (
         <RawDataView
           userRole="agent"
           userEmail={agentRecord?.officialEmail || officialEmail}
@@ -396,90 +468,8 @@ export function AgentView({ officialEmail, getIdToken, onBack }: AgentViewProps)
           userLocation={agentRecord?.location}
           getIdToken={getIdToken}
         />
-      ) : activeTab === 'metrics' ? (
-        <CallMetricsTab agentRecord={agentRecord} getIdToken={getIdToken} showCallMetrics={!isPreSales} />
-      ) : activeTab === 'dod' && !isPreSales ? (
-        <DayOnDayView
-          userRole="agent"
-          userEmail={agentRecord?.officialEmail || officialEmail}
-          targetAgentEmail={agentRecord?.officialEmail || officialEmail}
-          targetAgentName={agentRecord?.name}
-          lockAgent={true}
-          userLocation={agentRecord?.location}
-          getIdToken={getIdToken}
-        />
-      ) : activeTab === 'leaderboard' ? (
-        <AgentLeaderboardTab
-          getIdToken={getIdToken}
-          currentAgentEmail={agentRecord?.officialEmail || officialEmail}
-          currentLocation={agentRecord?.location || ''}
-          currentAgentType={agentType}
-        />
-      ) : activeTab === 'revenue' && !isPreSales ? (
-        <TeamRevenueTab
-          getIdToken={getIdToken}
-          agentLocation={agentRecord?.location || 'Dighe'}
-          agentType={agentType}
-        />
-      ) : isPreSales ? (
-        activeTab === 'simulator' ? (
-          <PreSalesSimulatorTab
-            plan={preSalesPlan}
-            initialCalls={initialPsCalls}
-            initialTalkSeconds={initialPsTalk}
-            initialQualityScore={initialPsQuality}
-            actualTotalIncentive={actualTotalIncentive}
-          />
-        ) : (
-          <PreSalesActualTab
-            agentRecord={agentRecord}
-            plan={preSalesPlan}
-            cycle={activeCycle}
-            onNavigateToSimulator={() => setActiveTab('simulator')}
-          />
-        )
-      ) : activeTab === 'actual' ? (
-        <ActualTab
-          agentRecord={agentRecord}
-          plan={plan}
-          cycle={activeCycle}
-          onNavigateToSimulator={(targetSales) => {
-            soundFx.playPop();
-            setSimPresetSales(targetSales);
-            setActiveTab('simulator');
-          }}
-          onNavigateToTarget={() => {
-            soundFx.playPop();
-            setActiveTab('target');
-          }}
-        />
-      ) : activeTab === 'target' ? (
-        <TargetTab
-          agentRecord={agentRecord}
-          plan={plan}
-          cycle={activeCycle}
-          onNavigateToSimulator={(targetSales) => {
-            soundFx.playPop();
-            setSimPresetSales(targetSales);
-            setActiveTab('simulator');
-          }}
-          onNavigateToActual={() => {
-            soundFx.playPop();
-            setActiveTab('actual');
-          }}
-        />
       ) : (
-        <SimulatorTab
-          plan={plan}
-          agentType={agentType}
-          initialSales={initialSales}
-          initialAvgConnects={initialAvgConnects}
-          initialAvgTalkMinutes={initialAvgTalkMinutes}
-          initialQualityScore={initialQualityScore}
-          initialVisits={initialVisits}
-          actualTotalIncentive={actualTotalIncentive}
-          presetSales={simPresetSales}
-        />
+        <StackedSections sections={revenueSections} jumpTo={jumpTo} />
       )}
     </div>
   );
