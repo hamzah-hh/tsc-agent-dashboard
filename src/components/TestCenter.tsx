@@ -44,6 +44,7 @@ import {
   GoogleSheetFetchResult,
 } from '../shared/sheets-service';
 import { LoginTrackerSettings } from './LoginTrackerSettings';
+import { RosterSettings } from './RosterSettings';
 
 const istDay = (iso: string) => new Date(new Date(iso).getTime() + 5.5 * 3600e3).toISOString().slice(0, 10);
 
@@ -2181,6 +2182,11 @@ function getRowsAsObjects(sheet) {
           getIdToken={getIdToken}
           onConfigUpdated={(newConfig) => setAppConfig(newConfig)}
         />
+      )}
+
+      {/* Rostering: the switch and the pilot teams */}
+      {appConfig && (
+        <RosterSettings appConfig={appConfig} getIdToken={getIdToken} onConfigUpdated={(newConfig) => setAppConfig(newConfig)} />
       )}
 
       {/* Section 7: Sync Logs */}

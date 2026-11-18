@@ -4,6 +4,19 @@ Newest first. How to demo and go live: [docs/GUIDELINE.md](docs/GUIDELINE.md).
 
 ---
 
+## Rostering, phase 1 (weekly offs and planned leave), 18 Nov 2026
+
+New **Roster** tab (agents, TLs, managers, Super Admin), off until the Super Admin switches it on in Admin, and then only for the pilot teams listed there. Rules are in [docs/ROSTERING_FINAL_PLAN.md](docs/ROSTERING_FINAL_PLAN.md).
+
+- **Agents:** a 3-week calendar for weekly offs (planned leave up to 60 days ahead). The first Mon-Fri WO of a week is confirmed at once when the team is under its limit; Sat/Sun WOs, a 2nd WO in a week and all PL wait for the TL. Cancel before the cut-off (D-1 18:00), at most 3 changes a week, an inbox of what happened.
+- **TLs and managers:** team grid, limit for every day and for particular dates (default weekdays: team size / 5, rounded up), approvals queue (approve, reject with a reason, approve over the limit with a reason), set or revoke an agent's day, history and CSV export.
+- **Data:** new tables in Neon (`roster_limit`, `roster_entry`, `roster_audit`, `app_notification`), created by `npm run db:migrate` (`db/migrations/010_roster.sql`). Nothing existing is changed. Without `DATABASE_URL` the Roster tab says it is unavailable and the rest of the app is unaffected.
+- **Limit under concurrency:** every booking is one SQL statement under advisory locks, so a day with 2 slots gives exactly 2 bookings even when four agents ask at once (tested).
+- **Tests:** rules in `src/shared/roster.testcases.ts` (`npm test`), API scenarios in `tests/roster.test.ts` on an in-memory Postgres (PGlite, a new dev dependency).
+- Not in this phase: swaps (phase 2), mail and OTP (phase 4).
+
+---
+
 ## v8.7, 22 Oct 2026: Export CSV on every table
 
 A simple **Export CSV** button (one header row, then the rows as shown, filters and sort applied; opens in Excel and Google Sheets) now sits next to every table:

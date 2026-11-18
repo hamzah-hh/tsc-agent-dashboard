@@ -1,4 +1,7 @@
-import { testCases } from './incentive.testcases';
+import { testCases as incentiveCases } from './incentive.testcases';
+import { rosterTestCases } from './roster.testcases';
+
+const testCases = [...incentiveCases, ...rosterTestCases];
 
 /**
  * Command-line runner for the calculation test cases (npm test).

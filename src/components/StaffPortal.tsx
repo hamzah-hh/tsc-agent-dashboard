@@ -1,5 +1,7 @@
 import React, { lazy, Suspense, useState } from 'react';
 import { lazyView } from '../utils/lazyView';
+import { useRosterStatus } from '../utils/rosterApi';
+const StaffRosterTab = lazyView<React.ComponentProps<typeof import('./StaffRosterTab')['StaffRosterTab']>>(() => import('./StaffRosterTab'), 'StaffRosterTab');
 const TeamView = lazyView<React.ComponentProps<typeof import('./TeamView')['TeamView']>>(() => import('./TeamView'), 'TeamView');
 const Leaderboards = lazyView<React.ComponentProps<typeof import('./Leaderboards')['Leaderboards']>>(() => import('./Leaderboards'), 'Leaderboards');
 const SyncStatus = lazyView<React.ComponentProps<typeof import('./SyncStatus')['SyncStatus']>>(() => import('./SyncStatus'), 'SyncStatus');
@@ -38,7 +40,7 @@ interface StaffPortalProps {
   getIdToken: () => Promise<string>;
 }
 
-type StaffTab = 'team' | 'summary' | 'cohort' | 'leaderboards' | 'dod' | 'rawData' | 'syncStatus' | 'admin';
+type StaffTab = 'team' | 'roster' | 'summary' | 'cohort' | 'leaderboards' | 'dod' | 'rawData' | 'syncStatus' | 'admin';
 
 export function StaffPortal({
   userRole,
@@ -52,6 +54,8 @@ export function StaffPortal({
 }: StaffPortalProps) {
   const [activeTab, setActiveTab] = useState<StaffTab>('team');
   const [selectedAgentEmail, setSelectedAgentEmail] = useState<string | null>(null);
+  // The Roster tab appears only when rostering is switched on for this person; the badge counts requests waiting for a decision
+  const { status: rosterStatus, refresh: refreshRoster } = useRosterStatus(getIdToken);
 
   // If an agent record is opened, display AgentView with read-only Simulator/Actual and "Back to team" button
   if (selectedAgentEmail) {
@@ -117,6 +121,21 @@ export function StaffPortal({
             <Users className="w-3.5 h-3.5" />
             Team
           </button>
+
+          {rosterStatus?.enabled && (
+            <button
+              onClick={() => setActiveTab('roster')}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                activeTab === 'roster'
+                  ? 'bg-white dark:bg-slate-800 text-slate-950 dark:text-white shadow-xs font-bold'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <CalendarDays className="w-3.5 h-3.5" />
+              Roster
+              {rosterStatus.badge ? <span className="ml-0.5 px-1.5 py-0.5 rounded-full bg-rose-600 text-white text-[10px] font-bold leading-none ">{rosterStatus.badge}</span> : null}
+            </button>
+          )}
 
           <button
             onClick={() => setActiveTab('summary')}
@@ -221,6 +240,10 @@ export function StaffPortal({
           getIdToken={getIdToken}
           onOpenAgent={(officialEmail) => setSelectedAgentEmail(officialEmail)}
         />
+      )}
+
+      {activeTab === 'roster' && rosterStatus?.enabled && (userRole === 'tl' || userRole === 'manager' || userRole === 'superAdmin') && (
+        <StaffRosterTab getIdToken={getIdToken} userRole={userRole} onChanged={refreshRoster} />
       )}
 
       {activeTab === 'summary' && <TeamSummaryView userRole={userRole} getIdToken={getIdToken} />}

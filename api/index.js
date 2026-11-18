@@ -1306,11 +1306,11 @@ function cleanNum(val) {
   return isNaN(parsed) ? 0 : parsed;
 }
 function normalizeCategoryName(raw) {
-  const norm = String(raw || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-  if (norm.includes("shopify")) return "shopify";
-  if (norm.includes("bfan")) return "bfan";
-  if (norm.includes("bfmp")) return "bfmp";
-  if (norm.includes("posoc") || norm.includes("pos")) return "posoc";
+  const norm3 = String(raw || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (norm3.includes("shopify")) return "shopify";
+  if (norm3.includes("bfan")) return "bfan";
+  if (norm3.includes("bfmp")) return "bfmp";
+  if (norm3.includes("posoc") || norm3.includes("pos")) return "posoc";
   return null;
 }
 function buildTeamRevenue(location, cycleId, mainRows, rawRevenueRows) {
@@ -4567,6 +4567,916 @@ async function buildReadiness() {
   };
 }
 
+// server-scope.ts
+function isAgentOfTl(agent, tlUserEmail, tlAccess) {
+  const tlPersonal = normalizeEmail(tlUserEmail);
+  const tlOfficial = normalizeEmail(tlAccess?.officialEmail);
+  const agentTlPersonal = normalizeEmail(agent.tlPersonalEmail);
+  const agentTlOfficial = normalizeEmail(agent.tlOfficialEmail);
+  if (tlPersonal && agentTlPersonal && agentTlPersonal === tlPersonal) {
+    return true;
+  }
+  if (tlOfficial && agentTlOfficial && agentTlOfficial === tlOfficial) {
+    return true;
+  }
+  if (tlPersonal && agentTlOfficial && agentTlOfficial === tlPersonal) {
+    return true;
+  }
+  if (tlOfficial && agentTlPersonal && agentTlPersonal === tlOfficial) {
+    return true;
+  }
+  if (!agentTlPersonal && !agentTlOfficial && tlAccess?.location) {
+    const tlLoc = tlAccess.location.trim().toLowerCase();
+    const agLoc = (agent.location || "").trim().toLowerCase();
+    if (tlLoc === agLoc) return true;
+    if (tlLoc === "dighe" && agLoc === "dighe (pre sales)") return true;
+  }
+  return false;
+}
+
+// server-roster-db.ts
+import { neon as neon2 } from "@neondatabase/serverless";
+import path3 from "path";
+function neonQueryable(connectionString) {
+  const sql = neon2(connectionString);
+  return {
+    async query(text2, params) {
+      return await sql.query(text2, params ?? []);
+    },
+    async batch(stmts) {
+      if (!stmts.length) return [];
+      return await sql.transaction(stmts.map((s) => sql.query(s.text, s.params ?? [])));
+    }
+  };
+}
+var override = null;
+var cached = null;
+function getRosterDb() {
+  if (override) return override;
+  const url = process.env.DATABASE_URL;
+  if (!url) return null;
+  if (!cached || cached.url !== url) cached = { url, db: neonQueryable(url) };
+  return cached.db;
+}
+var MIGRATIONS_DIR = path3.resolve(process.cwd(), "db", "migrations");
+
+// src/utils/csv.ts
+function csvCell(v) {
+  if (v === null || v === void 0) return "";
+  let s = typeof v === "number" ? Number.isFinite(v) ? String(v) : "" : String(v);
+  if (typeof v === "string" && /^[=+@\t\r]/.test(s)) s = `'${s}`;
+  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+function toCsv(rows) {
+  return rows.map((r) => r.map(csvCell).join(",")).join("\r\n");
+}
+
+// src/shared/roster.ts
+var ROSTER_RULES = {
+  /** Agents may change a day until this hour (IST) of the day before. */
+  agentCutoffHour: 18,
+  /** WOs: the current week plus this many more weeks. */
+  woWeeksAhead: 2,
+  /** PL: this many days from today. */
+  plDaysAhead: 60,
+  /** An agent may book or cancel at most this many times in a week. */
+  maxChangesPerWeek: 3,
+  /** Weekdays a WO may be taken on (Monday to Friday), used for the default limit. */
+  weekdaysPerWeek: 5
+};
+var IST_OFFSET_MS = 330 * 6e4;
+var DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+function isDay(value) {
+  return typeof value === "string" && DAY_RE.test(value) && !Number.isNaN(Date.parse(value + "T00:00:00Z")) && (/* @__PURE__ */ new Date(value + "T00:00:00Z")).toISOString().slice(0, 10) === value;
+}
+function istDay(ms) {
+  return new Date(ms + IST_OFFSET_MS).toISOString().slice(0, 10);
+}
+function addDays(day, n) {
+  return new Date(Date.parse(day + "T00:00:00Z") + n * 864e5).toISOString().slice(0, 10);
+}
+function dayOfWeek(day) {
+  return ((/* @__PURE__ */ new Date(day + "T00:00:00Z")).getUTCDay() + 6) % 7;
+}
+var weekStart = (day) => addDays(day, -dayOfWeek(day));
+var weekEnd = (day) => addDays(weekStart(day), 6);
+var isWeekend = (day) => dayOfWeek(day) >= 5;
+function istMidnightMs(day) {
+  return Date.parse(day + "T00:00:00Z") - IST_OFFSET_MS;
+}
+var WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function dayLabel(day) {
+  const [, m, d] = day.split("-").map(Number);
+  return `${WEEKDAYS[dayOfWeek(day)]} ${d} ${MONTHS[m - 1]}`;
+}
+function lastBookableDay(kind, today) {
+  return kind === "PL" ? addDays(today, ROSTER_RULES.plDaysAhead) : addDays(weekEnd(today), ROSTER_RULES.woWeeksAhead * 7);
+}
+function cutoffMs(day, role) {
+  if (role === "manager" || role === "superAdmin") return Infinity;
+  const midnight = istMidnightMs(day);
+  return role === "tl" ? midnight : midnight - (24 - ROSTER_RULES.agentCutoffHour) * 36e5;
+}
+function canChangeDay(day, role, nowMs) {
+  return day >= istDay(nowMs) && nowMs < cutoffMs(day, role);
+}
+function firstChangeableDay(role, nowMs) {
+  let d = istDay(nowMs);
+  for (let i = 0; i < 4; i++, d = addDays(d, 1)) if (canChangeDay(d, role, nowMs)) return d;
+  return d;
+}
+function dayProblem(kind, day, role, nowMs) {
+  if (!isDay(day)) return "Pick a valid date.";
+  const today = istDay(nowMs);
+  if (day < today) return "That day has already passed.";
+  const last = lastBookableDay(kind, today);
+  if (day > last) return kind === "PL" ? `Planned leave can only be requested up to ${dayLabel(last)}.` : `Weekly offs can only be set up to ${dayLabel(last)}.`;
+  if (!canChangeDay(day, role, nowMs)) {
+    return role === "tl" ? `Changes for ${dayLabel(day)} have closed (${dayLabel(day)} has started).` : `Changes for ${dayLabel(day)} closed at ${ROSTER_RULES.agentCutoffHour}:00 on the day before. Ask your TL.`;
+  }
+  return null;
+}
+function defaultWeekdayLimit(teamSize) {
+  return teamSize > 0 ? Math.ceil(teamSize / ROSTER_RULES.weekdaysPerWeek) : 0;
+}
+function effectiveLimit(day, dateLimit, allDaysLimit, teamSize) {
+  if (dateLimit !== null && dateLimit !== void 0) return { limit: dateLimit, source: "date" };
+  if (allDaysLimit !== null && allDaysLimit !== void 0) return { limit: allDaysLimit, source: "all" };
+  if (isWeekend(day)) return { limit: null, source: "none" };
+  return { limit: defaultWeekdayLimit(teamSize), source: "default" };
+}
+function bookingOutcome(kind, day, weekWoCount) {
+  const weekend = isWeekend(day);
+  if (kind === "PL") return { status: "pending", needsApproval: true, enforceLimit: !weekend, why: "Planned leave always needs your TL's approval." };
+  if (weekend) return { status: "pending", needsApproval: true, enforceLimit: false, why: "A Saturday or Sunday off needs your TL's approval." };
+  if (weekWoCount >= 1) return { status: "pending", needsApproval: true, enforceLimit: true, why: "A second weekly off in the same week needs your TL's approval." };
+  return { status: "approved", needsApproval: false, enforceLimit: true, why: "Confirmed: your first weekly off of the week, within the team limit." };
+}
+var norm = (s) => String(s ?? "").trim().toLowerCase();
+function teamKeyOf(agent) {
+  return norm(agent.tlOfficialEmail) || norm(agent.tlPersonalEmail) || `loc:${norm(agent.location)}`;
+}
+function feasibilityWarning(teamSize, weekdayLimits) {
+  const capacity = weekdayLimits.reduce((a, b) => a + b, 0);
+  if (teamSize > 0 && capacity < teamSize) {
+    return `${teamSize} agents, but the limits allow only ${capacity} weekday weekly offs this week. Raise a limit or some agents cannot get a WO.`;
+  }
+  return void 0;
+}
+
+// server-roster.ts
+var RosterError = class extends Error {
+  constructor(status, code, message) {
+    super(message);
+    this.status = status;
+    this.code = code;
+  }
+};
+var clock = () => Date.now();
+var norm2 = (s) => normalizeEmail(s);
+var isTestAgent = (a) => Boolean(a.isTest) || isTestAgentIdentifier(a.officialEmail, a.name);
+function pilotAllows(appConfig, actor) {
+  const cfg = appConfig.roster;
+  if (!cfg?.enabled) return false;
+  if (actor.role === "manager" || actor.role === "superAdmin") return true;
+  const pilot = new Set((cfg.pilotTeams || []).map(norm2).filter(Boolean));
+  if (pilot.size === 0) return true;
+  if (actor.role === "agent" && actor.agent) {
+    return [norm2(actor.agent.tlOfficialEmail), norm2(actor.agent.tlPersonalEmail), teamKeyOf(actor.agent)].some((k) => k && pilot.has(k));
+  }
+  if (actor.role === "tl") {
+    if ([norm2(actor.login), norm2(actor.officialEmail)].some((k) => k && pilot.has(k))) return true;
+    return actor.members.some((m) => [norm2(m.tlOfficialEmail), norm2(m.tlPersonalEmail)].some((k) => k && pilot.has(k)));
+  }
+  return false;
+}
+function registerRosterRoutes(api, ctx) {
+  const route = (fn) => (req, res, next) => {
+    fn(req, res).catch((err) => {
+      if (err instanceof RosterError) return res.status(err.status).json({ error: err.message, code: err.code });
+      if (err && typeof err.status === "number" && err.message) return res.status(err.status).json({ error: err.message });
+      next(err);
+    });
+  };
+  const needDb = () => {
+    const db = getRosterDb();
+    if (!db) throw new RosterError(503, "ROSTER_DB_UNAVAILABLE", "Rostering is temporarily unavailable.");
+    return db;
+  };
+  async function resolveActor(req, opts = {}) {
+    const user = await ctx.authenticate(req);
+    const { appConfig } = await ctx.ensureSeedData();
+    const identity = await ctx.identify(user.email, appConfig);
+    if (!identity) {
+      if (opts.requireEnabled === false) return null;
+      throw new RosterError(403, "FORBIDDEN", "Access denied.");
+    }
+    const cycleId = appConfig.activeCycleId;
+    const excluded = await ctx.getExcludedEmails(cycleId);
+    const everyone = (await ctx.loadAgents(cycleId)).filter((a) => !excluded.has(norm2(a.officialEmail)));
+    let visible = everyone;
+    if (!appConfig.testMode && identity.role !== "superAdmin") visible = visible.filter((a) => !isTestAgent(a));
+    const role = identity.role;
+    const base = { login: user.email, name: identity.access?.name || user.name, role, everyone, appConfig };
+    if (role === "agent") {
+      const mine = norm2(identity.access?.officialEmail);
+      const agent = everyone.find((a) => norm2(a.officialEmail) === mine);
+      if (!agent) {
+        if (opts.requireEnabled === false) return null;
+        throw new RosterError(403, "FORBIDDEN", "Your agent record was not found.");
+      }
+      return { ...base, agent, members: [agent], teamKeys: [teamKeyOf(agent)], inboxKeys: [norm2(agent.officialEmail)] };
+    }
+    if (role === "tl") {
+      const members = visible.filter((a) => isAgentOfTl(a, user.email, identity.access));
+      const keys2 = [...new Set(members.map(teamKeyOf))];
+      const ownKey = norm2(identity.access?.officialEmail) || norm2(user.email);
+      return { ...base, members, teamKeys: keys2.length ? keys2 : [ownKey], inboxKeys: [.../* @__PURE__ */ new Set([...keys2, ownKey, norm2(user.email)])] };
+    }
+    const keys = [...new Set(visible.map(teamKeyOf))];
+    return { ...base, members: visible, teamKeys: keys, inboxKeys: [] };
+  }
+  async function actorOrRefuse(req) {
+    const actor = await resolveActor(req);
+    const officialEmail = actor.agent?.officialEmail;
+    if (!pilotAllows(actor.appConfig, { role: actor.role, agent: actor.agent, login: actor.login, officialEmail, members: actor.members })) {
+      throw new RosterError(404, "ROSTER_OFF", "Rostering is not switched on.");
+    }
+    return actor;
+  }
+  const isStaff = (a) => a.role !== "agent";
+  const teamSizeOf = (actor, key, isTest) => actor.everyone.filter((a) => teamKeyOf(a) === key && isTestAgent(a) === isTest).length;
+  const nameOf = (actor) => {
+    const m = /* @__PURE__ */ new Map();
+    for (const a of actor.everyone) m.set(norm2(a.officialEmail), a.name);
+    return (email) => m.get(norm2(email)) || email;
+  };
+  const ENTRY_COLS = `e.id::text AS id, e.agent_email, e.day::text AS day, e.kind, e.status, e.needs_approval, e.team_key, e.source, e.reason,
+    e.over_limit, e.created_by, to_char(e.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at, e.decided_by,
+    to_char(e.decided_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS decided_at, e.decision_note, e.is_test`;
+  const toEntry = (row, name) => ({
+    id: row.id,
+    agentEmail: row.agent_email,
+    agentName: name(row.agent_email),
+    day: row.day,
+    kind: row.kind,
+    status: row.status,
+    needsApproval: Boolean(row.needs_approval),
+    source: row.source,
+    reason: row.reason,
+    overLimit: Boolean(row.over_limit),
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+    decidedBy: row.decided_by,
+    decidedAt: row.decided_at,
+    decisionNote: row.decision_note
+  });
+  async function getEntry(db, id) {
+    if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+    const rows = await db.query(`SELECT ${ENTRY_COLS} FROM roster_entry e WHERE e.id = $1::uuid`, [id]);
+    return rows[0] ?? null;
+  }
+  async function getEntryByRequest(db, requestId) {
+    const rows = await db.query(`SELECT ${ENTRY_COLS} FROM roster_entry e WHERE e.request_id = $1`, [requestId]);
+    return rows[0] ?? null;
+  }
+  const clean2 = (value, max, field) => {
+    if (value === void 0 || value === null || value === "") return null;
+    const s = String(value).replace(/[\u0000-\u001f\u007f]/g, " ").trim();
+    if (s.length > max) throw new RosterError(400, "BAD_REQUEST", `${field} can be at most ${max} characters.`);
+    return s || null;
+  };
+  let lastExpiry = 0;
+  async function expireOverdue(db, nowMs) {
+    if (nowMs - lastExpiry < 6e4 && nowMs >= lastExpiry) return;
+    lastExpiry = nowMs;
+    const today = istDay(nowMs);
+    await db.batch([
+      { text: `UPDATE roster_entry SET status = 'expired', updated_at = now() WHERE status = 'pending' AND day <= $1::date`, params: [today] },
+      {
+        text: `INSERT INTO app_notification (recipient, kind, title, body, entry_id)
+               SELECT agent_email, 'expired', 'Not approved in time', 'Your request for ' || day::text || ' was not approved before the day started.', id
+               FROM roster_entry WHERE status = 'expired' AND updated_at = now()`
+      },
+      {
+        text: `INSERT INTO roster_audit (actor, actor_role, action, entry_id, agent_email, team_key, day, detail)
+               SELECT 'system', 'system', 'expire', id, agent_email, team_key, day, '{}'::jsonb
+               FROM roster_entry WHERE status = 'expired' AND updated_at = now()`
+      }
+    ]);
+  }
+  async function dayInfos(db, actor, teamKey, isTest, from, to, teamSize, viewerRole, nowMs) {
+    const [limitRows, usedRows] = await Promise.all([
+      db.query(`SELECT day::text AS day, max_inactive FROM roster_limit WHERE team_key = $1 AND (day IS NULL OR day BETWEEN $2::date AND $3::date)`, [teamKey, from, to]),
+      db.query(
+        `SELECT day::text AS day,
+                count(*) FILTER (WHERE status = 'approved' OR (status = 'pending' AND extract(isodow FROM day) <= 5))::int AS n,
+                count(*) FILTER (WHERE status = 'pending')::int AS pending
+         FROM roster_entry
+         WHERE team_key = $1 AND is_test = $2::boolean AND status IN ('pending','approved') AND day BETWEEN $3::date AND $4::date GROUP BY day`,
+        [teamKey, isTest, from, to]
+      )
+    ]);
+    const allDays = limitRows.find((r) => r.day === null)?.max_inactive ?? null;
+    const byDay = new Map(limitRows.filter((r) => r.day !== null).map((r) => [r.day, r.max_inactive]));
+    const used = new Map(usedRows.map((r) => [r.day, r.n]));
+    const pendingBy = new Map(usedRows.map((r) => [r.day, r.pending]));
+    const out = [];
+    for (let d = from; d <= to; d = addDays(d, 1)) {
+      const { limit, source } = effectiveLimit(d, byDay.has(d) ? byDay.get(d) : null, allDays, teamSize);
+      const u = used.get(d) ?? 0;
+      out.push({ day: d, weekend: isWeekend(d), limit, limitSource: source, used: u, pending: pendingBy.get(d) ?? 0, left: limit === null ? null : Math.max(0, limit - u), locked: !canChangeDay(d, viewerRole, nowMs), overBooked: limit !== null && u > limit });
+    }
+    return out;
+  }
+  async function unreadCount(db, keys) {
+    if (!keys.length) return 0;
+    const rows = await db.query(`SELECT count(*)::int AS n FROM app_notification WHERE recipient = ANY($1::text[]) AND read_at IS NULL`, [keys]);
+    return rows[0]?.n ?? 0;
+  }
+  const inScope = (actor, agentEmail, teamKey) => {
+    if (actor.role === "manager" || actor.role === "superAdmin") return true;
+    if (actor.role === "agent") return norm2(actor.agent?.officialEmail) === norm2(agentEmail);
+    return actor.members.some((m) => norm2(m.officialEmail) === norm2(agentEmail)) || (teamKey ? actor.teamKeys.includes(teamKey) : false);
+  };
+  api.get(
+    "/api/roster/status",
+    route(async (req, res) => {
+      const actor = await resolveActor(req, { requireEnabled: false });
+      const body = { enabled: false };
+      if (!actor) return res.json(body);
+      const allowed = pilotAllows(actor.appConfig, { role: actor.role, agent: actor.agent, login: actor.login, officialEmail: actor.agent?.officialEmail, members: actor.members });
+      if (!allowed) return res.json(body);
+      const db = getRosterDb();
+      if (!db) return res.json({ enabled: true, unavailable: true, role: actor.role });
+      let badge = 0;
+      try {
+        if (isStaff(actor)) {
+          if (actor.teamKeys.length) {
+            const p = await db.query(`SELECT count(*)::int AS n FROM roster_entry WHERE status = 'pending' AND team_key = ANY($1::text[]) AND day > $2::date`, [actor.teamKeys, istDay(clock())]);
+            badge = p[0]?.n ?? 0;
+          }
+        } else {
+          badge = await unreadCount(db, actor.inboxKeys);
+        }
+      } catch (_err) {
+        badge = 0;
+      }
+      return res.json({ enabled: true, role: actor.role, badge });
+    })
+  );
+  api.get(
+    "/api/roster/me",
+    route(async (req, res) => {
+      const actor = await actorOrRefuse(req);
+      const db = needDb();
+      const nowMs = clock();
+      await expireOverdue(db, nowMs);
+      let agent = actor.agent;
+      if (isStaff(actor)) {
+        const wanted = norm2(String(req.query.agent ?? ""));
+        agent = actor.members.find((m) => norm2(m.officialEmail) === wanted);
+        if (!agent) throw new RosterError(404, "NOT_FOUND", "Agent not found.");
+      }
+      if (!agent) throw new RosterError(403, "FORBIDDEN", "No agent record.");
+      const today = istDay(nowMs);
+      const from = weekStart(today);
+      const woLast = lastBookableDay("WO", today);
+      const plLast = lastBookableDay("PL", today);
+      const key = teamKeyOf(agent);
+      const test = isTestAgent(agent);
+      const viewerRole = isStaff(actor) ? actor.role : "agent";
+      const name = nameOf(actor);
+      const [entryRows, days, changes, unread] = await Promise.all([
+        db.query(`SELECT ${ENTRY_COLS} FROM roster_entry e WHERE e.agent_email = $1 AND e.day BETWEEN $2::date AND $3::date ORDER BY e.day, e.created_at`, [norm2(agent.officialEmail), from, plLast]),
+        dayInfos(db, actor, key, test, from, plLast, teamSizeOf(actor, key, test), viewerRole, nowMs),
+        db.query(`SELECT count(*)::int AS n FROM roster_audit WHERE actor = $1 AND actor_role = 'agent' AND action IN ('book','cancel') AND at >= $2::timestamptz`, [actor.login, new Date(istMidnightMs(from)).toISOString()]),
+        unreadCount(db, actor.inboxKeys)
+      ]);
+      const entries = entryRows.map((r) => toEntry(r, name));
+      const weeks = [];
+      for (let w = from; w <= woLast; w = addDays(w, 7)) {
+        weeks.push({ weekStart: w, woCount: entries.filter((e) => e.kind === "WO" && (e.status === "pending" || e.status === "approved") && e.day >= w && e.day <= weekEnd(w)).length });
+      }
+      const body = {
+        today,
+        firstDay: firstChangeableDay(viewerRole, nowMs),
+        woLastDay: woLast,
+        plLastDay: plLast,
+        agentName: agent.name,
+        teamSize: teamSizeOf(actor, key, test),
+        entries,
+        days,
+        weeks,
+        changesThisWeek: changes[0]?.n ?? 0,
+        unread
+      };
+      return res.json(body);
+    })
+  );
+  api.post(
+    "/api/roster/entries",
+    route(async (req, res) => {
+      const actor = await actorOrRefuse(req);
+      const db = needDb();
+      const nowMs = clock();
+      const body = req.body || {};
+      const kind = body.kind;
+      const day = String(body.day ?? "");
+      if (kind !== "WO" && kind !== "PL") throw new RosterError(400, "BAD_REQUEST", "kind must be WO or PL.");
+      if (!isDay(day)) throw new RosterError(400, "BAD_REQUEST", "Pick a valid date.");
+      const requestId = String(body.requestId ?? "");
+      if (!/^[A-Za-z0-9_-]{8,64}$/.test(requestId)) throw new RosterError(400, "BAD_REQUEST", "requestId is required (8 to 64 letters, digits, - or _).");
+      const reason = clean2(body.reason, 300, "The note");
+      let target = actor.agent;
+      if (isStaff(actor)) {
+        const wanted = norm2(String(body.agentEmail ?? ""));
+        target = actor.members.find((m) => norm2(m.officialEmail) === wanted);
+        if (!target) throw new RosterError(404, "NOT_FOUND", "Agent not found.");
+        if ((actor.role === "manager" || actor.role === "superAdmin") && !reason) throw new RosterError(400, "NOTE_REQUIRED", "Say why you are changing this on the agent's behalf.");
+      }
+      if (!target) throw new RosterError(403, "FORBIDDEN", "No agent record.");
+      const problem = dayProblem(kind, day, actor.role, nowMs);
+      if (problem) throw new RosterError(409, "WINDOW", problem);
+      const today = istDay(nowMs);
+      if (actor.role === "agent") {
+        const changes = await db.query(`SELECT count(*)::int AS n FROM roster_audit WHERE actor = $1 AND actor_role = 'agent' AND action IN ('book','cancel') AND at >= $2::timestamptz`, [actor.login, new Date(istMidnightMs(weekStart(today))).toISOString()]);
+        if ((changes[0]?.n ?? 0) >= ROSTER_RULES.maxChangesPerWeek) {
+          throw new RosterError(409, "CHURN_LIMIT", `You have changed your days off ${ROSTER_RULES.maxChangesPerWeek} times this week. Ask your TL.`);
+        }
+      }
+      const email = norm2(target.officialEmail);
+      const key = teamKeyOf(target);
+      const test = isTestAgent(target);
+      const weekend = isWeekend(day);
+      const override2 = isStaff(actor) && body.override === true;
+      if (override2 && !reason) throw new RosterError(400, "NOTE_REQUIRED", "Give a reason for going over the limit.");
+      const forceApproved = isStaff(actor);
+      const enforce = forceApproved ? !override2 : !weekend;
+      const defaultCap = weekend ? null : defaultWeekdayLimit(teamSizeOf(actor, key, test));
+      const source = actor.role === "agent" ? "self" : actor.role === "tl" ? "tl" : "manager";
+      const stmts = [
+        { text: `SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))`, params: [`roster:agentweek:${email}:${weekStart(day)}`] },
+        { text: `SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))`, params: [`roster:teamday:${key}:${day}`] },
+        {
+          text: `WITH cap AS (
+                   SELECT COALESCE(
+                     (SELECT max_inactive FROM roster_limit WHERE team_key = $6::text AND day = $2::date),
+                     (SELECT max_inactive FROM roster_limit WHERE team_key = $6::text AND day IS NULL),
+                     $15::int) AS n),
+                 used AS (
+                   SELECT count(*)::int AS n FROM roster_entry
+                   WHERE team_key = $6::text AND day = $2::date AND is_test = $11::boolean
+                     AND (status = 'approved' OR (status = 'pending' AND extract(isodow FROM day) <= 5))),
+                 week AS (
+                   SELECT count(*)::int AS n FROM roster_entry
+                   WHERE agent_email = $1::text AND kind = 'WO' AND status IN ('pending','approved') AND day BETWEEN $12::date AND $13::date),
+                 ins AS (
+                   INSERT INTO roster_entry (agent_email, day, kind, status, needs_approval, team_key, agent_type, location, source, reason,
+                                             over_limit, created_by, request_id, is_test, decided_by, decided_at)
+                   SELECT $1::text, $2::date, $3::text,
+                          CASE WHEN $17::boolean THEN 'approved'
+                               WHEN ($3::text = 'PL' OR $14::boolean OR (SELECT n FROM week) >= 1) THEN 'pending' ELSE 'approved' END,
+                          (($3::text = 'PL' OR $14::boolean OR (SELECT n FROM week) >= 1) AND NOT $17::boolean),
+                          $6::text, $7::text, $8::text, $4::text, $9::text,
+                          ((SELECT n FROM cap) IS NOT NULL AND (SELECT n FROM used) >= (SELECT n FROM cap)),
+                          $5::text, $10::text, $11::boolean,
+                          CASE WHEN $17::boolean THEN $5::text END, CASE WHEN $17::boolean THEN now() END
+                   WHERE (NOT $16::boolean OR (SELECT n FROM cap) IS NULL OR (SELECT n FROM used) < (SELECT n FROM cap))
+                     AND ($18::int IS NULL OR $3::text = 'PL' OR (SELECT n FROM week) < $18::int)
+                   ON CONFLICT DO NOTHING
+                   RETURNING id)
+                 SELECT (SELECT n FROM cap) AS cap, (SELECT n FROM used) AS used, (SELECT n FROM week) AS week_wo, (SELECT count(*)::int FROM ins) AS inserted`,
+          params: [email, day, kind, source, actor.login, key, target.agentType, norm2(target.location) ? target.location : "", reason, requestId, test, weekStart(day), weekEnd(day), weekend, defaultCap, enforce, forceApproved, null]
+        },
+        {
+          text: `INSERT INTO roster_audit (actor, actor_role, action, entry_id, agent_email, team_key, day, detail, note)
+                 SELECT $2::text, $3::text, 'book', id, agent_email, team_key, day,
+                        jsonb_build_object('kind', kind, 'status', status, 'source', source, 'overLimit', over_limit), $4::text
+                 FROM roster_entry WHERE request_id = $1::text AND created_at = now()`,
+          params: [requestId, actor.login, actor.role, reason]
+        }
+      ];
+      const outcome = bookingOutcome(kind, day, 0);
+      const who = target.name;
+      stmts.push({
+        text: `INSERT INTO app_notification (recipient, kind, title, body, entry_id)
+               SELECT $2::text, CASE WHEN status = 'pending' THEN 'approval_needed' ELSE 'booked' END,
+                      CASE WHEN status = 'pending' THEN $3::text ELSE $4::text END,
+                      $5::text || ' on ' || $6::text || CASE WHEN over_limit THEN ' (over the limit)' ELSE '' END, id
+               FROM roster_entry WHERE request_id = $1::text AND created_at = now() AND source = 'self'`,
+        params: [requestId, key, `${who} needs your approval`, `${who} booked a day off`, kind === "PL" ? "Planned leave" : "Weekly off", dayLabel(day)]
+      });
+      if (isStaff(actor)) {
+        stmts.push({
+          text: `INSERT INTO app_notification (recipient, kind, title, body, entry_id)
+                 SELECT agent_email, 'set_by_staff', $2::text, $3::text, id FROM roster_entry WHERE request_id = $1::text AND created_at = now()`,
+          params: [requestId, "Your roster was updated", `${actor.name} set ${kind === "PL" ? "planned leave" : "a weekly off"} for you on ${dayLabel(day)}.`]
+        });
+      }
+      const results = await db.batch(stmts);
+      const info = results[2][0] || {};
+      const row = await getEntryByRequest(db, requestId);
+      const name = nameOf(actor);
+      if (info.inserted === 1 && row) {
+        return res.json({ entry: toEntry(row, name), message: forceApproved ? "Saved." : bookingOutcome(kind, day, info.week_wo ?? 0).why });
+      }
+      if (row) {
+        if (norm2(row.agent_email) === email) return res.json({ entry: toEntry(row, name), replayed: true });
+        throw new RosterError(409, "REQUEST_REUSED", "That request id was already used.");
+      }
+      const active = await db.query(`SELECT kind FROM roster_entry WHERE agent_email = $1 AND day = $2::date AND status IN ('pending','approved')`, [email, day]);
+      if (active.length) throw new RosterError(409, "ALREADY_BOOKED", `${isStaff(actor) ? who + " already has" : "You already have"} a ${active[0].kind === "PL" ? "planned leave" : "weekly off"} on ${dayLabel(day)}.`);
+      if (enforce && info.cap !== null && info.cap !== void 0 && info.used >= info.cap) {
+        throw new RosterError(409, "LIMIT_REACHED", `The team's limit for ${dayLabel(day)} is ${info.cap} and ${info.used} are already off. Pick another day, or ask your TL.`);
+      }
+      void outcome;
+      throw new RosterError(409, "NOT_ALLOWED", "That could not be saved.");
+    })
+  );
+  async function changeStatus(db, entry, actor, to, from, note, notify) {
+    const stmts = [
+      { text: `SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))`, params: [`roster:teamday:${entry.team_key}:${entry.day}`] },
+      {
+        text: `UPDATE roster_entry SET status = $2::text, decided_by = $3::text, decided_at = now(), decision_note = $4::text, updated_at = now()
+               WHERE id = $1::uuid AND status = ANY($5::text[]) RETURNING id::text AS id`,
+        params: [entry.id, to, actor.login, note, from]
+      },
+      {
+        text: `INSERT INTO roster_audit (actor, actor_role, action, entry_id, agent_email, team_key, day, detail, note)
+               SELECT $2::text, $3::text, $4::text, id, agent_email, team_key, day, jsonb_build_object('from', $5::text, 'kind', kind), $6::text
+               FROM roster_entry WHERE id = $1::uuid AND status = $7::text AND updated_at = now()`,
+        params: [entry.id, actor.login, actor.role, to === "cancelled" ? "cancel" : to === "rejected" ? "reject" : "revoke", entry.status, note, to]
+      }
+    ];
+    if (notify) {
+      stmts.push({
+        text: `INSERT INTO app_notification (recipient, kind, title, body, entry_id)
+               SELECT $2::text, $3::text, $4::text, $5::text, id FROM roster_entry WHERE id = $1::uuid AND status = $6::text AND updated_at = now()`,
+        params: [entry.id, notify.recipient, notify.kind, notify.title, notify.body, to]
+      });
+    }
+    const results = await db.batch(stmts);
+    return results[1].length === 1;
+  }
+  api.post(
+    "/api/roster/entries/:id/cancel",
+    route(async (req, res) => {
+      const actor = await actorOrRefuse(req);
+      const db = needDb();
+      const nowMs = clock();
+      const entry = await getEntry(db, String(req.params.id));
+      if (!entry || !inScope(actor, entry.agent_email, entry.team_key)) throw new RosterError(404, "NOT_FOUND", "Entry not found.");
+      if (entry.status !== "pending" && entry.status !== "approved") throw new RosterError(409, "STATE", "This entry is no longer active.");
+      if (!canChangeDay(entry.day, actor.role, nowMs)) throw new RosterError(409, "CUTOFF", `Changes for ${dayLabel(entry.day)} have closed. Ask your TL.`);
+      const note = clean2(req.body?.note, 300, "The note");
+      if (actor.role === "agent") {
+        const today = istDay(nowMs);
+        const changes = await db.query(`SELECT count(*)::int AS n FROM roster_audit WHERE actor = $1 AND actor_role = 'agent' AND action IN ('book','cancel') AND at >= $2::timestamptz`, [actor.login, new Date(istMidnightMs(weekStart(today))).toISOString()]);
+        if ((changes[0]?.n ?? 0) >= ROSTER_RULES.maxChangesPerWeek) throw new RosterError(409, "CHURN_LIMIT", `You have changed your days off ${ROSTER_RULES.maxChangesPerWeek} times this week. Ask your TL.`);
+      } else if ((actor.role === "manager" || actor.role === "superAdmin") && !note) {
+        throw new RosterError(400, "NOTE_REQUIRED", "Say why you are cancelling this for the agent.");
+      }
+      const name = nameOf(actor);
+      const notify = actor.role === "agent" ? entry.status === "approved" ? { recipient: entry.team_key, kind: "cancelled", title: `${name(entry.agent_email)} cancelled a day off`, body: `${dayLabel(entry.day)}` } : null : { recipient: entry.agent_email, kind: "cancelled_by_staff", title: "Your roster was updated", body: `${actor.name} cancelled your ${entry.kind === "PL" ? "planned leave" : "weekly off"} on ${dayLabel(entry.day)}.` };
+      const changed = await changeStatus(db, entry, actor, "cancelled", ["pending", "approved"], note, notify);
+      if (!changed) throw new RosterError(409, "STATE", "This entry changed. Reload and try again.");
+      return res.json({ entry: toEntry(await getEntry(db, entry.id), name) });
+    })
+  );
+  api.post(
+    "/api/roster/entries/:id/decision",
+    route(async (req, res) => {
+      const actor = await actorOrRefuse(req);
+      if (!isStaff(actor)) throw new RosterError(403, "FORBIDDEN", "Only a TL or manager can approve or reject.");
+      const db = needDb();
+      const nowMs = clock();
+      const entry = await getEntry(db, String(req.params.id));
+      if (!entry || !inScope(actor, entry.agent_email, entry.team_key)) throw new RosterError(404, "NOT_FOUND", "Entry not found.");
+      if (entry.status !== "pending") throw new RosterError(409, "STATE", "This request has already been decided.");
+      if (!canChangeDay(entry.day, actor.role, nowMs)) throw new RosterError(409, "CUTOFF", `${dayLabel(entry.day)} has started, so this can no longer be decided.`);
+      const decision = String(req.body?.decision ?? "");
+      const note = clean2(req.body?.note, 300, "The note");
+      const name = nameOf(actor);
+      const label = entry.kind === "PL" ? "planned leave" : "weekly off";
+      if (decision === "reject") {
+        if (!note) throw new RosterError(400, "NOTE_REQUIRED", "Say why you are rejecting this.");
+        const changed = await changeStatus(db, entry, actor, "rejected", ["pending"], note, {
+          recipient: entry.agent_email,
+          kind: "rejected",
+          title: "Request not approved",
+          body: `Your ${label} on ${dayLabel(entry.day)} was not approved: ${note}`
+        });
+        if (!changed) throw new RosterError(409, "STATE", "This request has already been decided.");
+        return res.json({ entry: toEntry(await getEntry(db, entry.id), name) });
+      }
+      if (decision !== "approve") throw new RosterError(400, "BAD_REQUEST", "decision must be approve or reject.");
+      const override2 = req.body?.override === true;
+      if (override2 && !note) throw new RosterError(400, "NOTE_REQUIRED", "Give a reason for approving over the limit.");
+      const target = actor.everyone.find((a) => norm2(a.officialEmail) === norm2(entry.agent_email));
+      const size = target ? teamSizeOf(actor, entry.team_key, Boolean(entry.is_test)) : 0;
+      const defaultCap = isWeekend(entry.day) ? null : defaultWeekdayLimit(size);
+      const results = await db.batch([
+        { text: `SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))`, params: [`roster:teamday:${entry.team_key}:${entry.day}`] },
+        {
+          text: `WITH cap AS (
+                   SELECT COALESCE(
+                     (SELECT max_inactive FROM roster_limit WHERE team_key = $2::text AND day = $3::date),
+                     (SELECT max_inactive FROM roster_limit WHERE team_key = $2::text AND day IS NULL),
+                     $4::int) AS n),
+                 used AS (
+                   SELECT count(*)::int AS n FROM roster_entry
+                   WHERE team_key = $2::text AND day = $3::date AND is_test = $5::boolean AND id <> $1::uuid
+                     AND (status = 'approved' OR (status = 'pending' AND extract(isodow FROM day) <= 5))),
+                 upd AS (
+                   UPDATE roster_entry SET status = 'approved', decided_by = $6::text, decided_at = now(), decision_note = $7::text,
+                          over_limit = over_limit OR ($8::boolean AND (SELECT n FROM cap) IS NOT NULL AND (SELECT n FROM used) >= (SELECT n FROM cap)),
+                          updated_at = now()
+                   WHERE id = $1::uuid AND status = 'pending'
+                     AND ($8::boolean OR (SELECT n FROM cap) IS NULL OR (SELECT n FROM used) < (SELECT n FROM cap))
+                   RETURNING id)
+                 SELECT (SELECT n FROM cap) AS cap, (SELECT n FROM used) AS used, (SELECT count(*)::int FROM upd) AS changed`,
+          params: [entry.id, entry.team_key, entry.day, defaultCap, Boolean(entry.is_test), actor.login, note, override2]
+        },
+        {
+          text: `INSERT INTO roster_audit (actor, actor_role, action, entry_id, agent_email, team_key, day, detail, note)
+                 SELECT $2::text, $3::text, 'approve', id, agent_email, team_key, day, jsonb_build_object('kind', kind, 'overLimit', over_limit), $4::text
+                 FROM roster_entry WHERE id = $1::uuid AND status = 'approved' AND updated_at = now()`,
+          params: [entry.id, actor.login, actor.role, note]
+        },
+        {
+          text: `INSERT INTO app_notification (recipient, kind, title, body, entry_id)
+                 SELECT agent_email, 'approved', 'Request approved', $2::text, id FROM roster_entry WHERE id = $1::uuid AND status = 'approved' AND updated_at = now()`,
+          params: [entry.id, `Your ${label} on ${dayLabel(entry.day)} was approved.`]
+        }
+      ]);
+      const info = results[1][0] || {};
+      if (info.changed !== 1) {
+        const fresh = await getEntry(db, entry.id);
+        if (fresh && fresh.status !== "pending") throw new RosterError(409, "STATE", "This request has already been decided.");
+        throw new RosterError(409, "LIMIT_REACHED", `Approving this would put ${(info.used ?? 0) + 1} off against a limit of ${info.cap} on ${dayLabel(entry.day)}. Approve over the limit with a reason, or reject.`);
+      }
+      return res.json({ entry: toEntry(await getEntry(db, entry.id), name) });
+    })
+  );
+  api.post(
+    "/api/roster/entries/:id/revoke",
+    route(async (req, res) => {
+      const actor = await actorOrRefuse(req);
+      if (!isStaff(actor)) throw new RosterError(403, "FORBIDDEN", "Only a TL or manager can revoke.");
+      const db = needDb();
+      const nowMs = clock();
+      const entry = await getEntry(db, String(req.params.id));
+      if (!entry || !inScope(actor, entry.agent_email, entry.team_key)) throw new RosterError(404, "NOT_FOUND", "Entry not found.");
+      if (entry.status !== "approved") throw new RosterError(409, "STATE", "Only an approved entry can be revoked.");
+      if (!canChangeDay(entry.day, actor.role, nowMs)) throw new RosterError(409, "CUTOFF", `${dayLabel(entry.day)} has started, so this can no longer be changed.`);
+      const note = clean2(req.body?.note, 300, "The note");
+      if (!note) throw new RosterError(400, "NOTE_REQUIRED", "Say why you are revoking this.");
+      const label = entry.kind === "PL" ? "planned leave" : "weekly off";
+      const changed = await changeStatus(db, entry, actor, "revoked", ["approved"], note, {
+        recipient: entry.agent_email,
+        kind: "revoked",
+        title: "Day off withdrawn",
+        body: `Your ${label} on ${dayLabel(entry.day)} was withdrawn: ${note}`
+      });
+      if (!changed) throw new RosterError(409, "STATE", "This entry changed. Reload and try again.");
+      return res.json({ entry: toEntry(await getEntry(db, entry.id), nameOf(actor)) });
+    })
+  );
+  api.get(
+    "/api/roster/team",
+    route(async (req, res) => {
+      const actor = await actorOrRefuse(req);
+      if (!isStaff(actor)) throw new RosterError(403, "FORBIDDEN", "Staff only.");
+      const db = needDb();
+      const nowMs = clock();
+      await expireOverdue(db, nowMs);
+      const today = istDay(nowMs);
+      const from = isDay(req.query.from) ? String(req.query.from) : weekStart(today);
+      let to = isDay(req.query.to) ? String(req.query.to) : lastBookableDay("WO", today);
+      const maxTo = addDays(from, 69);
+      if (to > maxTo) to = maxTo;
+      if (to < from) throw new RosterError(400, "BAD_REQUEST", "to must not be before from.");
+      const keys = actor.teamKeys;
+      const wantedKey = String(req.query.team ?? "").trim().toLowerCase();
+      const key = wantedKey && keys.includes(wantedKey) ? wantedKey : keys[0] || "";
+      if (actor.role === "tl" && wantedKey && !keys.includes(wantedKey)) throw new RosterError(403, "FORBIDDEN", "That is not your team.");
+      const agents = actor.members.filter((m) => teamKeyOf(m) === key);
+      const test = agents.length ? isTestAgent(agents[0]) : false;
+      const size = agents.filter((a) => isTestAgent(a) === test).length;
+      const name = nameOf(actor);
+      const [entryRows, days, limitRow, pendingRow, unread] = await Promise.all([
+        db.query(`SELECT ${ENTRY_COLS} FROM roster_entry e WHERE e.team_key = $1 AND e.day BETWEEN $2::date AND $3::date ORDER BY e.day, e.created_at`, [key, from, to]),
+        dayInfos(db, actor, key, test, from, to, size, actor.role, nowMs),
+        db.query(`SELECT max_inactive FROM roster_limit WHERE team_key = $1 AND day IS NULL`, [key]),
+        db.query(`SELECT count(*)::int AS n FROM roster_entry WHERE team_key = $1 AND status = 'pending'`, [key]),
+        unreadCount(db, actor.inboxKeys)
+      ]);
+      const entries = entryRows.map((r) => toEntry(r, name));
+      const noWo = [];
+      for (let w = weekStart(from); w <= to; w = addDays(w, 7)) {
+        if (weekEnd(w) < today) continue;
+        const have = new Set(entries.filter((e) => e.kind === "WO" && (e.status === "pending" || e.status === "approved") && e.day >= w && e.day <= weekEnd(w)).map((e) => norm2(e.agentEmail)));
+        noWo.push({ weekStart: w, agents: agents.filter((a) => !have.has(norm2(a.officialEmail))).map((a) => a.name) });
+      }
+      let feasibility;
+      for (let w = weekStart(from); w <= to && !feasibility; w = addDays(w, 7)) {
+        const limits = days.filter((d) => d.day >= w && d.day <= addDays(w, 4) && d.day >= today).map((d) => d.limit ?? 0);
+        if (limits.length === 5) feasibility = feasibilityWarning(size, limits);
+      }
+      const body = {
+        today,
+        teamKeys: keys,
+        teamSize: size,
+        agents: agents.map((a) => ({ email: norm2(a.officialEmail), name: a.name, agentType: a.agentType, location: a.location })),
+        entries,
+        days,
+        allDaysLimit: limitRow[0]?.max_inactive ?? null,
+        pending: pendingRow[0]?.n ?? 0,
+        noWo,
+        feasibility,
+        unread
+      };
+      return res.json({ ...body, teamKey: key });
+    })
+  );
+  const limitKeys = (actor, team) => {
+    const wanted = String(team ?? "").trim().toLowerCase();
+    if (actor.role === "tl") {
+      if (wanted && !actor.teamKeys.includes(wanted)) throw new RosterError(403, "FORBIDDEN", "That is not your team.");
+      return wanted ? [wanted] : actor.teamKeys;
+    }
+    if (!wanted) throw new RosterError(400, "BAD_REQUEST", "Say which team.");
+    if (!actor.teamKeys.includes(wanted)) throw new RosterError(404, "NOT_FOUND", "Team not found.");
+    return [wanted];
+  };
+  api.put(
+    "/api/roster/limits",
+    route(async (req, res) => {
+      const actor = await actorOrRefuse(req);
+      if (!isStaff(actor)) throw new RosterError(403, "FORBIDDEN", "Only a TL or manager can set limits.");
+      const db = needDb();
+      const nowMs = clock();
+      const keys = limitKeys(actor, req.body?.team);
+      const max = Number(req.body?.maxInactive);
+      if (!Number.isInteger(max) || max < 0 || max > 200) throw new RosterError(400, "BAD_REQUEST", "The limit must be a whole number from 0 to 200.");
+      const day = req.body?.day === null || req.body?.day === void 0 || req.body?.day === "" ? null : String(req.body.day);
+      if (day !== null) {
+        if (!isDay(day)) throw new RosterError(400, "BAD_REQUEST", "Pick a valid date.");
+        if (day < istDay(nowMs)) throw new RosterError(409, "WINDOW", "That day has already passed.");
+        if (day > addDays(istDay(nowMs), 120)) throw new RosterError(409, "WINDOW", "That is too far ahead.");
+      }
+      const note = clean2(req.body?.note, 200, "The note");
+      const stmts = [];
+      for (const key of keys) {
+        stmts.push({
+          text: day === null ? `INSERT INTO roster_limit (team_key, day, max_inactive, note, set_by) VALUES ($1::text, NULL, $2::int, $3::text, $4::text)
+               ON CONFLICT (team_key) WHERE day IS NULL DO UPDATE SET max_inactive = EXCLUDED.max_inactive, note = EXCLUDED.note, set_by = EXCLUDED.set_by, set_at = now()` : `INSERT INTO roster_limit (team_key, day, max_inactive, note, set_by) VALUES ($1::text, $5::date, $2::int, $3::text, $4::text)
+               ON CONFLICT (team_key, day) WHERE day IS NOT NULL DO UPDATE SET max_inactive = EXCLUDED.max_inactive, note = EXCLUDED.note, set_by = EXCLUDED.set_by, set_at = now()`,
+          params: day === null ? [key, max, note, actor.login] : [key, max, note, actor.login, day]
+        });
+        stmts.push({
+          text: `INSERT INTO roster_audit (actor, actor_role, action, team_key, day, detail, note) VALUES ($1::text, $2::text, 'limit_set', $3::text, $4::date, jsonb_build_object('maxInactive', $5::int), $6::text)`,
+          params: [actor.login, actor.role, key, day, max, note]
+        });
+      }
+      await db.batch(stmts);
+      return res.json({ ok: true, teamKeys: keys, day, maxInactive: max });
+    })
+  );
+  api.delete(
+    "/api/roster/limits",
+    route(async (req, res) => {
+      const actor = await actorOrRefuse(req);
+      if (!isStaff(actor)) throw new RosterError(403, "FORBIDDEN", "Only a TL or manager can change limits.");
+      const db = needDb();
+      const keys = limitKeys(actor, req.query.team);
+      const day = req.query.day ? String(req.query.day) : null;
+      if (day !== null && !isDay(day)) throw new RosterError(400, "BAD_REQUEST", "Pick a valid date.");
+      const stmts = [];
+      for (const key of keys) {
+        stmts.push({ text: day === null ? `DELETE FROM roster_limit WHERE team_key = $1::text AND day IS NULL` : `DELETE FROM roster_limit WHERE team_key = $1::text AND day = $2::date`, params: day === null ? [key] : [key, day] });
+        stmts.push({ text: `INSERT INTO roster_audit (actor, actor_role, action, team_key, day) VALUES ($1::text, $2::text, 'limit_clear', $3::text, $4::date)`, params: [actor.login, actor.role, key, day] });
+      }
+      await db.batch(stmts);
+      return res.json({ ok: true });
+    })
+  );
+  api.get(
+    "/api/roster/approvals",
+    route(async (req, res) => {
+      const actor = await actorOrRefuse(req);
+      if (!isStaff(actor)) throw new RosterError(403, "FORBIDDEN", "Staff only.");
+      const db = needDb();
+      const nowMs = clock();
+      await expireOverdue(db, nowMs);
+      const keys = actor.teamKeys;
+      const rows = keys.length ? await db.query(`SELECT ${ENTRY_COLS} FROM roster_entry e WHERE e.status = 'pending' AND e.team_key = ANY($1::text[]) ORDER BY e.created_at`, [keys]) : [];
+      const name = nameOf(actor);
+      const entries = rows.map((r) => toEntry(r, name));
+      const loads = {};
+      for (const key of new Set(rows.map((r) => r.team_key))) {
+        const mine = rows.filter((r) => r.team_key === key);
+        const lo = mine.reduce((m, r) => r.day < m ? r.day : m, mine[0].day);
+        const hi = mine.reduce((m, r) => r.day > m ? r.day : m, mine[0].day);
+        const test = Boolean(mine[0].is_test);
+        const infos = await dayInfos(db, actor, key, test, lo, hi, teamSizeOf(actor, key, test), actor.role, nowMs);
+        for (const r of mine) {
+          const info = infos.find((i) => i.day === r.day);
+          if (info) loads[r.id] = { used: info.used, limit: info.limit };
+        }
+      }
+      return res.json({ entries, loads, count: entries.length, unread: await unreadCount(db, actor.inboxKeys) });
+    })
+  );
+  const auditQuery = async (db, actor, from, to, agent, limit) => {
+    const params = [from, to];
+    let where = `a.day BETWEEN $1::date AND $2::date OR (a.day IS NULL AND a.at >= $1::date)`;
+    where = `(${where})`;
+    if (actor.role === "tl") {
+      params.push(actor.teamKeys);
+      where += ` AND a.team_key = ANY($${params.length}::text[])`;
+    }
+    if (agent) {
+      params.push(agent);
+      where += ` AND a.agent_email = $${params.length}::text`;
+    }
+    params.push(limit);
+    return db.query(
+      `SELECT a.id, to_char(a.at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS at, a.actor, a.actor_role, a.action, a.agent_email, a.team_key, a.day::text AS day, a.detail, a.note
+       FROM roster_audit a WHERE ${where} ORDER BY a.at DESC, a.id DESC LIMIT $${params.length}::int`,
+      params
+    );
+  };
+  api.get(
+    "/api/roster/audit",
+    route(async (req, res) => {
+      const actor = await actorOrRefuse(req);
+      if (!isStaff(actor)) throw new RosterError(403, "FORBIDDEN", "Staff only.");
+      const db = needDb();
+      const today = istDay(clock());
+      const from = isDay(req.query.from) ? String(req.query.from) : addDays(today, -30);
+      const to = isDay(req.query.to) ? String(req.query.to) : addDays(today, 70);
+      const agent = norm2(String(req.query.agent ?? ""));
+      if (agent && !inScope(actor, agent)) throw new RosterError(404, "NOT_FOUND", "Agent not found.");
+      const rows = await auditQuery(db, actor, from, to, agent, 300);
+      const name = nameOf(actor);
+      return res.json({ items: rows.map((r) => ({ id: Number(r.id), at: r.at, actor: r.actor, actorRole: r.actor_role, action: r.action, agentEmail: r.agent_email, agentName: r.agent_email ? name(r.agent_email) : null, teamKey: r.team_key, day: r.day, detail: r.detail, note: r.note })) });
+    })
+  );
+  api.get(
+    "/api/roster/export",
+    route(async (req, res) => {
+      const actor = await actorOrRefuse(req);
+      if (!isStaff(actor)) throw new RosterError(403, "FORBIDDEN", "Staff only.");
+      const db = needDb();
+      const today = istDay(clock());
+      const from = isDay(req.query.from) ? String(req.query.from) : weekStart(today);
+      const to = isDay(req.query.to) ? String(req.query.to) : lastBookableDay("PL", today);
+      const keys = actor.role === "tl" ? actor.teamKeys : actor.teamKeys;
+      const rows = keys.length ? await db.query(`SELECT ${ENTRY_COLS} FROM roster_entry e WHERE e.team_key = ANY($1::text[]) AND e.day BETWEEN $2::date AND $3::date ORDER BY e.day, e.agent_email`, [keys, from, to]) : [];
+      const name = nameOf(actor);
+      const csv = toCsv([
+        ["Date", "Agent", "Official Email", "Type", "Status", "Source", "Note", "Decided By", "Decision Note"],
+        ...rows.map((r) => [r.day, name(r.agent_email), r.agent_email, r.kind === "PL" ? "Planned leave" : "Weekly off", r.status, r.source, r.reason || "", r.decided_by || "", r.decision_note || ""])
+      ]);
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      return res.send(csv);
+    })
+  );
+  api.get(
+    "/api/notifications",
+    route(async (req, res) => {
+      const actor = await actorOrRefuse(req);
+      const db = needDb();
+      if (!actor.inboxKeys.length) return res.json({ items: [], unread: 0 });
+      const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 30));
+      const rows = await db.query(
+        `SELECT id, kind, title, body, entry_id::text AS entry_id, to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at, read_at IS NOT NULL AS read
+         FROM app_notification WHERE recipient = ANY($1::text[]) ORDER BY created_at DESC, id DESC LIMIT $2::int`,
+        [actor.inboxKeys, limit]
+      );
+      const items = rows.map((r) => ({ id: Number(r.id), kind: r.kind, title: r.title, body: r.body, entryId: r.entry_id, createdAt: r.created_at, read: Boolean(r.read) }));
+      return res.json({ items, unread: await unreadCount(db, actor.inboxKeys) });
+    })
+  );
+  api.post(
+    "/api/notifications/read",
+    route(async (req, res) => {
+      const actor = await actorOrRefuse(req);
+      const db = needDb();
+      if (!actor.inboxKeys.length) return res.json({ ok: true });
+      const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(Number).filter(Number.isInteger) : null;
+      await db.query(
+        ids ? `UPDATE app_notification SET read_at = now() WHERE recipient = ANY($1::text[]) AND read_at IS NULL AND id = ANY($2::bigint[])` : `UPDATE app_notification SET read_at = now() WHERE recipient = ANY($1::text[]) AND read_at IS NULL`,
+        ids ? [actor.inboxKeys, ids] : [actor.inboxKeys]
+      );
+      return res.json({ ok: true });
+    })
+  );
+}
+
 // server-login-tracker.ts
 var DEFAULT_LOGIN_TRACKER_CONFIG = {
   enabled: true,
@@ -4692,8 +5602,8 @@ async function recordAgentHeartbeat(agentEmail, config, now = /* @__PURE__ */ ne
   const docId = `${cleanEmail}_${windowInfo.dateKey}`;
   const docRef = adminDb.collection("loginActivity").doc(docId);
   const nowMs = now.getTime();
-  const cached = await readActivity(docId, nowMs);
-  const data = cached.data;
+  const cached2 = await readActivity(docId, nowMs);
+  const data = cached2.data;
   const lastTime = data?.lastHeartbeatTime;
   const lastWindow = data?.lastWindow;
   let delta = 0;
@@ -4725,9 +5635,9 @@ async function recordAgentHeartbeat(agentEmail, config, now = /* @__PURE__ */ ne
   };
   const neverSaved = !data;
   const windowChanged = Boolean(lastWindow) && lastWindow !== windowInfo.windowId;
-  const due = nowMs - cached.persistedAt >= PERSIST_EVERY_MS;
+  const due = nowMs - cached2.persistedAt >= PERSIST_EVERY_MS;
   const persist = neverSaved || windowChanged || due || remainingSeconds <= LOW_REMAINING_SECONDS;
-  activityCache.set(docId, { at: nowMs, persistedAt: persist ? nowMs : cached.persistedAt, data: { ...data, ...next } });
+  activityCache.set(docId, { at: nowMs, persistedAt: persist ? nowMs : cached2.persistedAt, data: { ...data, ...next } });
   if (persist) await docRef.set(next, { merge: true });
   let reason = void 0;
   if (!allowed) {
@@ -5055,6 +5965,7 @@ function createApiApp(options = {}) {
       });
     })
   );
+  registerRosterRoutes(api, { authenticate, identify, ensureSeedData, loadAgents, getExcludedEmails });
   api.get(
     "/api/monitor",
     route(async (req, res) => {
@@ -5169,7 +6080,7 @@ function createApiApp(options = {}) {
     "/api/admin/config",
     route(async (req, res) => {
       const { user, appConfig } = await requireSuperAdmin(req);
-      const { aiEnabled, aiTone, testMode, managers, superAdmins, googleSpreadsheetUrl, loginTracker } = req.body || {};
+      const { aiEnabled, aiTone, testMode, managers, superAdmins, googleSpreadsheetUrl, loginTracker, roster } = req.body || {};
       const updates = {};
       if (typeof googleSpreadsheetUrl === "string") updates.googleSpreadsheetUrl = googleSpreadsheetUrl.trim();
       if (typeof aiEnabled === "boolean") updates.aiEnabled = aiEnabled;
@@ -5182,6 +6093,13 @@ function createApiApp(options = {}) {
           amWindowMinutes: typeof loginTracker.amWindowMinutes === "number" && loginTracker.amWindowMinutes > 0 ? Math.round(loginTracker.amWindowMinutes) : current.amWindowMinutes,
           pmWindowMinutes: typeof loginTracker.pmWindowMinutes === "number" && loginTracker.pmWindowMinutes > 0 ? Math.round(loginTracker.pmWindowMinutes) : current.pmWindowMinutes,
           timezone: current.timezone || "Asia/Kolkata"
+        };
+      }
+      if (roster && typeof roster === "object") {
+        const current = appConfig.roster || { enabled: false, pilotTeams: [] };
+        updates.roster = {
+          enabled: typeof roster.enabled === "boolean" ? roster.enabled : current.enabled,
+          pilotTeams: roster.pilotTeams !== void 0 ? cleanEmailList(roster.pilotTeams, "pilotTeams") : current.pilotTeams
         };
       }
       if (managers !== void 0) updates.managers = cleanEmailList(managers, "managers");
@@ -5407,31 +6325,6 @@ function createApiApp(options = {}) {
       return res.json({ status: "ok", agentEmail });
     })
   );
-  function isAgentOfTl(agent, tlUserEmail, tlAccess) {
-    const tlPersonal = normalizeEmail(tlUserEmail);
-    const tlOfficial = normalizeEmail(tlAccess?.officialEmail);
-    const agentTlPersonal = normalizeEmail(agent.tlPersonalEmail);
-    const agentTlOfficial = normalizeEmail(agent.tlOfficialEmail);
-    if (tlPersonal && agentTlPersonal && agentTlPersonal === tlPersonal) {
-      return true;
-    }
-    if (tlOfficial && agentTlOfficial && agentTlOfficial === tlOfficial) {
-      return true;
-    }
-    if (tlPersonal && agentTlOfficial && agentTlOfficial === tlPersonal) {
-      return true;
-    }
-    if (tlOfficial && agentTlPersonal && agentTlPersonal === tlOfficial) {
-      return true;
-    }
-    if (!agentTlPersonal && !agentTlOfficial && tlAccess?.location) {
-      const tlLoc = tlAccess.location.trim().toLowerCase();
-      const agLoc = (agent.location || "").trim().toLowerCase();
-      if (tlLoc === agLoc) return true;
-      if (tlLoc === "dighe" && agLoc === "dighe (pre sales)") return true;
-    }
-    return false;
-  }
   api.get(
     "/api/agent-data",
     route(async (req, res) => {

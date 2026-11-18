@@ -1,6 +1,7 @@
 import { summary } from './harness';
 import { runDbTests } from './db.test';
 import { runApiTests } from './api.test';
+import { runRosterTests } from './roster.test';
 
 /**
  * Server tests: the database layer (against a fake Firestore that can fail on purpose) and the whole
@@ -10,6 +11,7 @@ import { runApiTests } from './api.test';
 async function main() {
   await runDbTests();
   await runApiTests();
+  await runRosterTests();
   const failed = summary();
   process.exit(failed > 0 ? 1 : 0);
 }

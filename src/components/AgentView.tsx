@@ -19,9 +19,11 @@ const TeamRevenueTab = lazyView<React.ComponentProps<typeof import('./TeamRevenu
 const RawDataView = lazyView<React.ComponentProps<typeof import('./RawDataView')['RawDataView']>>(() => import('./RawDataView'), 'RawDataView');
 const DayOnDayView = lazyView<React.ComponentProps<typeof import('./DayOnDayView')['DayOnDayView']>>(() => import('./DayOnDayView'), 'DayOnDayView');
 const CallMetricsTab = lazyView<React.ComponentProps<typeof import('./CallMetricsTab')['CallMetricsTab']>>(() => import('./CallMetricsTab'), 'CallMetricsTab');
+const RosterTab = lazyView<React.ComponentProps<typeof import('./RosterTab')['RosterTab']>>(() => import('./RosterTab'), 'RosterTab');
 const HomeTab = lazyView<React.ComponentProps<typeof import('./HomeTab')['HomeTab']>>(() => import('./HomeTab'), 'HomeTab');
 const BreaksAdherenceTab = lazyView<React.ComponentProps<typeof import('./BreaksAdherenceTab')['BreaksAdherenceTab']>>(() => import('./BreaksAdherenceTab'), 'BreaksAdherenceTab');
 import { StaleBanner } from './StaleBanner';
+import { useRosterStatus } from '../utils/rosterApi';
 import { StackedSection, StackedSections } from './StackedSections';
 import { calculateProjection, calculateRemainingWorkingDays } from '../shared/planning';
 import {
@@ -31,6 +33,7 @@ import {
   Briefcase,
   AlertCircle,
   Home,
+  CalendarDays,
   ArrowLeft,
   TrendingUp,
   FileSpreadsheet,
@@ -46,7 +49,9 @@ interface AgentViewProps {
 }
 
 export function AgentView({ officialEmail, getIdToken, onBack }: AgentViewProps) {
-  const [activeTab, setActiveTab] = useState<'home' | 'revenue' | 'calls' | 'breaks' | 'rawData'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'revenue' | 'calls' | 'breaks' | 'roster' | 'rawData'>('home');
+  // The Roster tab appears only when rostering is switched on for this person (and the agent's team is in the pilot)
+  const { status: rosterStatus, refresh: refreshRoster } = useRosterStatus(getIdToken);
   // Scrolls the Revenue page to a section from a button inside another section
   const [jumpTo, setJumpTo] = useState<{ id: string; n: number } | null>(null);
   const jump = (id: string) => {
@@ -418,6 +423,23 @@ export function AgentView({ officialEmail, getIdToken, onBack }: AgentViewProps)
               <span className="sm:hidden">Breaks</span>
               <span className="hidden sm:inline">Breaks & Adherence</span>
             </button>
+            {rosterStatus?.enabled && (
+              <button
+                onClick={() => {
+                  soundFx.playPop();
+                  setActiveTab('roster');
+                }}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition shrink-0 ${
+                  activeTab === 'roster'
+                    ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs font-bold'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <CalendarDays className="w-3.5 h-3.5" />
+                <span>Roster</span>
+                {rosterStatus.badge ? <span className="ml-0.5 px-1.5 py-0.5 rounded-full bg-rose-600 text-white text-[10px] font-bold leading-none ">{rosterStatus.badge}</span> : null}
+              </button>
+            )}
             <button
               onClick={() => {
                 soundFx.playPop();
@@ -458,6 +480,13 @@ export function AgentView({ officialEmail, getIdToken, onBack }: AgentViewProps)
         <CallMetricsTab agentRecord={agentRecord} isPreSales={isPreSales} />
       ) : activeTab === 'breaks' ? (
         <BreaksAdherenceTab agentRecord={agentRecord} getIdToken={getIdToken} />
+      ) : activeTab === 'roster' && rosterStatus?.enabled ? (
+        <RosterTab
+          getIdToken={getIdToken}
+          agentEmail={onBack ? agentRecord?.officialEmail || officialEmail : undefined}
+          readOnly={Boolean(onBack)}
+          onChanged={refreshRoster}
+        />
       ) : activeTab === 'rawData' ? (
         <RawDataView
           userRole="agent"

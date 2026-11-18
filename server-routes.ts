@@ -21,6 +21,8 @@ import { TeamSummaryResponse } from './src/shared/teamOps';
 import { buildReadiness } from './server-readiness';
 import { generateAiText, isAiConfigured, runBatchAiGeneration } from './server-ai';
 import { normalizeEmail } from './src/shared/incentive';
+import { isAgentOfTl } from './server-scope';
+import { registerRosterRoutes } from './server-roster';
 import { buildTeamRevenue } from './src/shared/revenue';
 import { overviewTier } from './src/shared/businessOverview';
 import { loadBusinessOverview } from './server-business-overview';
@@ -411,6 +413,10 @@ export function createApiApp(options: ApiOptions = {}): express.Express {
     })
   );
 
+  // ------------------------------------------------------------------ rostering
+
+  registerRosterRoutes(api, { authenticate, identify, ensureSeedData, loadAgents, getExcludedEmails });
+
   // ------------------------------------------------------------------ monitor (read-only, scheduled checks)
 
   /**
@@ -545,7 +551,7 @@ export function createApiApp(options: ApiOptions = {}): express.Express {
     '/api/admin/config',
     route(async (req, res) => {
       const { user, appConfig } = await requireSuperAdmin(req);
-      const { aiEnabled, aiTone, testMode, managers, superAdmins, googleSpreadsheetUrl, loginTracker } = req.body || {};
+      const { aiEnabled, aiTone, testMode, managers, superAdmins, googleSpreadsheetUrl, loginTracker, roster } = req.body || {};
       const updates: Partial<AppConfig> = {};
 
       if (typeof googleSpreadsheetUrl === 'string') updates.googleSpreadsheetUrl = googleSpreadsheetUrl.trim();
@@ -565,6 +571,13 @@ export function createApiApp(options: ApiOptions = {}): express.Express {
               ? Math.round(loginTracker.pmWindowMinutes)
               : current.pmWindowMinutes,
           timezone: current.timezone || 'Asia/Kolkata',
+        };
+      }
+      if (roster && typeof roster === 'object') {
+        const current = appConfig.roster || { enabled: false, pilotTeams: [] };
+        updates.roster = {
+          enabled: typeof roster.enabled === 'boolean' ? roster.enabled : current.enabled,
+          pilotTeams: roster.pilotTeams !== undefined ? cleanEmailList(roster.pilotTeams, 'pilotTeams') : current.pilotTeams,
         };
       }
       if (managers !== undefined) updates.managers = cleanEmailList(managers, 'managers');
@@ -846,49 +859,6 @@ export function createApiApp(options: ApiOptions = {}): express.Express {
       return res.json({ status: 'ok', agentEmail });
     })
   );
-
-/**
- * Determines whether an agent belongs to a Team Leader.
- * Checks personal email, official email, and location.
- */
-function isAgentOfTl(
-  agent: AgentRecord,
-  tlUserEmail: string,
-  tlAccess?: { officialEmail?: string; location?: string }
-): boolean {
-  const tlPersonal = normalizeEmail(tlUserEmail);
-  const tlOfficial = normalizeEmail(tlAccess?.officialEmail);
-  const agentTlPersonal = normalizeEmail(agent.tlPersonalEmail);
-  const agentTlOfficial = normalizeEmail(agent.tlOfficialEmail);
-
-  // 1. Direct match on TL Personal Email
-  if (tlPersonal && agentTlPersonal && agentTlPersonal === tlPersonal) {
-    return true;
-  }
-
-  // 2. Direct match on TL Official Email (agents sheet has TL_Official_Email)
-  if (tlOfficial && agentTlOfficial && agentTlOfficial === tlOfficial) {
-    return true;
-  }
-
-  // 3. Cross matches (if login is official email, or sheet had personal/official swapped)
-  if (tlPersonal && agentTlOfficial && agentTlOfficial === tlPersonal) {
-    return true;
-  }
-  if (tlOfficial && agentTlPersonal && agentTlPersonal === tlOfficial) {
-    return true;
-  }
-
-  // 4. Fallback: If neither personal nor official TL was assigned on the agent, location is the team
-  if (!agentTlPersonal && !agentTlOfficial && tlAccess?.location) {
-    const tlLoc = tlAccess.location.trim().toLowerCase();
-    const agLoc = (agent.location || '').trim().toLowerCase();
-    if (tlLoc === agLoc) return true;
-    if (tlLoc === 'dighe' && agLoc === 'dighe (pre sales)') return true;
-  }
-
-  return false;
-}
 
   /**
    * One agent's record plus the cycle rules.
