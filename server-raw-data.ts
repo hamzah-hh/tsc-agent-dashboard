@@ -299,9 +299,13 @@ function chunk<T>(rows: T[]): T[][] {
   return out;
 }
 
-// The raw rows are read on every Raw Data, Day-on-Day and Location Revenue page view. Cached per server
-// instance for a short time; any save on this instance drops the cache.
+// The raw rows (several MB) are read on every Raw Data, Day-on-Day and Location Revenue page view, and the
+// database charges for every byte it sends. They only change when a sync saves new ones, so a server instance
+// keeps them: within 30 s without asking anything, and for up to 20 minutes after checking one tiny document
+// (the save's timestamp) to see that nothing new was saved. Only a changed timestamp, or a save on this
+// instance, makes it read the rows again.
 const RAW_CACHE_TTL_MS = 30000;
+const RAW_CACHE_MAX_MS = 20 * 60000;
 const rawCache = new Map<string, { at: number; value: RawRecordsDoc }>();
 
 export function invalidateRawCache(): void {
@@ -495,7 +499,17 @@ export interface RawRecordsDoc {
  */
 export async function getOrLoadRawRecords(cycleId: string): Promise<RawRecordsDoc> {
   const hit = rawCache.get(cycleId);
-  if (hit && Date.now() - hit.at < RAW_CACHE_TTL_MS) return structuredClone(hit.value);
+  const now = Date.now();
+  if (hit && now - hit.at < RAW_CACHE_TTL_MS) return structuredClone(hit.value);
+  if (hit && now - hit.at < RAW_CACHE_MAX_MS && hit.value.updatedAt) {
+    const head = await rawRecordsRef(cycleId).get();
+    if (head.exists && (head.data() as any)?.updatedAt === hit.value.updatedAt) {
+      // The same save: keep the rows, refresh only the small sync status
+      hit.value = { ...hit.value, syncStatus: await getRawSyncStatus(cycleId) };
+      hit.at = now;
+      return structuredClone(hit.value);
+    }
+  }
   const value = await getOrLoadRawRecordsUncached(cycleId);
   rawCache.set(cycleId, { at: Date.now(), value: structuredClone(value) });
   return value;

@@ -149,6 +149,25 @@ export function createApiApp(options: ApiOptions = {}): express.Express {
 
   const verify: TokenVerifier = options.verifyIdToken ?? ((t) => verifyFirebaseIdToken(t));
 
+  // Timing: every API answer says how long the server took (a Server-Timing header, visible in the browser's
+  // Network tab), and a slow one is logged (without its query string, which can hold an email) so it shows up in
+  // the host's logs. SLOW_API_MS changes the threshold (default 1500 ms).
+  const slowMs = Number(process.env.SLOW_API_MS) > 0 ? Number(process.env.SLOW_API_MS) : 1500;
+  api.use('/api', (req, res, next) => {
+    const started = process.hrtime.bigint();
+    const elapsedMs = () => Number(process.hrtime.bigint() - started) / 1e6;
+    const writeHead = res.writeHead.bind(res) as (...args: any[]) => Response;
+    (res as any).writeHead = (...args: any[]) => {
+      if (!res.headersSent) res.setHeader('Server-Timing', `app;dur=${Math.round(elapsedMs())}`);
+      return writeHead(...args);
+    };
+    res.on('finish', () => {
+      const ms = elapsedMs();
+      if (ms >= slowMs) console.warn(`[slow] ${req.method} ${req.originalUrl.split('?')[0]} took ${Math.round(ms)} ms (status ${res.statusCode})`);
+    });
+    next();
+  });
+
   // JSON bodies (a sync sends the whole sheet), and never cache API answers
   api.use('/api', express.json({ limit: '50mb' }));
   // Requests that write config, agents or access: drop the read cache once they are done (and before,
@@ -416,6 +435,33 @@ export function createApiApp(options: ApiOptions = {}): express.Express {
   // ------------------------------------------------------------------ rostering
 
   registerRosterRoutes(api, { authenticate, identify, ensureSeedData, loadAgents, getExcludedEmails });
+
+  /**
+   * One agent's Breaks days for staff opening that agent: a TL only for their own team, a Manager or the Super
+   * Admin for anyone. (The page used to download the whole Team Summary and pick the agent out of it.)
+   */
+  api.get(
+    '/api/agent-breaks',
+    route(async (req, res) => {
+      const user = await authenticate(req);
+      const { appConfig } = await ensureSeedData();
+      const identity = await identify(user.email, appConfig);
+      if (!identity || identity.role === 'agent') throw new HttpError(403, 'Staff only.');
+      const target = normalizeEmail(String(req.query.agent ?? ''));
+      if (!target) throw new HttpError(400, 'Missing agent parameter');
+      const cycleId = appConfig.activeCycleId;
+      const excluded = await getExcludedEmails(cycleId);
+      let agents = (await loadAgents(cycleId)).filter((a) => !excluded.has(normalizeEmail(a.officialEmail)));
+      if (!appConfig.testMode && identity.role !== 'superAdmin') {
+        agents = agents.filter((a) => !a.isTest && !isTestAgentIdentifier(a.officialEmail, a.name));
+      }
+      if (identity.role === 'tl') agents = agents.filter((a) => isAgentOfTl(a, user.email, identity.access));
+      if (!agents.some((a) => normalizeEmail(a.officialEmail) === target)) throw new HttpError(403, 'That agent is not in your team.');
+      const ops = await loadTeamOps(cycleId);
+      res.set('Cache-Control', 'private, no-store');
+      return res.json({ breaks: ops.breaks.filter((b) => normalizeEmail(b.agentEmail) === target), updatedAt: ops.updatedAt });
+    })
+  );
 
   // ------------------------------------------------------------------ monitor (read-only, scheduled checks)
 

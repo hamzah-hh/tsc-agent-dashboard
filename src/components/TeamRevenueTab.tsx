@@ -1,4 +1,5 @@
 import { SortTh } from './SortTh';
+import { cachedGet } from '../utils/apiCache';
 import { DateRangeFilter, inDateRange, useDateRange } from './DateRangeFilter';
 import { useSort } from '../utils/useSort';
 import React, { useState, useEffect } from 'react';
@@ -40,19 +41,7 @@ export function TeamRevenueTab({ getIdToken, agentLocation, agentType }: TeamRev
     setError(null);
 
     try {
-      const token = await getIdToken();
-      const res = await fetch(`/api/team-revenue?location=${encodeURIComponent(agentLocation)}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson.error || `HTTP ${res.status}`);
-      }
-
-      const json = await res.json();
+      const json = await cachedGet<any>(getIdToken, `/api/team-revenue?location=${encodeURIComponent(agentLocation)}`, { force: isRefresh });
       setData(json.teamRevenue);
     } catch (err: any) {
       console.error('Failed to load team revenue:', err);

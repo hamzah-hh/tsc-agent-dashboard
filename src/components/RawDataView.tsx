@@ -228,6 +228,13 @@ export function RawDataView({
     document.body.removeChild(link);
   };
 
+  // Rows are shown 100 at a time: thousands of table rows at once make a phone slow
+  const PAGE = 100;
+  const [shown, setShown] = useState(PAGE);
+  useEffect(() => {
+    setShown(PAGE);
+  }, [activeTab, selectedLocation, selectedAgent, selectedCategory, from, to, allOrders, allVisits]);
+
   const orderSort = useSort(orders, {
     orderId: (o) => o.orderId,
     date: (o) => o.orderTime || o.date,
@@ -531,7 +538,7 @@ export function RawDataView({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-line">
-                  {orderSort.sorted.map((o, i) => (
+                  {orderSort.sorted.slice(0, shown).map((o, i) => (
                     // One order can be credited to several agents, so the Order ID alone is not a unique key
                     <tr key={`${o.orderId}|${o.agentEmail}|${i}`} className="hover:bg-slate-50/80 transition-colors">
                       <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-fg whitespace-nowrap">
@@ -584,6 +591,13 @@ export function RawDataView({
                   ))}
                 </tbody>
               </table>
+              {orders.length > shown && (
+                <div className="flex flex-wrap items-center justify-center gap-3 py-3 text-xs text-slate-500 dark:text-slate-400 border-t border-slate-100 dark:border-line">
+                  <span>Showing {shown} of {orders.length}</span>
+                  <button type="button" onClick={() => setShown((n) => n + PAGE)} className="font-semibold text-accent hover:underline">Show 100 more</button>
+                  <button type="button" onClick={() => setShown(orders.length)} className="font-semibold text-accent hover:underline">Show all</button>
+                </div>
+              )}
             </div>
           )
         ) : (
@@ -609,7 +623,7 @@ export function RawDataView({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-line">
-                  {visitSort.sorted.map((v, i) => {
+                  {visitSort.sorted.slice(0, shown).map((v, i) => {
                     const [visitDay, visitTime] = (v.visitDateTime || v.date).split(' ');
                     return (
                       <tr key={`${v.id}|${i}`} className="hover:bg-slate-50/80 transition-colors">
@@ -648,6 +662,13 @@ export function RawDataView({
                   })}
                 </tbody>
               </table>
+              {visits.length > shown && (
+                <div className="flex flex-wrap items-center justify-center gap-3 py-3 text-xs text-slate-500 dark:text-slate-400 border-t border-slate-100 dark:border-line">
+                  <span>Showing {shown} of {visits.length}</span>
+                  <button type="button" onClick={() => setShown((n) => n + PAGE)} className="font-semibold text-accent hover:underline">Show 100 more</button>
+                  <button type="button" onClick={() => setShown(visits.length)} className="font-semibold text-accent hover:underline">Show all</button>
+                </div>
+              )}
             </div>
           )
         )}

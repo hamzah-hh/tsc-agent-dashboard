@@ -7,6 +7,7 @@ import {
   User,
 } from 'firebase/auth';
 import { auth, googleProvider } from './shared/firebase-client';
+import { clearApiCache } from './utils/apiCache';
 import { setCachedSheetsToken } from './shared/sheets-auth';
 const AgentView = lazyView<React.ComponentProps<typeof import('./components/AgentView')['AgentView']>>(() => import('./components/AgentView'), 'AgentView');
 const StaffPortal = lazyView<React.ComponentProps<typeof import('./components/StaffPortal')['StaffPortal']>>(() => import('./components/StaffPortal'), 'StaffPortal');
@@ -115,6 +116,7 @@ export default function App() {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      clearApiCache(); // nothing fetched for the previous person may be shown to the next
       setUser(currentUser);
       if (currentUser) {
         setLoginError(null);

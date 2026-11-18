@@ -957,6 +957,18 @@ export async function runApiTests() {
     check('an agent sees only their own breaks', r.status === 200 && r.json?.breaks?.length === 1 && r.json.breaks[0].agentEmail === 'cia@co.in' && r.json.breaks[0].total === 4511, r.text.slice(0, 300));
     r = await call('GET', '/api/my-breaks', { token: tok(L.admin) });
     check('staff cannot use the agent breaks route', r.status === 403, r.text);
+    r = await call('GET', '/api/agent-breaks?agent=cia@co.in', { token: tok(L.admin) });
+    check('the Super Admin reads one agent\'s breaks (just that agent\'s rows)', r.status === 200 && r.json.breaks.length === 1 && r.json.breaks[0].agentEmail === 'cia@co.in' && r.json.breaks[0].total === 4511, r.text.slice(0, 200));
+    r = await call('GET', '/api/agent-breaks?agent=cia@co.in', { token: tok(L.tlDighe) });
+    check('a TL reads the breaks of an agent in their team', r.status === 200 && r.json.breaks.length === 1, r.text.slice(0, 200));
+    r = await call('GET', '/api/agent-breaks?agent=nobody@co.in', { token: tok(L.tlDighe) });
+    check('an agent who is not in the TL team (or does not exist) is refused (403)', r.status === 403, r.text.slice(0, 200));
+    r = await call('GET', '/api/agent-breaks?agent=cia@co.in', { token: tok('cia.login@gmail.com') });
+    check('an agent cannot use the staff route (403)', r.status === 403);
+    r = await call('GET', '/api/agent-breaks', { token: tok(L.admin) });
+    check('a missing agent is a 400', r.status === 400);
+    r = await call('GET', '/api/agent-breaks?agent=cia@co.in');
+    check('and it needs a sign-in (401)', r.status === 401);
     check('productivity: worked Dialer days only, with connects and talk seconds',
       ts.productivity.filter((d: any) => d.agentEmail === 'cia@co.in').map((d: any) => `${d.date}:${d.day}:${d.connects}:${d.talkSeconds}`).join() === '2026-10-02:1:100:6000,2026-10-03:0.5:40:1200' &&
       !ts.productivity.some((d: any) => d.agentEmail === 'cps@co.in'), JSON.stringify(ts.productivity));

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { SortTh } from './SortTh';
+import { cachedGet } from '../utils/apiCache';
 import { DateRangeFilter, inDateRange, useDateRange } from './DateRangeFilter';
 import { useSort } from '../utils/useSort';
 import { formatCurrencyINR, formatNumberINR } from '../shared/incentive';
@@ -129,25 +130,13 @@ export function DayOnDayView({
     setError(null);
 
     try {
-      const token = await getIdToken();
       const params = new URLSearchParams();
 
       const effectiveAgent = targetAgentEmail || (selectedAgent || '');
       if (effectiveAgent) params.set('agentEmail', effectiveAgent);
       if (selectedLocation && !effectiveAgent) params.set('location', selectedLocation);
 
-      const res = await fetch(`/api/dod-data?${params.toString()}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson.error || `HTTP ${res.status}`);
-      }
-
-      const json = await res.json();
+      const json = await cachedGet<any>(getIdToken, `/api/dod-data?${params.toString()}`, { force: isRefresh });
       setData(json);
 
       if (!selectedAgent && json.agent?.officialEmail) {

@@ -9,6 +9,9 @@ import { BreakDay, TargetRow } from './src/shared/teamOps';
 
 const CHUNK = 1000;
 const TTL_MS = 30000;
+// After 30 s the small head document is checked instead of reading every chunk again: the rows only change when
+// a sync saves new ones (which changes the head's updatedAt). Beyond this age they are read again regardless.
+const MAX_AGE_MS = 20 * 60000;
 const cache = new Map<string, { at: number; value: TeamOpsData }>();
 
 export interface TeamOpsData {
@@ -54,6 +57,10 @@ export async function loadTeamOps(cycleId: string): Promise<TeamOpsData> {
   const hit = cache.get(cycleId);
   if (hit && Date.now() - hit.at < TTL_MS) return structuredClone(hit.value);
   const snap = await headRef(cycleId).get();
+  if (hit && Date.now() - hit.at < MAX_AGE_MS && snap.exists && hit.value.updatedAt && (snap.data() as any)?.updatedAt === hit.value.updatedAt) {
+    hit.at = Date.now();
+    return structuredClone(hit.value);
+  }
   let value: TeamOpsData = { breaks: [], targets: [], updatedAt: null };
   if (snap.exists) {
     const d: any = snap.data();

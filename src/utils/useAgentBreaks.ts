@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { BreakDay } from '../shared/teamOps';
+import { ApiError, cachedGet, hasFlag, setFlag } from './apiCache';
 
 /**
- * The agent's Breaks tab days, newest first. An agent reads their own rows; staff viewing an agent are refused
- * by that route, so theirs come from the Team Summary, which is already limited to the teams they may see.
+ * The agent's Breaks tab days, newest first. An agent reads their own rows; staff viewing an agent are refused by
+ * that route and read that agent's rows from the staff route (a TL only for their own team). The answer is shared
+ * by every tab that needs it and reused for a minute.
  */
 export function useAgentBreaks(getIdToken: () => Promise<string>, agentEmail: string) {
   const [breaks, setBreaks] = useState<BreakDay[] | null>(null);
@@ -16,17 +18,19 @@ export function useAgentBreaks(getIdToken: () => Promise<string>, agentEmail: st
     setError(null);
     (async () => {
       try {
-        const headers = { Authorization: `Bearer ${await getIdToken()}` };
-        let res = await fetch('/api/my-breaks', { headers });
-        let json: any = await res.json().catch(() => ({}));
-        let rows: BreakDay[] = json.breaks || [];
-        if (res.status === 403) {
-          res = await fetch('/api/team-summary', { headers });
-          json = await res.json().catch(() => ({}));
-          if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
-          rows = ((json.breaks || []) as BreakDay[]).filter((b) => (b.agentEmail || '').toLowerCase() === email);
-        } else if (!res.ok) {
-          throw new Error(json.error || `HTTP ${res.status}`);
+        const staffRows = async () => (await cachedGet<{ breaks?: BreakDay[] }>(getIdToken, `/api/agent-breaks?agent=${encodeURIComponent(email)}`)).breaks || [];
+        let rows: BreakDay[];
+        if (hasFlag('staff')) {
+          rows = await staffRows();
+        } else {
+          try {
+            rows = (await cachedGet<{ breaks?: BreakDay[] }>(getIdToken, '/api/my-breaks')).breaks || [];
+          } catch (err) {
+            // Staff viewing an agent are refused by that route: they ask for just that agent's rows instead (and remember it)
+            if (!(err instanceof ApiError) || err.status !== 403) throw err;
+            setFlag('staff');
+            rows = await staffRows();
+          }
         }
         if (live) setBreaks([...rows].sort((a, b) => b.date.localeCompare(a.date)));
       } catch (err: any) {

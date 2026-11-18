@@ -2546,6 +2546,7 @@ function chunk(rows) {
   return out;
 }
 var RAW_CACHE_TTL_MS = 3e4;
+var RAW_CACHE_MAX_MS = 20 * 6e4;
 var rawCache = /* @__PURE__ */ new Map();
 function invalidateRawCache() {
   rawCache.clear();
@@ -2676,7 +2677,16 @@ async function syncRawSheetData(cycleId, sheetUrl = DEFAULT_RAW_SHEET_URL) {
 }
 async function getOrLoadRawRecords(cycleId) {
   const hit = rawCache.get(cycleId);
-  if (hit && Date.now() - hit.at < RAW_CACHE_TTL_MS) return structuredClone(hit.value);
+  const now = Date.now();
+  if (hit && now - hit.at < RAW_CACHE_TTL_MS) return structuredClone(hit.value);
+  if (hit && now - hit.at < RAW_CACHE_MAX_MS && hit.value.updatedAt) {
+    const head = await rawRecordsRef(cycleId).get();
+    if (head.exists && head.data()?.updatedAt === hit.value.updatedAt) {
+      hit.value = { ...hit.value, syncStatus: await getRawSyncStatus(cycleId) };
+      hit.at = now;
+      return structuredClone(hit.value);
+    }
+  }
   const value = await getOrLoadRawRecordsUncached(cycleId);
   rawCache.set(cycleId, { at: Date.now(), value: structuredClone(value) });
   return value;
@@ -3214,6 +3224,7 @@ function buildFromCleanSheet(tabs, cycle) {
 // server-team-ops.ts
 var CHUNK = 1e3;
 var TTL_MS = 3e4;
+var MAX_AGE_MS = 20 * 6e4;
 var cache = /* @__PURE__ */ new Map();
 var headRef = (cycleId) => adminDb.collection("cycles").doc(cycleId).collection("data").doc("teamOps");
 var chunksCol = (cycleId) => headRef(cycleId).collection("chunks");
@@ -3248,6 +3259,10 @@ async function loadTeamOps(cycleId) {
   const hit = cache.get(cycleId);
   if (hit && Date.now() - hit.at < TTL_MS) return structuredClone(hit.value);
   const snap = await headRef(cycleId).get();
+  if (hit && Date.now() - hit.at < MAX_AGE_MS && snap.exists && hit.value.updatedAt && snap.data()?.updatedAt === hit.value.updatedAt) {
+    hit.at = Date.now();
+    return structuredClone(hit.value);
+  }
   let value = { breaks: [], targets: [], updatedAt: null };
   if (snap.exists) {
     const d = snap.data();
@@ -6178,6 +6193,21 @@ function createApiApp(options = {}) {
   const api = express();
   api.disable("x-powered-by");
   const verify = options.verifyIdToken ?? ((t) => verifyFirebaseIdToken(t));
+  const slowMs = Number(process.env.SLOW_API_MS) > 0 ? Number(process.env.SLOW_API_MS) : 1500;
+  api.use("/api", (req, res, next) => {
+    const started = process.hrtime.bigint();
+    const elapsedMs = () => Number(process.hrtime.bigint() - started) / 1e6;
+    const writeHead = res.writeHead.bind(res);
+    res.writeHead = (...args) => {
+      if (!res.headersSent) res.setHeader("Server-Timing", `app;dur=${Math.round(elapsedMs())}`);
+      return writeHead(...args);
+    };
+    res.on("finish", () => {
+      const ms = elapsedMs();
+      if (ms >= slowMs) console.warn(`[slow] ${req.method} ${req.originalUrl.split("?")[0]} took ${Math.round(ms)} ms (status ${res.statusCode})`);
+    });
+    next();
+  });
   api.use("/api", express.json({ limit: "50mb" }));
   api.use(["/api/sync", "/api/import", "/api/clear-test", "/api/admin"], (req, res, next) => {
     if (req.method === "GET") return next();
@@ -6390,6 +6420,28 @@ function createApiApp(options = {}) {
     })
   );
   registerRosterRoutes(api, { authenticate, identify, ensureSeedData, loadAgents, getExcludedEmails });
+  api.get(
+    "/api/agent-breaks",
+    route(async (req, res) => {
+      const user = await authenticate(req);
+      const { appConfig } = await ensureSeedData();
+      const identity = await identify(user.email, appConfig);
+      if (!identity || identity.role === "agent") throw new HttpError(403, "Staff only.");
+      const target = normalizeEmail(String(req.query.agent ?? ""));
+      if (!target) throw new HttpError(400, "Missing agent parameter");
+      const cycleId = appConfig.activeCycleId;
+      const excluded = await getExcludedEmails(cycleId);
+      let agents = (await loadAgents(cycleId)).filter((a) => !excluded.has(normalizeEmail(a.officialEmail)));
+      if (!appConfig.testMode && identity.role !== "superAdmin") {
+        agents = agents.filter((a) => !a.isTest && !isTestAgentIdentifier(a.officialEmail, a.name));
+      }
+      if (identity.role === "tl") agents = agents.filter((a) => isAgentOfTl(a, user.email, identity.access));
+      if (!agents.some((a) => normalizeEmail(a.officialEmail) === target)) throw new HttpError(403, "That agent is not in your team.");
+      const ops = await loadTeamOps(cycleId);
+      res.set("Cache-Control", "private, no-store");
+      return res.json({ breaks: ops.breaks.filter((b) => normalizeEmail(b.agentEmail) === target), updatedAt: ops.updatedAt });
+    })
+  );
   api.get(
     "/api/monitor",
     route(async (req, res) => {

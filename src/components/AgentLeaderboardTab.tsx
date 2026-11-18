@@ -1,4 +1,5 @@
 import { SortTh } from './SortTh';
+import { cachedGet } from '../utils/apiCache';
 import { useSort } from '../utils/useSort';
 import React, { useState, useEffect } from 'react';
 import { round2 } from '../utils/format';
@@ -80,26 +81,11 @@ export function AgentLeaderboardTab({
     setError(null);
 
     try {
-      const token = await getIdToken();
-      const [res, locRes] = await Promise.all([
-        fetch('/api/agent-leaderboard', {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }),
-        fetch(`/api/location-revenue?location=${encodeURIComponent(currentLocation)}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }),
+      // The location table is a bonus: if it cannot be loaded the leaderboard still shows
+      const [json, locJson] = await Promise.all([
+        cachedGet<any>(getIdToken, '/api/agent-leaderboard', { force: isRefresh }),
+        cachedGet<any>(getIdToken, `/api/location-revenue?location=${encodeURIComponent(currentLocation)}`, { force: isRefresh }).catch(() => null),
       ]);
-
-      if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson.error || `HTTP ${res.status}`);
-      }
-
-      const json = await res.json();
       const allowed = json.allowedCategory as 'HO' | 'STORE' | 'PRE_SALES' | 'ALL' | undefined;
 
       setData({
@@ -110,11 +96,8 @@ export function AgentLeaderboardTab({
         userRole: json.userRole,
       });
 
-      if (locRes.ok) {
-        const locJson = await locRes.json().catch(() => ({}));
-        if (locJson.locationRevenue) {
-          setLocationRevenue(locJson.locationRevenue);
-        }
+      if (locJson?.locationRevenue) {
+        setLocationRevenue(locJson.locationRevenue);
       }
 
       // Automatically lock to the allowed category
