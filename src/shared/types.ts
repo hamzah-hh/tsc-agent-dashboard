@@ -156,6 +156,8 @@ export interface AgentDailyEntry {
   visitsBooked: number;
   visitsAttributed: number;
   day: number;
+  /** Dialer Total_Outbound_Calls (absent on days synced before the column was stored). */
+  outbound?: number;
   // Pre Sales only
   calls?: number;
   avgTalkSec?: number;
@@ -366,6 +368,8 @@ export interface RawMainRow {
   Sales?: any;
   Average_Order_Value?: any;
   Unique_Connects?: any;
+  /** Dialer Total_Outbound_Calls for the day (blank when the sheet has no such column). */
+  Outbound_Calls?: any;
   Talk_Time_Minutes?: any;
   TL_Official_Email?: any;
   TL_Personal_Email?: any;

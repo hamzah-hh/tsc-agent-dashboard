@@ -493,7 +493,7 @@ export function buildFromCleanSheet(tabs: CleanSheetTabs, cycle: { startDate: st
     const byDay = totals.get(p.official);
     if (!byDay || byDay.size === 0) {
       // Roster row: the agent can sign in before their first data
-      mainRows.push({ ...profile, Date: cycle.startDate, Count_of_Orders: '', Sales: '', Unique_Connects: '', Talk_Time_Minutes: '', Store_Visits: '', Day: 0, Inbound_Calls: '', Avg_TT_per_day: '' });
+      mainRows.push({ ...profile, Date: cycle.startDate, Count_of_Orders: '', Sales: '', Unique_Connects: '', Outbound_Calls: '', Talk_Time_Minutes: '', Store_Visits: '', Day: 0, Inbound_Calls: '', Avg_TT_per_day: '' });
       continue;
     }
     for (const day of [...byDay.keys()].sort()) {
@@ -505,6 +505,7 @@ export function buildFromCleanSheet(tabs: CleanSheetTabs, cycle: { startDate: st
         Sales: t.sales,
         Average_Order_Value: t.orders > 0 ? Math.round(t.sales / t.orders) : 0,
         Unique_Connects: t.connects,
+        Outbound_Calls: t.outbound,
         Talk_Time_Minutes: t.talkSec / 60,
         Store_Visits: t.visits,
         // Blank Day + calls = one Pre Sales worked day; otherwise only a Dialer row makes a worked day

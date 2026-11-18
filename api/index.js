@@ -825,6 +825,8 @@ function aggregateAgent(rows, qualityRow) {
       sales: safeNum(r.Sales),
       orders: safeNum(r.Count_of_Orders),
       connects: safeNum(r.Unique_Connects),
+      // null when the row has no Outbound_Calls at all (older syncs), so those days are not shown as 0
+      outbound: r.Outbound_Calls === void 0 || r.Outbound_Calls === null || String(r.Outbound_Calls).trim() === "" ? null : safeNum(r.Outbound_Calls),
       talkSeconds: safeNum(r.Talk_Time_Minutes) * 60,
       visitsBooked: safeNum(r.Store_Visits),
       visitsAttributed: safeNum(r.Store_Visits),
@@ -878,6 +880,7 @@ function aggregateAgent(rows, qualityRow) {
       existing.sales += nr.sales;
       existing.orders += nr.orders;
       existing.connects += nr.connects;
+      if (nr.outbound !== null) existing.outbound = (existing.outbound ?? 0) + nr.outbound;
       existing.talkSeconds += nr.talkSeconds;
       existing.visitsBooked += nr.visitsBooked;
       existing.visitsAttributed += nr.visitsAttributed;
@@ -889,6 +892,7 @@ function aggregateAgent(rows, qualityRow) {
         sales: nr.sales,
         orders: nr.orders,
         connects: nr.connects,
+        ...nr.outbound !== null ? { outbound: nr.outbound } : {},
         talkSeconds: nr.talkSeconds,
         visitsBooked: nr.visitsBooked,
         visitsAttributed: nr.visitsAttributed,
@@ -3136,7 +3140,7 @@ function buildFromCleanSheet(tabs, cycle) {
     };
     const byDay = totals.get(p.official);
     if (!byDay || byDay.size === 0) {
-      mainRows.push({ ...profile, Date: cycle.startDate, Count_of_Orders: "", Sales: "", Unique_Connects: "", Talk_Time_Minutes: "", Store_Visits: "", Day: 0, Inbound_Calls: "", Avg_TT_per_day: "" });
+      mainRows.push({ ...profile, Date: cycle.startDate, Count_of_Orders: "", Sales: "", Unique_Connects: "", Outbound_Calls: "", Talk_Time_Minutes: "", Store_Visits: "", Day: 0, Inbound_Calls: "", Avg_TT_per_day: "" });
       continue;
     }
     for (const day of [...byDay.keys()].sort()) {
@@ -3148,6 +3152,7 @@ function buildFromCleanSheet(tabs, cycle) {
         Sales: t.sales,
         Average_Order_Value: t.orders > 0 ? Math.round(t.sales / t.orders) : 0,
         Unique_Connects: t.connects,
+        Outbound_Calls: t.outbound,
         Talk_Time_Minutes: t.talkSec / 60,
         Store_Visits: t.visits,
         // Blank Day + calls = one Pre Sales worked day; otherwise only a Dialer row makes a worked day
@@ -3540,6 +3545,9 @@ function canonicalizeMainHeader(rawHeader) {
   }
   if (normalized === "averageordervalue" || normalized === "aov" || normalized === "avgordervalue") {
     return "Average_Order_Value";
+  }
+  if (normalized === "outboundcalls" || normalized === "totaloutboundcalls" || normalized === "outbound") {
+    return "Outbound_Calls";
   }
   if (normalized === "uniqueconnects" || normalized === "connects" || normalized === "totalconnects" || normalized === "callsconnected") {
     return "Unique_Connects";

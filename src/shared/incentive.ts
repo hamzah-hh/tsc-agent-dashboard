@@ -141,6 +141,8 @@ export function aggregateAgent(
       sales: safeNum(r.Sales),
       orders: safeNum(r.Count_of_Orders),
       connects: safeNum(r.Unique_Connects),
+      // null when the row has no Outbound_Calls at all (older syncs), so those days are not shown as 0
+      outbound: r.Outbound_Calls === undefined || r.Outbound_Calls === null || String(r.Outbound_Calls).trim() === '' ? null : safeNum(r.Outbound_Calls),
       talkSeconds: safeNum(r.Talk_Time_Minutes) * 60,
       visitsBooked: safeNum(r.Store_Visits),
       visitsAttributed: safeNum(r.Store_Visits),
@@ -205,6 +207,7 @@ export function aggregateAgent(
       existing.sales += nr.sales;
       existing.orders += nr.orders;
       existing.connects += nr.connects;
+      if (nr.outbound !== null) existing.outbound = (existing.outbound ?? 0) + nr.outbound;
       existing.talkSeconds += nr.talkSeconds;
       existing.visitsBooked += nr.visitsBooked;
       existing.visitsAttributed += nr.visitsAttributed;
@@ -216,6 +219,7 @@ export function aggregateAgent(
         sales: nr.sales,
         orders: nr.orders,
         connects: nr.connects,
+        ...(nr.outbound !== null ? { outbound: nr.outbound } : {}),
         talkSeconds: nr.talkSeconds,
         visitsBooked: nr.visitsBooked,
         visitsAttributed: nr.visitsAttributed,

@@ -216,6 +216,11 @@ export function canonicalizeMainHeader(rawHeader: string): string {
     return 'Average_Order_Value';
   }
 
+  // Outbound calls (Dialer Total_Outbound_Calls)
+  if (normalized === 'outboundcalls' || normalized === 'totaloutboundcalls' || normalized === 'outbound') {
+    return 'Outbound_Calls';
+  }
+
   // Unique Connects
   if (
     normalized === 'uniqueconnects' ||

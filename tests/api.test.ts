@@ -1170,6 +1170,8 @@ export async function runApiTests() {
       octHo?.quality === 1 && Math.abs(octAll.quality - (2 * 1 + 4 * 0.9) / 6) < 1e-9, JSON.stringify([octHo?.quality, octAll?.quality]));
     const ciaRec = (await adminDb.collection('cycles').doc(CYCLE).collection('agents').doc('cia@co.in').get()).data();
     check('the incentive quality uses only the cycle month (the September 50% is left out)', ciaRec?.quality?.audits === 2 && ciaRec.quality.score === 100, JSON.stringify(ciaRec?.quality));
+    check('the agent record keeps Total_Outbound_Calls per day (and nothing for Total_Connected_Calls); unique connects stay as they were',
+      (ciaRec?.daily || []).map((d: any) => `${d.date}:${d.outbound}:${d.connects}:${'connected' in d}`).join() === '2026-10-02:300:100:false,2026-10-03:100:35:false', JSON.stringify(ciaRec?.daily));
     check('the all-tier row adds the tiers up', octAll?.outbound === 600 && octAll.connected === 250 && octAll.teamSize === 2 && octAll.revenue === 4500, JSON.stringify(octAll));
     check('past months come from the tab (a Quality_Score typed as 83.78 reads as 0.8378)', sepAll?.outbound === 407262 && Math.abs(sepAll.quality - 0.8378) < 1e-9 && sepAll.qualityPreSales === 0.9065 && !sepAll.live, JSON.stringify(sepAll));
     r = await call('GET', '/api/team-summary', { token: tok(L.tlDighe) });
