@@ -4804,6 +4804,12 @@ function registerRosterRoutes(api, ctx) {
     const cycleId = appConfig.activeCycleId;
     const excluded = await ctx.getExcludedEmails(cycleId);
     const everyone = (await ctx.loadAgents(cycleId)).filter((a) => !excluded.has(norm2(a.officialEmail)));
+    if (ctx.loadCarryOverAgents) {
+      const have = new Set(everyone.map((a) => norm2(a.officialEmail)));
+      for (const a of await ctx.loadCarryOverAgents(appConfig, istDay(clock()))) {
+        if (!have.has(norm2(a.officialEmail))) everyone.push(a);
+      }
+    }
     let visible = everyone;
     if (!appConfig.testMode && identity.role !== "superAdmin") visible = visible.filter((a) => !isTestAgent(a));
     const role = identity.role;
@@ -6146,6 +6152,28 @@ function clearRouteCache() {
   excludedCache.clear();
   accessCache.clear();
 }
+async function loadCarryOverAgents(appConfig, todayIst) {
+  try {
+    const cycles = await adminDb.collection("cycles").get();
+    let active = null;
+    const others = [];
+    cycles.forEach((d) => {
+      const c = d.data() || {};
+      if (d.id === appConfig.activeCycleId) active = c;
+      else if (c.endDate) others.push({ id: d.id, endDate: String(c.endDate).slice(0, 10) });
+    });
+    const start = active?.startDate ? String(active.startDate).slice(0, 10) : "";
+    if (!start || todayIst < start) return [];
+    const days = (Date.parse(todayIst) - Date.parse(start)) / 864e5;
+    if (days > 14) return [];
+    const prev = others.filter((o) => o.endDate < start).sort((a, b) => a.endDate < b.endDate ? 1 : -1)[0];
+    if (!prev) return [];
+    const excluded = await getExcludedEmails(prev.id);
+    return (await loadAgents(prev.id)).filter((a) => !excluded.has(normalizeEmail(a.officialEmail)));
+  } catch {
+    return [];
+  }
+}
 async function getExcludedEmails(cycleId) {
   const hit = excludedCache.get(cycleId);
   if (hit && Date.now() - hit.at < ROUTE_CACHE_TTL_MS) return new Set(hit.value);
@@ -6419,7 +6447,7 @@ function createApiApp(options = {}) {
       });
     })
   );
-  registerRosterRoutes(api, { authenticate, identify, ensureSeedData, loadAgents, getExcludedEmails });
+  registerRosterRoutes(api, { authenticate, identify, ensureSeedData, loadAgents, getExcludedEmails, loadCarryOverAgents });
   api.get(
     "/api/agent-breaks",
     route(async (req, res) => {

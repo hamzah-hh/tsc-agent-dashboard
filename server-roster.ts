@@ -59,6 +59,8 @@ export interface RosterContext {
   ensureSeedData(): Promise<{ appConfig: AppConfig }>;
   loadAgents(cycleId: string): Promise<AgentRecord[]>;
   getExcludedEmails(cycleId: string): Promise<Set<string>>;
+  /** The previous cycle's agents during the first 14 days of a new cycle (empty otherwise). */
+  loadCarryOverAgents?(appConfig: AppConfig, todayIst: string): Promise<AgentRecord[]>;
 }
 
 class RosterError extends Error {
@@ -144,6 +146,12 @@ export function registerRosterRoutes(api: Express, ctx: RosterContext): void {
     const cycleId = appConfig.activeCycleId;
     const excluded = await ctx.getExcludedEmails(cycleId);
     const everyone = (await ctx.loadAgents(cycleId)).filter((a) => !excluded.has(norm(a.officialEmail)));
+    if (ctx.loadCarryOverAgents) {
+      const have = new Set(everyone.map((a) => norm(a.officialEmail)));
+      for (const a of await ctx.loadCarryOverAgents(appConfig, istDay(clock()))) {
+        if (!have.has(norm(a.officialEmail))) everyone.push(a);
+      }
+    }
     let visible = everyone;
     if (!appConfig.testMode && identity.role !== 'superAdmin') visible = visible.filter((a) => !isTestAgent(a));
 

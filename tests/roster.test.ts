@@ -1,6 +1,7 @@
 import type { AddressInfo } from 'net';
 import type { Server } from 'http';
-import { resetBackendForTests } from '../server-firebase-admin';
+import { adminDb, resetBackendForTests } from '../server-firebase-admin';
+import { ensureSeedData } from '../server-import';
 import { createApiApp } from '../server-routes';
 import { setRawSheetFetchForTests } from '../server-raw-data';
 import { setRosterDbForTests } from '../server-roster-db';
@@ -526,6 +527,23 @@ export async function runRosterTests() {
     check('after that it can no longer be accepted (EXPIRED)', r.status === 409 && r.json.code === 'EXPIRED', msg(r));
     r = await call('GET', '/api/roster/swaps', { token: tok(loginC(5)) });
     check('it shows as expired, and both agents were told', r.json.items.find((x: any) => x.id === sw7.id)?.status === 'expired' && (await inboxOf(loginC(3))).some((n) => n.kind === 'swap_expired'));
+
+    // ------------------------------------------------------------------
+    section('rostering: a new incentive cycle starts (carry-over of the previous cycle for 14 days)');
+    const activeId = (await ensureSeedData()).appConfig.activeCycleId;
+    await adminDb.collection('cycles').doc('old-cycle').set({ name: 'Old', startDate: '2026-10-01', endDate: '2026-11-30' });
+    await adminDb.collection('cycles').doc('old-cycle').collection('agents').doc('z1@co.in').set({
+      name: 'Zed One', officialEmail: 'z1@co.in', personalEmail: 'z1.login@gmail.com', location: 'Dighe', agentType: 'HO Callers',
+      tlOfficialEmail: TEAM_A, tlPersonalEmail: L.tlA, isTest: false, daily: [],
+    });
+    await adminDb.collection('access').doc('z1.login@gmail.com').set({ role: 'agent', officialEmail: 'z1@co.in', name: 'Zed One', location: 'Dighe' });
+    await adminDb.collection('cycles').doc(activeId).set({ startDate: '2026-12-01', endDate: '2026-12-31' }, { merge: true });
+    now = ist('2026-12-03', 10, 0);
+    r = await call('GET', '/api/roster/me', { token: tok('z1.login@gmail.com') });
+    check('two days into the new cycle, an agent who has no data there yet still has a roster (carry-over)', r.status === 200, msg(r));
+    now = ist('2026-12-20', 10, 0);
+    r = await call('GET', '/api/roster/me', { token: tok('z1.login@gmail.com') });
+    check('after 14 days the carry-over ends (the agent record is not found)', r.status === 403, msg(r));
   } finally {
     server.close();
     setRosterClockForTests(null);

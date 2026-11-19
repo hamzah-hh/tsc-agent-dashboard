@@ -95,6 +95,33 @@ function clearRouteCache(): void {
   accessCache.clear();
 }
 
+/**
+ * Agents of the cycle that ended just before the active one, for the first 14 days of a new cycle: the roster
+ * does not depend on the incentive cycle, so people whose data has not reached the new cycle yet keep their roster.
+ */
+async function loadCarryOverAgents(appConfig: AppConfig, todayIst: string): Promise<AgentRecord[]> {
+  try {
+    const cycles = await adminDb.collection('cycles').get();
+    let active: any = null;
+    const others: { id: string; endDate: string }[] = [];
+    cycles.forEach((d: any) => {
+      const c = d.data() || {};
+      if (d.id === appConfig.activeCycleId) active = c;
+      else if (c.endDate) others.push({ id: d.id, endDate: String(c.endDate).slice(0, 10) });
+    });
+    const start = active?.startDate ? String(active.startDate).slice(0, 10) : '';
+    if (!start || todayIst < start) return [];
+    const days = (Date.parse(todayIst) - Date.parse(start)) / 86400000;
+    if (days > 14) return [];
+    const prev = others.filter((o) => o.endDate < start).sort((a, b) => (a.endDate < b.endDate ? 1 : -1))[0];
+    if (!prev) return [];
+    const excluded = await getExcludedEmails(prev.id);
+    return (await loadAgents(prev.id)).filter((a) => !excluded.has(normalizeEmail(a.officialEmail)));
+  } catch {
+    return [];
+  }
+}
+
 async function getExcludedEmails(cycleId: string): Promise<Set<string>> {
   const hit = excludedCache.get(cycleId);
   if (hit && Date.now() - hit.at < ROUTE_CACHE_TTL_MS) return new Set(hit.value);
@@ -434,7 +461,7 @@ export function createApiApp(options: ApiOptions = {}): express.Express {
 
   // ------------------------------------------------------------------ rostering
 
-  registerRosterRoutes(api, { authenticate, identify, ensureSeedData, loadAgents, getExcludedEmails });
+  registerRosterRoutes(api, { authenticate, identify, ensureSeedData, loadAgents, getExcludedEmails, loadCarryOverAgents });
 
   /**
    * One agent's Breaks days for staff opening that agent: a TL only for their own team, a Manager or the Super
