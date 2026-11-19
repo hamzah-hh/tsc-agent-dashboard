@@ -9,6 +9,7 @@ import {
   getRevenuePlan,
 } from '../shared/plans';
 import { metricsFromTotals, preSalesMetricsFromTotals } from '../shared/incentive';
+import { MilestoneLadder } from './MilestoneLadder';
 const ActualTab = lazyView<React.ComponentProps<typeof import('./ActualTab')['ActualTab']>>(() => import('./ActualTab'), 'ActualTab');
 const TargetTab = lazyView<React.ComponentProps<typeof import('./TargetTab')['TargetTab']>>(() => import('./TargetTab'), 'TargetTab');
 const SimulatorTab = lazyView<React.ComponentProps<typeof import('./SimulatorTab')['SimulatorTab']>>(() => import('./SimulatorTab'), 'SimulatorTab');
@@ -253,6 +254,38 @@ export function AgentView({ officialEmail, getIdToken, onBack }: AgentViewProps)
       ]
     : [
         {
+          id: 'overview',
+          title: 'Overview',
+          node: (
+            <TargetTab
+              part="banner"
+              agentRecord={agentRecord}
+              plan={plan}
+              cycle={activeCycle}
+              onNavigateToSimulator={(targetSales) => {
+                setSimPresetSales(targetSales);
+                jump('simulator');
+              }}
+              onNavigateToActual={() => jump('actual')}
+              ladder={
+                agentRecord?.result && agentRecord.totals ? (
+                  <MilestoneLadder
+                    embedded
+                    currentClass={agentRecord.result.className}
+                    achievementPct={agentRecord.result.achievementPct}
+                    sales={agentRecord.totals.sales}
+                    plan={plan}
+                    onSimulateTarget={(targetSales) => {
+                      setSimPresetSales(targetSales);
+                      jump('simulator');
+                    }}
+                  />
+                ) : undefined
+              }
+            />
+          ),
+        },
+        {
           id: 'actual',
           title: 'Actual',
           node: (
@@ -265,6 +298,7 @@ export function AgentView({ officialEmail, getIdToken, onBack }: AgentViewProps)
                 jump('simulator');
               }}
               onNavigateToTarget={() => jump('target')}
+              hideTargetBlocks
             />
           ),
         },
@@ -273,6 +307,7 @@ export function AgentView({ officialEmail, getIdToken, onBack }: AgentViewProps)
           title: 'Targets & Goals',
           node: (
             <TargetTab
+              part="rest"
               agentRecord={agentRecord}
               plan={plan}
               cycle={activeCycle}

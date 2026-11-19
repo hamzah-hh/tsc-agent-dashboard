@@ -168,8 +168,12 @@ export function RosterTab({ getIdToken, agentEmail, readOnly = false, onChanged 
             <CalendarDays className="w-4 h-4 text-accent" /> Roster{readOnly ? `: ${data.agentName}` : ''}
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Pick your weekly off for this week and the next 2 weeks (planned leave up to {dayLabel(data.plLastDay)}). Your first WO from Monday to Friday is confirmed at once while your team is under its limit. A Saturday or Sunday WO, a second WO in a week and all planned leave need your TL's approval.
+            Tap a day to take a weekly off (this week and the next 2) or request planned leave (up to {dayLabel(data.plLastDay)}).
           </p>
+          <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-600 dark:text-slate-300">
+            <li>First WO Mon to Fri: confirmed at once while the team is under its limit</li>
+            <li>Sat/Sun WO, a 2nd WO in a week and all planned leave: your TL approves</li>
+          </ul>
         </div>
         {!readOnly && (
           <span className="text-[11px] text-slate-500 dark:text-slate-400 shrink-0">
@@ -184,24 +188,28 @@ export function RosterTab({ getIdToken, agentEmail, readOnly = false, onChanged 
         </div>
       )}
 
+      <div className="grid lg:grid-cols-5 gap-6 items-start">
+      <div className="lg:col-span-3">
       <div className={CARD}>
-        <div className="space-y-4">
+        <div className="grid grid-cols-7 gap-1.5 sm:gap-2 mb-2 sticky top-0">
+          {WEEKDAYS.map((n, i) => (
+            <div key={n} className={`text-center text-[11px] uppercase tracking-wide font-bold ${i >= 5 ? 'text-amber-700 dark:text-amber-300' : 'text-slate-500 dark:text-slate-400'}`}>
+              {n}
+            </div>
+          ))}
+        </div>
+        <div className="space-y-5">
           {weeks.map((w) => {
             const count = weekWo(w);
             return (
               <div key={w}>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[11px] uppercase tracking-wide font-bold text-slate-500 dark:text-slate-400">Week of {dayLabel(w)}</span>
+                <div className="flex items-center justify-between mb-1.5 rounded-lg bg-slate-100 dark:bg-raised px-3 py-1.5">
+                  <span className="text-[11px] uppercase tracking-wide font-bold text-slate-700 dark:text-slate-200">Week of {dayLabel(w)}</span>
                   <span className={`text-[11px] font-semibold ${count === 0 && weekEnd(w) >= data.today ? 'text-amber-700 dark:text-amber-300' : 'text-slate-500 dark:text-slate-400'}`}>
                     {count === 0 ? (weekEnd(w) >= data.today ? 'No WO yet: pick a day' : 'No WO') : `WO: ${count} this week`}
                   </span>
                 </div>
                 <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
-                  {WEEKDAYS.map((n, i) => (
-                    <div key={n} className={`text-center text-[10px] uppercase tracking-wide font-bold ${i >= 5 ? 'text-amber-700 dark:text-amber-300' : 'text-slate-400 dark:text-slate-500'}`}>
-                      {n}
-                    </div>
-                  ))}
                   {WEEKDAYS.map((_, i) => {
                     const day = addDays(w, i);
                     return <DayCell key={day} day={day} info={dayInfo.get(day)} entry={entryOn(day)} today={data.today} selected={selected === day} onSelect={() => setSelected(day)} />;
@@ -210,6 +218,12 @@ export function RosterTab({ getIdToken, agentEmail, readOnly = false, onChanged 
               </div>
             );
           })}
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-slate-600 dark:text-slate-300">
+          <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-emerald-200 dark:bg-emerald-500/30" /> Weekly off</span>
+          <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-200 dark:bg-amber-500/30" /> Waiting for TL</span>
+          <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-indigo-200 dark:bg-indigo-500/30" /> Planned leave</span>
+          <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-rose-100 border border-rose-300 dark:bg-rose-500/10 dark:border-rose-500/40" /> Team full</span>
         </div>
         {!readOnly && (
           <div className="mt-5 pt-4 border-t border-slate-200 dark:border-line flex flex-wrap items-center gap-2 text-xs">
@@ -230,7 +244,9 @@ export function RosterTab({ getIdToken, agentEmail, readOnly = false, onChanged 
         )}
       </div>
 
-      {selected && (
+      </div>
+      <div className="lg:col-span-2 space-y-6">
+      {selected ? (
         <div className={CARD} aria-live="polite">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
             <h3 className="text-sm font-bold text-slate-950 dark:text-fg">{dayLabel(selected)}</h3>
@@ -306,6 +322,8 @@ export function RosterTab({ getIdToken, agentEmail, readOnly = false, onChanged 
             </div>
           )}
         </div>
+      ) : (
+        <div className={`${CARD} text-center text-xs text-slate-500 dark:text-slate-400`}>Tap a day in the calendar to plan it.</div>
       )}
 
       {swapEntry && (
@@ -431,9 +449,21 @@ export function RosterTab({ getIdToken, agentEmail, readOnly = false, onChanged 
           )}
         </div>
       )}
+      </div>
+      </div>
     </div>
   );
 }
+
+const cellTint = (e: Pick<RosterEntryDTO, 'status' | 'kind'>) =>
+  e.status === 'pending'
+    ? 'bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-200'
+    : e.status === 'approved'
+    ? e.kind === 'PL'
+      ? 'bg-indigo-100 text-indigo-900 dark:bg-indigo-500/20 dark:text-indigo-200'
+      : 'bg-emerald-100 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-200'
+    : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400';
+const monthName = (day: string) => new Date(day + 'T00:00:00Z').toLocaleDateString('en-IN', { month: 'short', timeZone: 'UTC' });
 
 function DayCell({ day, info, entry, today, selected, onSelect }: { day: string; info?: RosterDayInfo; entry?: RosterEntryDTO; today: string; selected: boolean; onSelect: () => void }) {
   const past = day < today;
@@ -445,16 +475,19 @@ function DayCell({ day, info, entry, today, selected, onSelect }: { day: string;
       onClick={onSelect}
       aria-label={`${dayLabel(day)}${entry ? `, ${statusText(entry)}` : ''}`}
       aria-pressed={selected}
-      className={`min-h-[64px] sm:min-h-[76px] rounded-lg border p-1.5 text-left flex flex-col justify-between transition ${
-        selected ? 'border-accent ring-1 ring-accent' : 'border-slate-200 dark:border-line'
-      } ${past ? 'opacity-40 cursor-default' : 'hover:bg-slate-50 dark:hover:bg-hover'} ${day === today ? 'bg-slate-50 dark:bg-raised' : ''}`}
+      className={`min-h-[68px] sm:min-h-[84px] rounded-xl border p-2 text-left flex flex-col justify-between transition ${
+        selected ? 'border-accent ring-2 ring-accent/60' : entry ? 'border-transparent' : 'border-slate-200 dark:border-line'
+      } ${entry ? cellTint(entry) : info?.weekend ? 'bg-amber-50/60 dark:bg-amber-500/5' : !past && info && !info.weekend && info.left === 0 ? 'bg-rose-50 dark:bg-rose-500/10' : 'bg-white dark:bg-panel'} ${past ? 'opacity-40 cursor-default' : 'hover:shadow-sm hover:border-slate-400 dark:hover:border-slate-500'} ${day === today ? 'ring-1 ring-slate-400 dark:ring-slate-500' : ''}`}
     >
       <span className="flex items-center justify-between">
-        <span className="text-xs font-bold font-mono text-slate-900 dark:text-fg">{d}</span>
+        <span className="text-sm font-bold font-mono text-slate-900 dark:text-fg">
+          {d}
+          {(d === 1 || day === today) && <span className="ml-1 text-[9px] font-semibold uppercase text-slate-500 dark:text-slate-400">{d === 1 ? monthName(day) : 'today'}</span>}
+        </span>
         {info?.locked && !past && <Lock className="w-3 h-3 text-slate-400" aria-hidden />}
       </span>
       {entry ? (
-        <span className={`rounded px-1 py-0.5 text-[10px] font-bold leading-tight ${chipClass(entry)}`}>{entry.status === 'pending' ? `${entry.kind} ?` : entry.kind}</span>
+        <span className="text-[11px] font-extrabold leading-tight">{entry.status === 'pending' ? `${entry.kind} · waiting` : entry.kind}</span>
       ) : info && !past ? (
         <span className={`text-[10px] leading-tight ${info.weekend ? 'text-slate-400 dark:text-slate-500' : info.left === 0 ? 'text-rose-600 dark:text-rose-400 font-semibold' : 'text-slate-500 dark:text-slate-400'}`}>
           {info.weekend ? 'TL OK' : info.left === 0 ? 'Full' : `${info.left} left`}

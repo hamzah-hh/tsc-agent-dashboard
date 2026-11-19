@@ -6,6 +6,8 @@ import { useAgentBreaks } from '../utils/useAgentBreaks';
 import { CARD, Tile, TileGroup, rangeLabel } from './MetricTile';
 import { DateRangeFilter, inDateRange, useDateRange } from './DateRangeFilter';
 import { adherencePct } from './BreaksAdherenceTab';
+import { AnimatedCounter } from './AnimatedCounter';
+import { Sparkles } from 'lucide-react';
 
 interface HomeTabProps {
   agentRecord: AgentRecord | null;
@@ -75,6 +77,55 @@ export function HomeTab({ agentRecord, plan, isPreSales, getIdToken }: HomeTabPr
           </p>
         </div>
         <DateRangeFilter from={from} to={to} min={firstDay} max={lastDay} onChange={setRange} />
+      </div>
+
+      {/* Incentive Earned: the cycle's payout so far, with what it is made of */}
+      <div className="bg-brand-900 dark:bg-raised text-white rounded-3xl p-6 sm:p-7 border border-amber-500/30 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-44 h-44 bg-amber-500/10 rounded-full blur-2xl pointer-events-none" />
+        <div className="relative grid grid-cols-1 md:grid-cols-2 gap-6 md:items-center">
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[11px] uppercase tracking-wider font-extrabold text-amber-400 font-mono flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5" />
+                Incentive Earned
+              </span>
+              {!isPreSales && result && (
+                <span className="text-xs font-bold font-mono px-2.5 py-0.5 rounded-full bg-amber-400/15 text-amber-300 border border-amber-400/30">
+                  Class {result.className} · {formatNumberINR(result.achievementPct, 1)}%
+                </span>
+              )}
+            </div>
+            <div className="text-4xl lg:text-[42px] font-black text-amber-300 tracking-tight font-mono mt-3">
+              <AnimatedCounter value={result?.total ?? 0} />
+            </div>
+            <p className="text-[11px] text-slate-300 mt-2 font-medium">Whole cycle so far, at your current run-rate</p>
+          </div>
+          {!isPreSales && result && (
+            <div className="space-y-2 text-xs md:border-l md:border-white/10 md:pl-6">
+              {[
+                ['Base revenue incentive', result.revenueIncentiveNet],
+                [`Quality bonus (${result.quality.band})`, result.quality.amount],
+                [`Connects bonus (${result.connects.band})`, result.connects.amount],
+                [`Talk time bonus (${result.talk.band})`, result.talk.amount],
+                [`Store visits rider (Tier ${result.rider.tier})`, result.rider.amount],
+              ].map(([label, amount]) => (
+                <div key={label as string} className="flex items-center justify-between text-slate-300">
+                  <span className="inline-flex items-center gap-1.5 font-medium">
+                    <span className={`w-2 h-2 rounded-full ${(amount as number) > 0 ? 'bg-amber-400' : 'bg-slate-600'}`} />
+                    {label}
+                  </span>
+                  <span className="font-mono font-bold text-white tabular-nums">{formatCurrencyINR(amount as number)}</span>
+                </div>
+              ))}
+              {result.deductions && result.deductions.length > 0 && (
+                <div className="flex justify-between text-rose-400 pt-1.5 border-t border-white/10 font-mono">
+                  <span>Deductions</span>
+                  <span className="font-bold">-{formatCurrencyINR(result.deductions.reduce((acc, d) => acc + d.amount, 0))}</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {!isPreSales && (

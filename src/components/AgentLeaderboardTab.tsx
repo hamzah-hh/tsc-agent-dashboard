@@ -60,7 +60,8 @@ export function AgentLeaderboardTab({
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [locationRevenue, setLocationRevenue] = useState<LocationRevenueData | null>(null);
+  const [ownLocationRevenue, setLocationRevenue] = useState<LocationRevenueData | null>(null);
+  const [storeRevenue, setStoreRevenue] = useState<LocationRevenueData | null>(null);
   const [showFullStructure, setShowFullStructure] = useState(false);
   const [data, setData] = useState<{
     ho: AgentLeaderboardRow[];
@@ -82,9 +83,10 @@ export function AgentLeaderboardTab({
 
     try {
       // The location table is a bonus: if it cannot be loaded the leaderboard still shows
-      const [json, locJson] = await Promise.all([
+      const [json, locJson, storeJson] = await Promise.all([
         cachedGet<any>(getIdToken, '/api/agent-leaderboard', { force: isRefresh }),
         cachedGet<any>(getIdToken, `/api/location-revenue?location=${encodeURIComponent(currentLocation)}`, { force: isRefresh }).catch(() => null),
+        cachedGet<any>(getIdToken, '/api/location-revenue?scope=store', { force: isRefresh }).catch(() => null),
       ]);
       const allowed = json.allowedCategory as 'HO' | 'STORE' | 'PRE_SALES' | 'ALL' | undefined;
 
@@ -99,6 +101,7 @@ export function AgentLeaderboardTab({
       if (locJson?.locationRevenue) {
         setLocationRevenue(locJson.locationRevenue);
       }
+      if (storeJson?.locationRevenue) setStoreRevenue(storeJson.locationRevenue);
 
       // Automatically lock to the allowed category
       if (allowed === 'HO') setActiveTab('ho');
@@ -152,6 +155,8 @@ export function AgentLeaderboardTab({
       ? 'Performance standings for all Store Callers across Andheri and Bangalore. Ranked by overall incentive performance.'
       : 'Performance standings for all Head Office Callers (Dighe). Ranked by overall incentive performance.';
 
+  // Store Callers: the breakdown for all of them together (Andheri and Bangalore); HO Callers: their own location
+  const locationRevenue = activeTab === 'store' ? storeRevenue : activeTab === 'ho' && ownLocationRevenue && !/andheri|bangalore/i.test(ownLocationRevenue.location) ? ownLocationRevenue : null;
   const locRows = locationRevenue?.rows ?? [];
   const locSort = useSort(locRows, {
     agent: (x) => x.agentEmail,

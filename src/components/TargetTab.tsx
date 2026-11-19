@@ -36,6 +36,10 @@ interface TargetTabProps {
   cycle: Cycle;
   onNavigateToSimulator?: (presetSales?: number) => void;
   onNavigateToActual?: () => void;
+  /** 'banner': only the target console on top; 'rest': everything below it; default both. */
+  part?: 'banner' | 'rest' | 'all';
+  /** Shown inside the console card (the class progression highway). */
+  ladder?: React.ReactNode;
 }
 
 export const TargetTab: React.FC<TargetTabProps> = ({
@@ -44,6 +48,8 @@ export const TargetTab: React.FC<TargetTabProps> = ({
   cycle,
   onNavigateToSimulator,
   onNavigateToActual,
+  part = 'all',
+  ladder,
 }) => {
   // Hooks stay above every early return (a record that arrives later must not change the hook order).
   // null = the agent has not touched the slider yet, so it follows the live numbers.
@@ -109,6 +115,8 @@ export const TargetTab: React.FC<TargetTabProps> = ({
 
   return (
     <div className="space-y-6">
+      {part !== 'rest' && (
+      <>
       {/* 1. Master Target Overview Banner (Executive Fintech Finish) */}
       <div className="bg-brand-900 dark:bg-raised text-white rounded-3xl p-6 sm:p-8 border border-amber-500/30 relative overflow-hidden">
         {/* Ambient Corner Lighting */}
@@ -288,8 +296,13 @@ export const TargetTab: React.FC<TargetTabProps> = ({
             </span>
           </div>
         </div>
+        {ladder && <div className="relative z-10 mt-7 pt-6 border-t border-white/10">{ladder}</div>}
       </div>
+      </>
+      )}
 
+      {part !== 'banner' && (
+        <>
       {/* 2. Target Slabs Matrix: Class-by-Class Milestones */}
       <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-6 sm:p-7 shadow-xs space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
@@ -680,6 +693,8 @@ export const TargetTab: React.FC<TargetTabProps> = ({
           </div>
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 };

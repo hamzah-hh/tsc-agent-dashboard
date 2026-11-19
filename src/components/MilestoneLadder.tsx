@@ -11,6 +11,8 @@ interface MilestoneLadderProps {
   sales: number;
   plan: Plan;
   onSimulateTarget?: (targetSales: number) => void;
+  /** Inside another card: no card of its own. */
+  embedded?: boolean;
 }
 
 const ICONS = [Award, Zap, Flame, Crown];
@@ -27,6 +29,7 @@ export const MilestoneLadder: React.FC<MilestoneLadderProps> = ({
   sales,
   plan,
   onSimulateTarget,
+  embedded = false,
 }) => {
   // One step for each qualifying class of the plan (limits, rates and names all come from the cycle)
   const tiers = classSteps(plan).map((s, i) => ({
@@ -60,7 +63,7 @@ export const MilestoneLadder: React.FC<MilestoneLadderProps> = ({
   );
 
   return (
-    <div className="relative overflow-hidden rounded-3xl p-6 sm:p-7 border border-amber-500/30 bg-brand-900 dark:bg-raised text-white">
+    <div className={embedded ? 'relative text-white' : 'relative overflow-hidden rounded-3xl p-6 sm:p-7 border border-amber-500/30 bg-brand-900 dark:bg-raised text-white'}>
       {/* Dynamic Ambient Background Lights */}
       <div className="absolute -top-32 -right-32 w-80 h-80 bg-amber-500/15 rounded-full blur-[100px] pointer-events-none" />
       <div className="absolute -bottom-32 -left-32 w-80 h-80 bg-indigo-500/15 rounded-full blur-[100px] pointer-events-none" />

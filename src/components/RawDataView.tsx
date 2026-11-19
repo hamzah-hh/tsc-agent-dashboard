@@ -364,7 +364,7 @@ export function RawDataView({
 
           {/* Quick Filters */}
           <div className="flex flex-wrap items-center gap-3">
-            <DateRangeFilter from={from} to={to} min={minDate} max={maxDate} onChange={setRange} />
+            <DateRangeFilter onDark from={from} to={to} min={minDate} max={maxDate} onChange={setRange} />
             {/* Location filter for Manager / Super Admin */}
             {(userRole === 'superAdmin' || userRole === 'manager') && (
               <div className="flex items-center gap-1.5 bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200">

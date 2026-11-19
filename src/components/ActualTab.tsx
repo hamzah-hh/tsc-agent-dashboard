@@ -50,9 +50,11 @@ interface ActualTabProps {
   cycle: Cycle;
   onNavigateToSimulator?: (presetSales?: number) => void;
   onNavigateToTarget?: () => void;
+  /** The class highway and the target bar are part of the Overview block at the top of Revenue. */
+  hideTargetBlocks?: boolean;
 }
 
-export function ActualTab({ agentRecord, plan, cycle, onNavigateToSimulator, onNavigateToTarget }: ActualTabProps) {
+export function ActualTab({ agentRecord, plan, cycle, onNavigateToSimulator, onNavigateToTarget, hideTargetBlocks }: ActualTabProps) {
   // Hooks stay above every early return: when the first sync arrives and the agent taps Refresh, this
   // component goes from "No data yet" to the full screen, and a hook after the return would crash it.
   const [completedItems, setCompletedItems] = React.useState<Record<string, boolean>>({});
@@ -191,6 +193,8 @@ export function ActualTab({ agentRecord, plan, cycle, onNavigateToSimulator, onN
         </div>
       )}
 
+      {!hideTargetBlocks && (
+        <>
       {/* Interactive Class Milestone Roadmap */}
       <MilestoneLadder
         currentClass={result.className as any}
@@ -238,6 +242,8 @@ export function ActualTab({ agentRecord, plan, cycle, onNavigateToSimulator, onN
           </button>
         )}
       </div>
+        </>
+      )}
 
       {/* Grid: Card 1 (Total Incentive) & Card 2 (Revenue Progress) */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-5">

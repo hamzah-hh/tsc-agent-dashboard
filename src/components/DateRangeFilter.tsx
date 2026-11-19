@@ -32,13 +32,17 @@ interface DateRangeFilterProps {
   max: string;
   onChange: (from: string, to: string) => void;
   className?: string;
+  /** On a dark card (even in light mode): light text and outlines. */
+  onDark?: boolean;
 }
 
 const input =
   'border border-slate-300 dark:border-line bg-white dark:bg-panel text-slate-800 dark:text-fg rounded-lg px-2 py-1 text-[11px] focus:outline-none focus:border-accent';
 
+const inputDark = 'border border-white/30 bg-white/10 text-white rounded-lg px-2 py-1 text-[11px] focus:outline-none focus:border-amber-400 [color-scheme:dark]';
+
 /** From / to data-date pickers with quick ranges, for tables that list one row per day. */
-export function DateRangeFilter({ from, to, min, max, onChange, className = '' }: DateRangeFilterProps) {
+export function DateRangeFilter({ from, to, min, max, onChange, className = '', onDark = false }: DateRangeFilterProps) {
   const last7 = max ? (addDays(max, -6) < min ? min : addDays(max, -6)) : '';
   const [mtdFrom, mtdTo] = mtdRange(min, max);
   const quick: Array<[string, string, string]> = [
@@ -47,11 +51,12 @@ export function DateRangeFilter({ from, to, min, max, onChange, className = '' }
     ['Last 7 days', last7, max],
     ['Latest day', max, max],
   ];
+  const label_ = onDark ? 'text-slate-300' : 'text-slate-500 dark:text-slate-400';
   const isAll = (!from && !to) || (from === min && to === max);
   return (
     <div className={`flex flex-wrap items-center gap-1.5 ${className}`}>
-      <CalendarDays className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 shrink-0" aria-hidden />
-      <span className="text-[10px] uppercase tracking-wide font-bold text-slate-500 dark:text-slate-400">Data date</span>
+      <CalendarDays className={`w-3.5 h-3.5 shrink-0 ${onDark ? 'text-slate-300' : 'text-slate-400 dark:text-slate-500'}`} aria-hidden />
+      <span className={`text-[10px] uppercase tracking-wide font-bold ${label_}`}>Data date</span>
       {quick.map(([label, f, t]) => {
         const active = label === 'All dates' ? isAll && !(mtdFrom === min) : from === f && to === t;
         return (
@@ -62,7 +67,11 @@ export function DateRangeFilter({ from, to, min, max, onChange, className = '' }
             onClick={() => onChange(f, t)}
             className={`px-2 py-1 rounded-lg text-[11px] font-semibold border transition ${
               active
-                ? 'bg-brand-900 text-white border-brand-900 dark:bg-accent dark:text-on-accent dark:border-accent'
+                ? onDark
+                  ? 'bg-amber-400 text-slate-950 border-amber-400'
+                  : 'bg-brand-900 text-white border-brand-900 dark:bg-accent dark:text-on-accent dark:border-accent'
+                : onDark
+                ? 'border-white/30 text-slate-100 hover:bg-white/10'
                 : 'border-slate-300 dark:border-line text-slate-700 dark:text-fg-2 hover:bg-slate-50 dark:hover:bg-hover'
             }`}
           >
@@ -70,9 +79,9 @@ export function DateRangeFilter({ from, to, min, max, onChange, className = '' }
           </button>
         );
       })}
-      <input type="date" value={from} min={min || undefined} max={to || max || undefined} onChange={(e) => onChange(e.target.value, to)} className={input} aria-label="From data date" />
-      <span className="text-slate-400 text-[11px]">to</span>
-      <input type="date" value={to} min={from || min || undefined} max={max || undefined} onChange={(e) => onChange(from, e.target.value)} className={input} aria-label="To data date" />
+      <input type="date" value={from} min={min || undefined} max={to || max || undefined} onChange={(e) => onChange(e.target.value, to)} className={onDark ? inputDark : input} aria-label="From data date" />
+      <span className={`text-[11px] ${onDark ? 'text-slate-300' : 'text-slate-400'}`}>to</span>
+      <input type="date" value={to} min={from || min || undefined} max={max || undefined} onChange={(e) => onChange(from, e.target.value)} className={onDark ? inputDark : input} aria-label="To data date" />
     </div>
   );
 }

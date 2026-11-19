@@ -1587,6 +1587,27 @@ export function createApiApp(options: ApiOptions = {}): express.Express {
       const rawRecords = await getOrLoadRawRecords(cycleId);
       const summaries = rawRecords.locationSummaries || {};
 
+      // All Store Callers (Andheri and Bangalore together): every signed-in person can see the store callers' standings already
+      if (req.query.scope === 'store') {
+        const parts = ['Andheri', 'Bangalore'].map((k) => summaries[k]).filter(Boolean);
+        const sum = (pick: (d: any) => number) => parts.reduce((s, d) => s + (pick(d) || 0), 0);
+        const cat = (k: 'shopify' | 'bfan' | 'bfmp' | 'posoc') => ({ orders: sum((d) => d.categories?.[k]?.orders), sales: sum((d) => d.categories?.[k]?.sales) });
+        const totalOrders = sum((d) => d.totalOrders);
+        const totalRevenue = sum((d) => d.totalRevenue);
+        const rows = parts.flatMap((d) => d.rows || []).sort((a, b) => b.totalRevenue - a.totalRevenue);
+        return res.json({
+          locationRevenue: {
+            location: 'All Store Callers',
+            totalOrders,
+            totalRevenue,
+            aov: totalOrders > 0 ? totalRevenue / totalOrders : 0,
+            categories: { shopify: cat('shopify'), bfan: cat('bfan'), bfmp: cat('bfmp'), posoc: cat('posoc') },
+            rows,
+          },
+          availableLocations: Object.keys(summaries),
+        });
+      }
+
       let targetLoc = (req.query.location as string)?.trim() || '';
       if (identity.role === 'agent') {
         targetLoc = identity.access?.location || 'Dighe';
