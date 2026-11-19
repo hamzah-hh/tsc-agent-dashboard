@@ -101,7 +101,7 @@ export function CallMetricsTab({ agentRecord, isPreSales }: CallMetricsTabProps)
 
       <div className={CARD}>
         <div className="flex flex-wrap items-center justify-between mb-1 gap-2">
-          <span className="text-xs uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 font-mono">Day on Day: Call Metrics</span>
+          <span className="text-xs uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400">Day on Day: Call Metrics</span>
           <ExportCsvButton
             filename={csvName('call-metrics', name, csvStamp())}
             disabled={days.length === 0}

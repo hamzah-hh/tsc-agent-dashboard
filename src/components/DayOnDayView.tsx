@@ -406,7 +406,7 @@ export function DayOnDayView({
           {/* Card 1: Agent Total Revenue */}
           <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
             <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 mb-1">
-              <span className="text-[11px] font-mono uppercase font-bold">Caller Revenue</span>
+              <span className="text-[11px] uppercase font-bold">Caller Revenue</span>
               <TrendingUp className="w-4 h-4 text-emerald-500" />
             </div>
             <span className="text-2xl font-black text-slate-900 dark:text-white font-mono">
@@ -420,7 +420,7 @@ export function DayOnDayView({
           {/* Card 2: Team Total Revenue */}
           <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
             <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 mb-1">
-              <span className="text-[11px] font-mono uppercase font-bold">{data.team.location} Team Total</span>
+              <span className="text-[11px] uppercase font-bold">{data.team.location} Team Total</span>
               <Building2 className="w-4 h-4 text-indigo-500" />
             </div>
             <span className="text-2xl font-black text-slate-900 dark:text-white font-mono">
@@ -434,7 +434,7 @@ export function DayOnDayView({
           {/* Card 3: Overall Contribution % */}
           <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
             <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 mb-1">
-              <span className="text-[11px] font-mono uppercase font-bold">Team Share %</span>
+              <span className="text-[11px] uppercase font-bold">Team Share %</span>
               <Percent className="w-4 h-4 text-amber-500" />
             </div>
             <span className="text-2xl font-black text-amber-600 dark:text-amber-400 font-mono">
@@ -448,7 +448,7 @@ export function DayOnDayView({
           {/* Card 4: Latest Day Velocity */}
           <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
             <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 mb-1">
-              <span className="text-[11px] font-mono uppercase font-bold">Latest Day ({data.summary.latestDate})</span>
+              <span className="text-[11px] uppercase font-bold">Latest Day ({data.summary.latestDate})</span>
               <ShoppingBag className="w-4 h-4 text-cyan-500" />
             </div>
             <span className="text-2xl font-black text-slate-900 dark:text-white font-mono">
@@ -480,7 +480,7 @@ export function DayOnDayView({
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="bg-slate-50 dark:bg-slate-950/60 border-b border-slate-200 dark:border-slate-800 text-[11px] font-mono uppercase font-bold text-slate-500 dark:text-slate-400">
+                <tr className="bg-slate-50 dark:bg-slate-950/60 border-b border-slate-200 dark:border-slate-800 text-[11px] uppercase font-bold text-slate-500 dark:text-slate-400">
                   <SortTh sort={daySort} k="date" className="py-3.5 px-4">Date</SortTh>
                   <SortTh sort={daySort} k="sales" right className="py-3.5 px-4 text-right">Caller Sales</SortTh>
                   <SortTh sort={daySort} k="growth" className="py-3.5 px-4 text-center">Caller D-o-D Growth</SortTh>
@@ -637,7 +637,7 @@ export function DayOnDayView({
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="bg-slate-50 dark:bg-slate-950/60 border-b border-slate-200 dark:border-slate-800 text-[11px] font-mono uppercase font-bold text-slate-500 dark:text-slate-400">
+                <tr className="bg-slate-50 dark:bg-slate-950/60 border-b border-slate-200 dark:border-slate-800 text-[11px] uppercase font-bold text-slate-500 dark:text-slate-400">
                   <SortTh sort={matrixSort} k="caller" className="py-3.5 px-4">Caller</SortTh>
                   <SortTh sort={matrixSort} k="cls" className="py-3.5 px-3 text-center">Class</SortTh>
                   {matrixDates.map((d) => (

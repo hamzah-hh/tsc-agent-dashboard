@@ -85,7 +85,7 @@ export function HomeTab({ agentRecord, plan, isPreSales, getIdToken }: HomeTabPr
         <div className="relative grid grid-cols-1 md:grid-cols-2 gap-6 md:items-center">
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[11px] uppercase tracking-wider font-extrabold text-amber-400 font-mono flex items-center gap-1.5">
+              <span className="text-[11px] uppercase tracking-wider font-bold text-amber-400 flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5" />
                 Incentive Earned
               </span>

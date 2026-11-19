@@ -370,21 +370,21 @@ export function AgentLeaderboardTab({
           {activeTab === 'preSales' ? (
             <div className="flex flex-wrap items-center gap-3 sm:gap-6 text-xs border-t sm:border-t-0 pt-2 sm:pt-0 border-amber-200 dark:border-amber-500/30">
               <div>
-                <span className="text-[10px] uppercase font-mono text-slate-500 dark:text-slate-400 block">Worked Days</span>
+                <span className="text-[10px] uppercase text-slate-500 dark:text-slate-400 block">Worked Days</span>
                 <span className="font-mono font-bold text-slate-900 dark:text-fg">{currentUserRow.activeDays}</span>
               </div>
               <div>
-                <span className="text-[10px] uppercase font-mono text-slate-500 dark:text-slate-400 block">Daily Calls</span>
+                <span className="text-[10px] uppercase text-slate-500 dark:text-slate-400 block">Daily Calls</span>
                 <span className="font-mono font-bold text-slate-900 dark:text-fg">{currentUserRow.avgCalls ?? 0}</span>
               </div>
               <div>
-                <span className="text-[10px] uppercase font-mono text-slate-500 dark:text-slate-400 block">Daily Talk Time</span>
+                <span className="text-[10px] uppercase text-slate-500 dark:text-slate-400 block">Daily Talk Time</span>
                 <span className="font-mono font-bold text-slate-900 dark:text-fg">
                   {currentUserRow.avgTalkSeconds ?? 0}s ({Math.floor((currentUserRow.avgTalkSeconds ?? 0) / 60)}m {(currentUserRow.avgTalkSeconds ?? 0) % 60}s)
                 </span>
               </div>
               <div>
-                <span className="text-[10px] uppercase font-mono text-slate-500 dark:text-slate-400 block">Quality</span>
+                <span className="text-[10px] uppercase text-slate-500 dark:text-slate-400 block">Quality</span>
                 <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">
                   {currentUserRow.qualityScore !== null ? `${round2(currentUserRow.qualityScore)}%` : '-'}
                 </span>
@@ -393,21 +393,21 @@ export function AgentLeaderboardTab({
           ) : (
             <div className="flex flex-wrap items-center gap-3 sm:gap-6 text-xs border-t sm:border-t-0 pt-2 sm:pt-0 border-amber-200 dark:border-amber-500/30">
               <div>
-                <span className="text-[10px] uppercase font-mono text-slate-500 dark:text-slate-400 block">Orders</span>
+                <span className="text-[10px] uppercase text-slate-500 dark:text-slate-400 block">Orders</span>
                 <span className="font-mono font-bold text-slate-900 dark:text-fg">{currentUserRow.orders}</span>
               </div>
               <div>
-                <span className="text-[10px] uppercase font-mono text-slate-500 dark:text-slate-400 block">Revenue</span>
+                <span className="text-[10px] uppercase text-slate-500 dark:text-slate-400 block">Revenue</span>
                 <span className="font-mono font-bold text-slate-900 dark:text-fg">{formatCurrencyINR(currentUserRow.sales)}</span>
               </div>
               <div>
-                <span className="text-[10px] uppercase font-mono text-slate-500 dark:text-slate-400 block">Achievement</span>
+                <span className="text-[10px] uppercase text-slate-500 dark:text-slate-400 block">Achievement</span>
                 <span className="font-mono font-bold text-amber-700 dark:text-amber-400">
                   {formatNumberINR(currentUserRow.achievementPct, 1)}%
                 </span>
               </div>
               <div>
-                <span className="text-[10px] uppercase font-mono text-slate-500 dark:text-slate-400 block">Class</span>
+                <span className="text-[10px] uppercase text-slate-500 dark:text-slate-400 block">Class</span>
                 <span className="font-mono font-bold text-indigo-700 dark:text-indigo-400">Class {currentUserRow.className}</span>
               </div>
             </div>
@@ -461,7 +461,7 @@ export function AgentLeaderboardTab({
           {/* Metric KPI Chips */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
             <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-raised border border-slate-100 dark:border-line">
-              <span className="text-[11px] font-mono font-bold text-slate-500 dark:text-slate-400 uppercase block mb-1">
+              <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase block mb-1">
                 Total Revenue
               </span>
               <span className="text-lg font-black text-slate-900 dark:text-fg font-mono">
@@ -470,7 +470,7 @@ export function AgentLeaderboardTab({
             </div>
 
             <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-raised border border-slate-100 dark:border-line">
-              <span className="text-[11px] font-mono font-bold text-slate-500 dark:text-slate-400 uppercase block mb-1">
+              <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase block mb-1">
                 Total Orders
               </span>
               <span className="text-lg font-black text-slate-900 dark:text-fg font-mono">
@@ -479,7 +479,7 @@ export function AgentLeaderboardTab({
             </div>
 
             <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-raised border border-slate-100 dark:border-line">
-              <span className="text-[11px] font-mono font-bold text-slate-500 dark:text-slate-400 uppercase block mb-1">
+              <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase block mb-1">
                 Location AOV
               </span>
               <span className="text-lg font-black text-slate-900 dark:text-fg font-mono">
@@ -488,7 +488,7 @@ export function AgentLeaderboardTab({
             </div>
 
             <div className="p-3.5 rounded-xl bg-amber-50/70 dark:bg-amber-500/10 border border-amber-200/60 dark:border-amber-500/30">
-              <span className="text-[11px] font-mono font-bold text-amber-800 dark:text-amber-400 uppercase block mb-1">
+              <span className="text-[11px] font-bold text-amber-800 dark:text-amber-400 uppercase block mb-1">
                 Active Callers
               </span>
               <span className="text-lg font-black text-amber-900 dark:text-amber-400 font-mono">
@@ -501,7 +501,7 @@ export function AgentLeaderboardTab({
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
             <div className="p-3 rounded-xl bg-indigo-50/60 dark:bg-indigo-500/10 border border-indigo-100 dark:border-indigo-500/30 flex items-center justify-between">
               <div>
-                <span className="text-[10px] font-mono uppercase font-bold text-indigo-700 dark:text-indigo-400 block">
+                <span className="text-[10px] uppercase font-bold text-indigo-700 dark:text-indigo-400 block">
                   1. Shopify
                 </span>
                 <span className="text-sm font-black text-slate-900 dark:text-fg font-mono block mt-0.5">
@@ -518,7 +518,7 @@ export function AgentLeaderboardTab({
 
             <div className="p-3 rounded-xl bg-emerald-50/60 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/30 flex items-center justify-between">
               <div>
-                <span className="text-[10px] font-mono uppercase font-bold text-emerald-700 dark:text-emerald-400 block">
+                <span className="text-[10px] uppercase font-bold text-emerald-700 dark:text-emerald-400 block">
                   2. Alt Number
                 </span>
                 <span className="text-sm font-black text-slate-900 dark:text-fg font-mono block mt-0.5">
@@ -535,7 +535,7 @@ export function AgentLeaderboardTab({
 
             <div className="p-3 rounded-xl bg-purple-50/60 dark:bg-purple-500/10 border border-purple-100 dark:border-purple-500/30 flex items-center justify-between">
               <div>
-                <span className="text-[10px] font-mono uppercase font-bold text-purple-700 dark:text-purple-400 block">
+                <span className="text-[10px] uppercase font-bold text-purple-700 dark:text-purple-400 block">
                   3. Marketplace
                 </span>
                 <span className="text-sm font-black text-slate-900 dark:text-fg font-mono block mt-0.5">
@@ -552,7 +552,7 @@ export function AgentLeaderboardTab({
 
             <div className="p-3 rounded-xl bg-amber-50/60 dark:bg-amber-500/10 border border-amber-100 dark:border-amber-500/30 flex items-center justify-between">
               <div>
-                <span className="text-[10px] font-mono uppercase font-bold text-amber-700 dark:text-amber-400 block">
+                <span className="text-[10px] uppercase font-bold text-amber-700 dark:text-amber-400 block">
                   4. POS OC ALT
                 </span>
                 <span className="text-sm font-black text-slate-900 dark:text-fg font-mono block mt-0.5">
@@ -572,7 +572,7 @@ export function AgentLeaderboardTab({
           {showFullStructure && (
             <div className="mt-4 pt-4 border-t border-slate-100 dark:border-line overflow-x-auto">
               <div className="flex items-center justify-between mb-2">
-                <h4 className="text-xs font-mono uppercase tracking-wider font-bold text-slate-700 dark:text-fg-2">
+                <h4 className="text-xs uppercase tracking-wider font-bold text-slate-700 dark:text-fg-2">
                   Revenue Table Structure ({locationRevenue.location})
                 </h4>
                 <span className="flex items-center gap-2">
@@ -589,7 +589,7 @@ export function AgentLeaderboardTab({
               </div>
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
-                  <tr className="bg-slate-50 dark:bg-raised border-b border-slate-200 dark:border-line text-[10px] font-mono uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold">
+                  <tr className="bg-slate-50 dark:bg-raised border-b border-slate-200 dark:border-line text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold">
 <SortTh sort={locSort} k="agent" className="py-2.5 px-3">Agent</SortTh>
                     <SortTh sort={locSort} k="shopOrd" right className="py-2.5 px-3 text-right">Shopify Orders</SortTh>
                     <SortTh sort={locSort} k="shopRev" right className="py-2.5 px-3 text-right">Shopify Revenue</SortTh>
@@ -686,7 +686,7 @@ export function AgentLeaderboardTab({
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-slate-50 dark:bg-raised border-b border-slate-200 dark:border-line text-[11px] font-mono uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
+                <tr className="bg-slate-50 dark:bg-raised border-b border-slate-200 dark:border-line text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
 <SortTh sort={preSort} k="rank" className="py-3 px-4 w-14 text-center">Rank</SortTh>
                   <SortTh sort={preSort} k="name" className="py-3 px-4">Caller</SortTh>
                   <SortTh sort={preSort} k="location" className="py-3 px-3">Location</SortTh>
@@ -847,7 +847,7 @@ export function AgentLeaderboardTab({
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-slate-50 dark:bg-raised border-b border-slate-200 dark:border-line text-[11px] font-mono uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
+                <tr className="bg-slate-50 dark:bg-raised border-b border-slate-200 dark:border-line text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
 <SortTh sort={hoSort} k="rank" className="py-3 px-4 w-14 text-center">Rank</SortTh>
                   <SortTh sort={hoSort} k="name" className="py-3 px-4">Caller</SortTh>
                   <SortTh sort={hoSort} k="location" className="py-3 px-3">Location</SortTh>

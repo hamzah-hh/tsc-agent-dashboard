@@ -143,7 +143,7 @@ export function SimulatorTab({
 
       {/* Quick Target Preset Chips */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
-        <span className="text-xs font-mono font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider shrink-0 flex items-center gap-1.5">
+        <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider shrink-0 flex items-center gap-1.5">
           <Zap className="w-3.5 h-3.5 text-amber-500" /> Presets:
         </span>
         {steps.map((s, i) => (
@@ -184,7 +184,7 @@ export function SimulatorTab({
         {/* Left Side: Inputs */}
         <div className="lg:col-span-7 bg-white/90 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-6 shadow-xs space-y-5">
           <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-            <h4 className="text-xs uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 font-mono">
+            <h4 className="text-xs uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400">
               Adjust Simulation Parameters
             </h4>
             <span className="text-[11px] text-slate-400 dark:text-slate-500 font-mono">Drag sliders or type exact values</span>
@@ -400,7 +400,7 @@ export function SimulatorTab({
 
           <div className="relative z-10">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] uppercase tracking-wider font-extrabold text-amber-400 font-mono flex items-center gap-1.5">
+              <span className="text-[11px] uppercase tracking-wider font-bold text-amber-400 flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-amber-400" />
                 Simulated Total Payout
               </span>
@@ -435,7 +435,7 @@ export function SimulatorTab({
           </div>
 
           <div className="relative z-10 border-t border-white/10 pt-4 space-y-2.5 text-xs">
-            <h5 className="text-[11px] font-bold text-amber-400 uppercase tracking-widest font-mono">
+            <h5 className="text-[11px] font-bold text-amber-400 uppercase tracking-wider">
               Simulated Breakdown
             </h5>
 

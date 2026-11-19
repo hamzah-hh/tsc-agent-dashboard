@@ -127,7 +127,7 @@ export const TargetTab: React.FC<TargetTabProps> = ({
           <div className="space-y-2">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" />
-              <span className="text-xs uppercase font-extrabold tracking-wider text-amber-400 font-mono flex items-center gap-1.5">
+              <span className="text-xs uppercase font-bold tracking-wider text-amber-400 flex items-center gap-1.5">
                 <Target className="w-4 h-4" />
                 Cycle Target Console · {activeCycleTitle(cycle.name)}
               </span>
@@ -155,7 +155,7 @@ export const TargetTab: React.FC<TargetTabProps> = ({
           {/* Quick Metrics Badge in Header */}
           <div className="flex flex-row lg:flex-col items-center lg:items-end justify-between gap-3 shrink-0 pt-2 lg:pt-0 border-t lg:border-t-0 border-white/10">
             <div className="text-left lg:text-right">
-              <span className="text-[11px] font-mono text-slate-400 block uppercase">Pacing Status</span>
+              <span className="text-[11px] text-slate-400 block uppercase">Pacing Status</span>
               <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black font-mono mt-1 ${
                 isPacingAhead
                   ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/40'
@@ -656,7 +656,7 @@ export const TargetTab: React.FC<TargetTabProps> = ({
           </div>
 
           <div className="lg:col-span-5 bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 space-y-3">
-            <span className="text-[11px] font-mono text-slate-400 uppercase font-bold block">
+            <span className="text-[11px] text-slate-400 uppercase font-bold block">
               Projected Outcome at this pace
             </span>
             <div className="flex justify-between items-baseline text-xs font-mono">

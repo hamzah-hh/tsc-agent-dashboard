@@ -138,7 +138,7 @@ export const TierSlabSection: React.FC<TierSlabSectionProps> = ({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-              <h4 className="text-xs uppercase tracking-wider font-extrabold text-slate-900 dark:text-white font-mono flex items-center gap-1.5">
+              <h4 className="text-xs uppercase tracking-wider font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                 1. Revenue Class Slabs & Commission Rates
               </h4>
             </div>
@@ -168,7 +168,7 @@ export const TierSlabSection: React.FC<TierSlabSectionProps> = ({
 
           <div className="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-950/60 shadow-xs">
             <table className="w-full text-left text-xs border-collapse">
-              <thead className="bg-slate-50 dark:bg-slate-950/80 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 uppercase font-mono text-[10px] tracking-wider">
+              <thead className="bg-slate-50 dark:bg-slate-950/80 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 uppercase text-[10px] tracking-wider">
                 <tr>
                   <th className="py-3.5 px-4 font-bold">Class</th>
                   <th className="py-3.5 px-4 font-bold">Achievement Threshold</th>
@@ -285,7 +285,7 @@ export const TierSlabSection: React.FC<TierSlabSectionProps> = ({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <h4 className="text-xs uppercase tracking-wider font-extrabold text-slate-900 dark:text-white font-mono flex items-center gap-1.5">
+              <h4 className="text-xs uppercase tracking-wider font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                 2. Quality, Connects & Talk Time Bonus Slabs
               </h4>
             </div>
@@ -445,7 +445,7 @@ export const TierSlabSection: React.FC<TierSlabSectionProps> = ({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-              <h4 className="text-xs uppercase tracking-wider font-extrabold text-slate-900 dark:text-white font-mono flex items-center gap-1.5">
+              <h4 className="text-xs uppercase tracking-wider font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                 3. Store Visits Rider Slabs ({tierDisplayName})
               </h4>
             </div>

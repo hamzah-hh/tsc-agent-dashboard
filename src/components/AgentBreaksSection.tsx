@@ -35,7 +35,7 @@ export function AgentBreaksSection({ days, error, agentName, summary }: AgentBre
   return (
     <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-6 shadow-xs">
       <div className="flex flex-wrap items-center justify-between mb-1 gap-2">
-        <span className="text-xs uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 font-mono">
+        <span className="text-xs uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400">
           Day on Day: Breaks & Adherence
         </span>
         <ExportCsvButton

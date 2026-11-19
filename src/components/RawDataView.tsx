@@ -440,7 +440,7 @@ export function RawDataView({
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="p-4 rounded-2xl bg-white dark:bg-panel border border-slate-200 dark:border-line shadow-xs">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 mb-1">
-            <span className="text-[11px] font-mono uppercase font-bold">Total Orders</span>
+            <span className="text-[11px] uppercase font-bold">Total Orders</span>
             <ShoppingBag className="w-4 h-4 text-amber-500" />
           </div>
           <span className="text-2xl font-black text-slate-900 dark:text-fg font-mono">
@@ -451,7 +451,7 @@ export function RawDataView({
 
         <div className="p-4 rounded-2xl bg-white dark:bg-panel border border-slate-200 dark:border-line shadow-xs">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 mb-1">
-            <span className="text-[11px] font-mono uppercase font-bold">Total Order Value</span>
+            <span className="text-[11px] uppercase font-bold">Total Order Value</span>
             <FileSpreadsheet className="w-4 h-4 text-indigo-500" />
           </div>
           <span className="text-2xl font-black text-slate-900 dark:text-fg font-mono">
@@ -462,7 +462,7 @@ export function RawDataView({
 
         <div className="p-4 rounded-2xl bg-white dark:bg-panel border border-slate-200 dark:border-line shadow-xs">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 mb-1">
-            <span className="text-[11px] font-mono uppercase font-bold">Average Order Value</span>
+            <span className="text-[11px] uppercase font-bold">Average Order Value</span>
             <CheckCircle2 className="w-4 h-4 text-emerald-500" />
           </div>
           <span className="text-2xl font-black text-slate-900 dark:text-fg font-mono">
@@ -473,7 +473,7 @@ export function RawDataView({
 
         <div className="p-4 rounded-2xl bg-white dark:bg-panel border border-slate-200 dark:border-line shadow-xs">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 mb-1">
-            <span className="text-[11px] font-mono uppercase font-bold">Attributed Visits</span>
+            <span className="text-[11px] uppercase font-bold">Attributed Visits</span>
             <Store className="w-4 h-4 text-purple-500" />
           </div>
           <span className="text-2xl font-black text-slate-900 dark:text-fg font-mono">
@@ -525,7 +525,7 @@ export function RawDataView({
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
-                  <tr className="bg-slate-50 dark:bg-raised border-b border-slate-200 dark:border-line text-[11px] font-mono uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold">
+                  <tr className="bg-slate-50 dark:bg-raised border-b border-slate-200 dark:border-line text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold">
                     <SortTh sort={orderSort} k="orderId" className="py-3 px-4">Order ID</SortTh>
                     <SortTh sort={orderSort} k="date" className="py-3 px-3">Date</SortTh>
                     <SortTh sort={orderSort} k="caller" className="py-3 px-4">Caller</SortTh>
@@ -612,7 +612,7 @@ export function RawDataView({
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
-                  <tr className="bg-slate-50 dark:bg-raised border-b border-slate-200 dark:border-line text-[11px] font-mono uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold">
+                  <tr className="bg-slate-50 dark:bg-raised border-b border-slate-200 dark:border-line text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold">
                     <SortTh sort={visitSort} k="when" className="py-3 px-4">Date &amp; Time</SortTh>
                     <SortTh sort={visitSort} k="caller" className="py-3 px-4">Caller</SortTh>
                     <SortTh sort={visitSort} k="type" className="py-3 px-3">Type</SortTh>

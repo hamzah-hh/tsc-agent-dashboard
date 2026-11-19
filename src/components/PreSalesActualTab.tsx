@@ -103,7 +103,7 @@ function TierCard({
     <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-5 shadow-xs flex flex-col justify-between">
       <div>
         <div className="flex items-center justify-between mb-2">
-          <span className="text-[11px] uppercase tracking-wider font-extrabold text-slate-900 dark:text-white font-mono flex items-center gap-1.5">
+          <span className="text-[11px] uppercase tracking-wider font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
             {icon}
             {title}
           </span>
@@ -257,7 +257,7 @@ export function PreSalesActualTab({ agentRecord, plan, cycle, onNavigateToSimula
             </div>
             <div>
               <div className="flex items-center gap-2 mb-0.5">
-                <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block font-mono">
+                <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block">
                   {headline.isAiText ? 'AI Coaching Advice' : 'Performance Pulse'}
                 </span>
                 {headline.isAiText && (
@@ -281,7 +281,7 @@ export function PreSalesActualTab({ agentRecord, plan, cycle, onNavigateToSimula
           <div className="absolute top-0 right-0 w-44 h-44 bg-amber-500/10 rounded-full blur-2xl pointer-events-none" />
           <div>
             <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
-              <span className="text-[11px] uppercase tracking-wider font-extrabold text-amber-400 font-mono flex items-center gap-1.5">
+              <span className="text-[11px] uppercase tracking-wider font-bold text-amber-400 flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-amber-400" />
                 Incentive Earned
               </span>
@@ -339,7 +339,7 @@ export function PreSalesActualTab({ agentRecord, plan, cycle, onNavigateToSimula
         <div className="md:col-span-7 bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-6 sm:p-7 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
-              <span className="text-xs uppercase tracking-wider font-extrabold text-slate-900 dark:text-white font-mono flex items-center gap-1.5">
+              <span className="text-xs uppercase tracking-wider font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
                 Quality Score Gate
               </span>
@@ -462,7 +462,7 @@ export function PreSalesActualTab({ agentRecord, plan, cycle, onNavigateToSimula
       <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-6 shadow-xs">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h4 className="text-xs uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 font-mono">
+            <h4 className="text-xs uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400">
               Daily Coaching Checklist & Action Plan
             </h4>
             <p className="text-[11px] text-slate-400 dark:text-slate-500">
@@ -557,7 +557,7 @@ export function PreSalesActualTab({ agentRecord, plan, cycle, onNavigateToSimula
       {/* Daily calls */}
       <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-6 shadow-xs">
         <div className="flex flex-wrap items-center justify-between mb-4 gap-2">
-          <span className="text-xs uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 font-mono">
+          <span className="text-xs uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400">
             Daily Inbound Calls
           </span>
           <div className="flex flex-wrap items-center gap-3">

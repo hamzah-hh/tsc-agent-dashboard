@@ -173,7 +173,7 @@ export function ActualTab({ agentRecord, plan, cycle, onNavigateToSimulator, onN
             </div>
             <div>
               <div className="flex items-center gap-2 mb-0.5">
-                <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block font-mono">
+                <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block">
                   {headline.isAiText ? 'AI Coaching Advice' : 'Performance Pulse'}
                 </span>
                 {headline.isAiText && (
@@ -216,7 +216,7 @@ export function ActualTab({ agentRecord, plan, cycle, onNavigateToSimulator, onN
           </div>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs uppercase font-extrabold font-mono text-amber-600 dark:text-amber-400 tracking-wider">
+              <span className="text-xs uppercase font-bold text-amber-600 dark:text-amber-400 tracking-wider">
                 Assigned Sales Target
               </span>
               <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-800 dark:text-amber-200">
@@ -255,7 +255,7 @@ export function ActualTab({ agentRecord, plan, cycle, onNavigateToSimulator, onN
 
           <div>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] uppercase tracking-wider font-extrabold text-amber-400 font-mono flex items-center gap-1.5">
+              <span className="text-[11px] uppercase tracking-wider font-bold text-amber-400 flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-amber-400" />
                 1. Projected Incentive Payout
               </span>
@@ -342,7 +342,7 @@ export function ActualTab({ agentRecord, plan, cycle, onNavigateToSimulator, onN
           <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 dark:bg-amber-400/5 rounded-full blur-2xl pointer-events-none" />
           <div>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs uppercase tracking-wider font-extrabold text-slate-900 dark:text-white font-mono flex items-center gap-1.5">
+              <span className="text-xs uppercase tracking-wider font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                 <Target className="w-3.5 h-3.5 text-amber-500" />
                 2. Target Achievement & Sales Delivery
               </span>
@@ -618,7 +618,7 @@ export function ActualTab({ agentRecord, plan, cycle, onNavigateToSimulator, onN
       {/* Card 3: Run Rate */}
       <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-6 shadow-xs">
         <div className="flex items-center justify-between mb-4">
-          <span className="text-xs uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 font-mono">
+          <span className="text-xs uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400">
             3. Run Rate & Trajectory
           </span>
           <span className="text-xs text-slate-500 dark:text-slate-400 font-medium font-mono">
@@ -687,7 +687,7 @@ export function ActualTab({ agentRecord, plan, cycle, onNavigateToSimulator, onN
             <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-4.5 shadow-xs flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-[11px] uppercase tracking-wider font-extrabold text-slate-900 dark:text-white font-mono flex items-center gap-1">
+                  <span className="text-[11px] uppercase tracking-wider font-bold text-slate-900 dark:text-white flex items-center gap-1">
                     <Award className="w-3.5 h-3.5 text-emerald-500" />
                     4. Quality Score
                   </span>
@@ -774,7 +774,7 @@ export function ActualTab({ agentRecord, plan, cycle, onNavigateToSimulator, onN
             <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-4.5 shadow-xs flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-[11px] uppercase tracking-wider font-extrabold text-slate-900 dark:text-white font-mono flex items-center gap-1">
+                  <span className="text-[11px] uppercase tracking-wider font-bold text-slate-900 dark:text-white flex items-center gap-1">
                     <PhoneCall className="w-3.5 h-3.5 text-indigo-500" />
                     5. Connects
                   </span>
@@ -862,7 +862,7 @@ export function ActualTab({ agentRecord, plan, cycle, onNavigateToSimulator, onN
             <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-4.5 shadow-xs flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-[11px] uppercase tracking-wider font-extrabold text-slate-900 dark:text-white font-mono flex items-center gap-1">
+                  <span className="text-[11px] uppercase tracking-wider font-bold text-slate-900 dark:text-white flex items-center gap-1">
                     <Clock className="w-3.5 h-3.5 text-amber-500" />
                     6. Talk Time
                   </span>
@@ -949,7 +949,7 @@ export function ActualTab({ agentRecord, plan, cycle, onNavigateToSimulator, onN
             <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-4.5 shadow-xs flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-[11px] uppercase tracking-wider font-extrabold text-slate-900 dark:text-white font-mono flex items-center gap-1">
+                  <span className="text-[11px] uppercase tracking-wider font-bold text-slate-900 dark:text-white flex items-center gap-1">
                     <Store className="w-3.5 h-3.5 text-blue-500" />
                     7. Store Visits
                   </span>
@@ -1037,7 +1037,7 @@ export function ActualTab({ agentRecord, plan, cycle, onNavigateToSimulator, onN
       <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-6 shadow-xs">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h4 className="text-xs uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 font-mono">
+            <h4 className="text-xs uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400">
               9. Daily Coaching Checklist & Action Plan
             </h4>
             <p className="text-[11px] text-slate-400 dark:text-slate-500">Click any coaching recommendation to mark as actioned today</p>
@@ -1123,7 +1123,7 @@ export function ActualTab({ agentRecord, plan, cycle, onNavigateToSimulator, onN
       {/* 10. Daily Trend Chart */}
       <div className="bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-6 shadow-xs">
         <div className="flex flex-wrap items-center justify-between mb-4 gap-2">
-          <span className="text-xs uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 font-mono">
+          <span className="text-xs uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400">
             10. Daily Revenue Trend
           </span>
           <div className="flex flex-wrap items-center gap-3">

@@ -34,7 +34,7 @@ export function Tile({ label, value, sub, red }: { label: string; value: string;
 export function TileGroup({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section>
-      <h3 className="text-[11px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 font-mono mb-2">{title}</h3>
+      <h3 className="text-[11px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-2">{title}</h3>
       <div className={TILE_GRID}>{children}</div>
     </section>
   );

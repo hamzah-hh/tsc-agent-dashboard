@@ -209,7 +209,7 @@ export function TeamRevenueTab({ getIdToken, agentLocation, agentType }: TeamRev
           {/* 4 Summary Metric Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-white dark:bg-panel border border-slate-200 dark:border-line rounded-2xl p-5 shadow-xs">
-              <span className="text-[11px] font-mono uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block">
+              <span className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block">
                 Total Team Revenue
               </span>
               <div className="text-2xl font-black text-slate-900 dark:text-fg font-mono mt-1">
@@ -219,7 +219,7 @@ export function TeamRevenueTab({ getIdToken, agentLocation, agentType }: TeamRev
             </div>
 
             <div className="bg-white dark:bg-panel border border-slate-200 dark:border-line rounded-2xl p-5 shadow-xs">
-              <span className="text-[11px] font-mono uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block">
+              <span className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block">
                 Total Orders Closed
               </span>
               <div className="text-2xl font-black text-slate-900 dark:text-fg font-mono mt-1">
@@ -229,7 +229,7 @@ export function TeamRevenueTab({ getIdToken, agentLocation, agentType }: TeamRev
             </div>
 
             <div className="bg-white dark:bg-panel border border-slate-200 dark:border-line rounded-2xl p-5 shadow-xs">
-              <span className="text-[11px] font-mono uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block">
+              <span className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block">
                 Average Order Value (AOV)
               </span>
               <div className="text-2xl font-black text-slate-900 dark:text-fg font-mono mt-1">
@@ -239,7 +239,7 @@ export function TeamRevenueTab({ getIdToken, agentLocation, agentType }: TeamRev
             </div>
 
             <div className="bg-white dark:bg-panel border border-slate-200 dark:border-line rounded-2xl p-5 shadow-xs">
-              <span className="text-[11px] font-mono uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block">
+              <span className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block">
                 Active Days Logged
               </span>
               <div className="text-2xl font-black text-slate-900 dark:text-fg font-mono mt-1">
@@ -402,7 +402,7 @@ export function TeamRevenueTab({ getIdToken, agentLocation, agentType }: TeamRev
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-slate-50 dark:bg-raised border-b border-slate-200 dark:border-line text-[11px] font-mono uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
+                  <tr className="bg-slate-50 dark:bg-raised border-b border-slate-200 dark:border-line text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
                     <SortTh sort={sort} k="date" className="py-3 px-4">Date</SortTh>
                     <SortTh sort={sort} k="day" className="py-3 px-3 text-center">Day</SortTh>
                     <SortTh sort={sort} k="shopify" right className="py-3 px-3 text-right">Shopify (Ord · Rev)</SortTh>

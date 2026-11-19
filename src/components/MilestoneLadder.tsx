@@ -77,7 +77,7 @@ export const MilestoneLadder: React.FC<MilestoneLadderProps> = ({
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
               <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500" />
             </span>
-            <span className="text-xs uppercase tracking-widest font-black text-amber-400 font-mono flex items-center gap-1.5">
+            <span className="text-xs uppercase tracking-wider font-bold text-amber-400 flex items-center gap-1.5">
               <Flame className="w-4 h-4 text-amber-400" />
               Incentive Class Progression Highway
             </span>
@@ -181,7 +181,7 @@ export const MilestoneLadder: React.FC<MilestoneLadderProps> = ({
                     <CheckCircle2 className="w-3 h-3" /> UNLOCKED
                   </span>
                 ) : (
-                  <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                     LOCKED
                   </span>
                 )}
