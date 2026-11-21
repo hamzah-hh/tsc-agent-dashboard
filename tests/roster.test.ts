@@ -579,6 +579,26 @@ export async function runRosterTests() {
     r = await call('POST', '/api/push/subscribe', { token: tok(L.tlA), body: { subscription: tlSub } });
     r = await call('POST', '/api/push/unsubscribe', { token: tok(asAgent(6)), body: { endpoint: tlSub.endpoint } });
     check('nobody can remove someone else device', (await subs()).length === 1);
+
+    // Super Admin test panel
+    r = await call('GET', '/api/admin/push/status', { token: tok(L.tlA) });
+    check('the test panel is Super Admin only (403)', r.status === 403, msg(r));
+    r = await call('POST', '/api/admin/push/test', { token: tok(L.manager), body: {} });
+    check('a manager cannot send test notifications (403)', r.status === 403, msg(r));
+    r = await call('POST', '/api/admin/push/test', { token: tok(L.admin), body: {} });
+    check('with no device registered the Super Admin sees 0 devices', r.status === 200 && r.json.reached === 0 && r.json.devices.length === 0, r.text);
+    const adSub = { endpoint: 'https://push.example/admin-device', keys: { p256dh: 'p256dh-ad', auth: 'auth-ad' } };
+    await call('POST', '/api/push/subscribe', { token: tok(L.admin), body: { subscription: adSub } });
+    r = await call('GET', '/api/admin/push/status', { token: tok(L.admin) });
+    check('status lists the admin device', r.status === 200 && r.json.configured === true && r.json.devices.length === 1, r.text);
+    pushed.length = 0;
+    r = await call('POST', '/api/admin/push/test', { token: tok(L.admin), body: { title: 'Hello', body: 'World' } });
+    check('the test goes to the admin device only, with the typed title', r.status === 200 && r.json.reached === 1 && pushed.length === 1 && pushed[0].endpoint === adSub.endpoint && pushed[0].title === 'Hello', r.text);
+    failWith = 500;
+    r = await call('POST', '/api/admin/push/test', { token: tok(L.admin), body: {} });
+    failWith = null;
+    check('a failed send is reported, not hidden', r.status === 200 && r.json.reached === 0 && r.json.devices[0].ok === false && /500/.test(r.json.devices[0].error), r.text);
+    await call('POST', '/api/push/unsubscribe', { token: tok(L.admin), body: { endpoint: adSub.endpoint } });
     setPushSenderForTests(null);
     delete process.env.VAPID_PUBLIC_KEY;
     delete process.env.VAPID_PRIVATE_KEY;

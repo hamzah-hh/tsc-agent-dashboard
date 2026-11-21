@@ -4769,11 +4769,11 @@ var realSender = async (target, payload) => {
   await webpush.sendNotification({ endpoint: target.endpoint, keys: { p256dh: target.p256dh, auth: target.auth } }, JSON.stringify(payload), { TTL: 6 * 3600, urgency: "high" });
 };
 var send = (target, payload) => (senderOverride ?? realSender)(target, payload);
-async function sendTo(db, sub, payload) {
+async function sendToDetailed(db, sub, payload) {
   try {
     await send(sub, payload);
     await db.query(`UPDATE push_subscription SET failed_count = 0 WHERE id = $1::bigint AND failed_count <> 0`, [sub.id]);
-    return true;
+    return { ok: true };
   } catch (err) {
     const status = Number(err?.statusCode ?? err?.status);
     if (status === 404 || status === 410) {
@@ -4782,9 +4782,10 @@ async function sendTo(db, sub, payload) {
       await db.query(`UPDATE push_subscription SET failed_count = failed_count + 1 WHERE id = $1::bigint`, [sub.id]);
       await db.query(`DELETE FROM push_subscription WHERE id = $1::bigint AND failed_count >= 8`, [sub.id]);
     }
-    return false;
+    return { ok: false, error: `${status || "error"}${err?.body ? ": " + String(err.body).slice(0, 120) : err?.message ? ": " + String(err.message).slice(0, 120) : ""}` };
   }
 }
+var sendTo = async (db, sub, payload) => (await sendToDetailed(db, sub, payload)).ok;
 async function dispatchPendingPushes(db, budgetMs = 4e3) {
   if (!pushConfigured() && !senderOverride) return 0;
   const work = async () => {
@@ -4825,12 +4826,23 @@ async function dispatchPendingPushes(db, budgetMs = 4e3) {
   }
 }
 async function sendTestPush(db, loginEmail) {
+  return (await sendPushToLogin(db, loginEmail, { title: "Notifications are on", body: "You will get roster updates here.", kind: "test", url: "/" })).reached;
+}
+async function listDevices(db, loginEmail) {
+  const rows = await db.query(
+    `SELECT id::int AS id, user_agent, created_at, last_seen_at, failed_count FROM push_subscription WHERE login_email = $1::text ORDER BY last_seen_at DESC`,
+    [loginEmail]
+  );
+  return rows.map((r) => ({ id: Number(r.id), userAgent: String(r.user_agent || ""), createdAt: String(r.created_at), lastSeenAt: String(r.last_seen_at), failedCount: Number(r.failed_count || 0) }));
+}
+async function sendPushToLogin(db, loginEmail, payload) {
   const subs = await db.query(`SELECT id::int AS id, endpoint, p256dh, auth FROM push_subscription WHERE login_email = $1::text`, [loginEmail]);
-  let n = 0;
+  const devices = [];
   for (const s of subs) {
-    if (await sendTo(db, s, { title: "Notifications are on", body: "You will get roster updates here.", kind: "test", url: "/" })) n++;
+    const r = await sendToDetailed(db, s, payload);
+    devices.push({ id: Number(s.id), ...r });
   }
-  return n;
+  return { reached: devices.filter((d) => d.ok).length, devices };
 }
 
 // server-roster.ts
@@ -6038,6 +6050,28 @@ function registerRosterRoutes(api, ctx) {
       const db = needDb();
       if (!pushConfigured()) throw new RosterError(503, "PUSH_OFF", "Notifications are not set up on the server yet.");
       return res.json({ ok: true, reached: await sendTestPush(db, norm2(actor.login)) });
+    })
+  );
+  api.get(
+    "/api/admin/push/status",
+    route(async (req, res) => {
+      const actor = await resolveActor(req);
+      if (actor.role !== "superAdmin") throw new RosterError(403, "FORBIDDEN", "Super Admin only.");
+      const db = needDb();
+      return res.json({ configured: pushConfigured(), devices: await listDevices(db, norm2(actor.login)) });
+    })
+  );
+  api.post(
+    "/api/admin/push/test",
+    route(async (req, res) => {
+      const actor = await resolveActor(req);
+      if (actor.role !== "superAdmin") throw new RosterError(403, "FORBIDDEN", "Super Admin only.");
+      const db = needDb();
+      if (!pushConfigured()) throw new RosterError(503, "PUSH_OFF", "Notifications are not set up on the server yet. Add the VAPID keys in Vercel and redeploy.");
+      const title = String(req.body?.title || "").trim().slice(0, 80) || "Test notification";
+      const body = String(req.body?.body || "").trim().slice(0, 200) || "This is a test from the Super Admin panel.";
+      const out = await sendPushToLogin(db, norm2(actor.login), { title, body, kind: "test", url: "/" });
+      return res.json({ ok: true, ...out });
     })
   );
   api.post(

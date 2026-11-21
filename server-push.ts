@@ -40,12 +40,12 @@ const realSender: PushSender = async (target, payload) => {
 };
 const send = (target: PushTarget, payload: PushPayload) => (senderOverride ?? realSender)(target, payload);
 
-/** Sends to one device; a device that is gone (404/410) or keeps failing is removed. Returns true when delivered. */
-async function sendTo(db: Queryable, sub: PushTarget & { id: number }, payload: PushPayload): Promise<boolean> {
+/** Sends to one device; a device that is gone (404/410) or keeps failing is removed. */
+async function sendToDetailed(db: Queryable, sub: PushTarget & { id: number }, payload: PushPayload): Promise<{ ok: boolean; error?: string }> {
   try {
     await send(sub, payload);
     await db.query(`UPDATE push_subscription SET failed_count = 0 WHERE id = $1::bigint AND failed_count <> 0`, [sub.id]);
-    return true;
+    return { ok: true };
   } catch (err: any) {
     const status = Number(err?.statusCode ?? err?.status);
     if (status === 404 || status === 410) {
@@ -54,9 +54,10 @@ async function sendTo(db: Queryable, sub: PushTarget & { id: number }, payload: 
       await db.query(`UPDATE push_subscription SET failed_count = failed_count + 1 WHERE id = $1::bigint`, [sub.id]);
       await db.query(`DELETE FROM push_subscription WHERE id = $1::bigint AND failed_count >= 8`, [sub.id]);
     }
-    return false;
+    return { ok: false, error: `${status || 'error'}${err?.body ? ': ' + String(err.body).slice(0, 120) : err?.message ? ': ' + String(err.message).slice(0, 120) : ''}` };
   }
 }
+const sendTo = async (db: Queryable, sub: PushTarget & { id: number }, payload: PushPayload): Promise<boolean> => (await sendToDetailed(db, sub, payload)).ok;
 
 /** Pushes the notifications written in the last hour that nobody has pushed yet. Never throws. */
 export async function dispatchPendingPushes(db: Queryable, budgetMs = 4000): Promise<number> {
@@ -105,10 +106,37 @@ export async function dispatchPendingPushes(db: Queryable, budgetMs = 4000): Pro
 
 /** A test push to one person's own devices. Returns how many were reached. */
 export async function sendTestPush(db: Queryable, loginEmail: string): Promise<number> {
+  return (await sendPushToLogin(db, loginEmail, { title: 'Notifications are on', body: 'You will get roster updates here.', kind: 'test', url: '/' })).reached;
+}
+
+export interface DeviceInfo {
+  id: number;
+  userAgent: string;
+  createdAt: string;
+  lastSeenAt: string;
+  failedCount: number;
+}
+
+/** The devices a person has turned notifications on for. */
+export async function listDevices(db: Queryable, loginEmail: string): Promise<DeviceInfo[]> {
+  const rows = await db.query(
+    `SELECT id::int AS id, user_agent, created_at, last_seen_at, failed_count FROM push_subscription WHERE login_email = $1::text ORDER BY last_seen_at DESC`,
+    [loginEmail]
+  );
+  return rows.map((r) => ({ id: Number(r.id), userAgent: String(r.user_agent || ''), createdAt: String(r.created_at), lastSeenAt: String(r.last_seen_at), failedCount: Number(r.failed_count || 0) }));
+}
+
+/** Sends any message to every device one person has registered, saying what happened to each. */
+export async function sendPushToLogin(
+  db: Queryable,
+  loginEmail: string,
+  payload: PushPayload
+): Promise<{ reached: number; devices: { id: number; ok: boolean; error?: string }[] }> {
   const subs = await db.query(`SELECT id::int AS id, endpoint, p256dh, auth FROM push_subscription WHERE login_email = $1::text`, [loginEmail]);
-  let n = 0;
+  const devices: { id: number; ok: boolean; error?: string }[] = [];
   for (const s of subs) {
-    if (await sendTo(db, s as any, { title: 'Notifications are on', body: 'You will get roster updates here.', kind: 'test', url: '/' })) n++;
+    const r = await sendToDetailed(db, s as any, payload);
+    devices.push({ id: Number(s.id), ...r });
   }
-  return n;
+  return { reached: devices.filter((d) => d.ok).length, devices };
 }

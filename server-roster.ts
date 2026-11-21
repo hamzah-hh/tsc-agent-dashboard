@@ -49,7 +49,7 @@ import {
   weekStart,
 } from './src/shared/roster';
 
-import { dispatchPendingPushes, pushConfigured, pushPublicKey, sendTestPush } from './server-push';
+import { dispatchPendingPushes, listDevices, pushConfigured, pushPublicKey, sendPushToLogin, sendTestPush } from './server-push';
 
 // ------------------------------------------------------------------ context from server-routes.ts
 
@@ -1430,6 +1430,31 @@ export function registerRosterRoutes(api: Express, ctx: RosterContext): void {
       const db = needDb();
       if (!pushConfigured()) throw new RosterError(503, 'PUSH_OFF', 'Notifications are not set up on the server yet.');
       return res.json({ ok: true, reached: await sendTestPush(db, norm(actor.login)) });
+    })
+  );
+
+  // Super Admin: see the devices registered on this account and send any message to them
+  api.get(
+    '/api/admin/push/status',
+    route(async (req, res) => {
+      const actor = (await resolveActor(req)) as Actor;
+      if (actor.role !== 'superAdmin') throw new RosterError(403, 'FORBIDDEN', 'Super Admin only.');
+      const db = needDb();
+      return res.json({ configured: pushConfigured(), devices: await listDevices(db, norm(actor.login)) });
+    })
+  );
+
+  api.post(
+    '/api/admin/push/test',
+    route(async (req, res) => {
+      const actor = (await resolveActor(req)) as Actor;
+      if (actor.role !== 'superAdmin') throw new RosterError(403, 'FORBIDDEN', 'Super Admin only.');
+      const db = needDb();
+      if (!pushConfigured()) throw new RosterError(503, 'PUSH_OFF', 'Notifications are not set up on the server yet. Add the VAPID keys in Vercel and redeploy.');
+      const title = String(req.body?.title || '').trim().slice(0, 80) || 'Test notification';
+      const body = String(req.body?.body || '').trim().slice(0, 200) || 'This is a test from the Super Admin panel.';
+      const out = await sendPushToLogin(db, norm(actor.login), { title, body, kind: 'test', url: '/' });
+      return res.json({ ok: true, ...out });
     })
   );
 

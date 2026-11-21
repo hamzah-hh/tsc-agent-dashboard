@@ -45,6 +45,7 @@ import {
 } from '../shared/sheets-service';
 import { LoginTrackerSettings } from './LoginTrackerSettings';
 import { RosterSettings } from './RosterSettings';
+import { PushTestSettings } from './PushTestSettings';
 
 const istDay = (iso: string) => new Date(new Date(iso).getTime() + 5.5 * 3600e3).toISOString().slice(0, 10);
 
@@ -2188,6 +2189,9 @@ function getRowsAsObjects(sheet) {
       {appConfig && (
         <RosterSettings appConfig={appConfig} getIdToken={getIdToken} onConfigUpdated={(newConfig) => setAppConfig(newConfig)} />
       )}
+
+      {/* Test notifications to this account's own devices */}
+      <PushTestSettings getIdToken={getIdToken} />
 
       {/* Section 7: Sync Logs */}
       <div className="bg-white dark:bg-panel border border-slate-200 dark:border-line rounded-xl overflow-hidden shadow-sm">
