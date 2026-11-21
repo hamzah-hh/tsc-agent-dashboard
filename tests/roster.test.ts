@@ -6,6 +6,7 @@ import { createApiApp } from '../server-routes';
 import { setRawSheetFetchForTests } from '../server-raw-data';
 import { setRosterDbForTests } from '../server-roster-db';
 import { setRosterClockForTests } from '../server-roster';
+import { setPushSenderForTests } from '../server-push';
 import { check, section } from './harness';
 import { createTestRosterDb } from './pglite';
 
@@ -527,6 +528,60 @@ export async function runRosterTests() {
     check('after that it can no longer be accepted (EXPIRED)', r.status === 409 && r.json.code === 'EXPIRED', msg(r));
     r = await call('GET', '/api/roster/swaps', { token: tok(loginC(5)) });
     check('it shows as expired, and both agents were told', r.json.items.find((x: any) => x.id === sw7.id)?.status === 'expired' && (await inboxOf(loginC(3))).some((n) => n.kind === 'swap_expired'));
+
+    // ------------------------------------------------------------------
+    section('rostering: web push');
+    process.env.VAPID_PUBLIC_KEY = 'test-public-key';
+    process.env.VAPID_PRIVATE_KEY = 'test-private-key';
+    const pushed: Array<{ endpoint: string; title: string }> = [];
+    let failWith: number | null = null;
+    setPushSenderForTests(async (t, p) => {
+      if (failWith) throw Object.assign(new Error('gone'), { statusCode: failWith });
+      pushed.push({ endpoint: t.endpoint, title: p.title });
+    });
+    const tlSub = { endpoint: 'https://push.example/tl-device', keys: { p256dh: 'p256dh-tl', auth: 'auth-tl' } };
+    const agSub = { endpoint: 'https://push.example/agent-device', keys: { p256dh: 'p256dh-ag', auth: 'auth-ag' } };
+    const subs = async () => (await rosterDb.query('SELECT endpoint FROM push_subscription ORDER BY endpoint')).map((x) => String(x.endpoint));
+
+    r = await call('GET', '/api/push/config');
+    check('push config needs a sign-in (401)', r.status === 401);
+    r = await call('GET', '/api/push/config', { token: tok(asAgent(6)) });
+    check('push config gives the public key when set up', r.status === 200 && r.json.enabled === true && r.json.publicKey === 'test-public-key', r.text);
+    r = await call('POST', '/api/push/subscribe', { token: tok(L.tlC), body: { subscription: { endpoint: 'http://insecure', keys: { p256dh: 'a', auth: 'b' } } } });
+    check('a subscription must be an https address (400)', r.status === 400 && r.json.code === 'BAD_SUBSCRIPTION', msg(r));
+    r = await call('POST', '/api/push/subscribe', { token: tok(L.tlA), body: { subscription: tlSub } });
+    check('the TL turns notifications on', r.status === 200 && r.json.receives === true, r.text);
+    r = await call('POST', '/api/push/subscribe', { token: tok(asAgent(6)), body: { subscription: agSub } });
+    check('so does an agent', r.status === 200 && r.json.receives === true, r.text);
+    check('both devices are stored once', (await subs()).length === 2);
+    await call('POST', '/api/push/subscribe', { token: tok(L.tlA), body: { subscription: tlSub } });
+    check('subscribing again does not add a second row', (await subs()).length === 2);
+
+    r = await call('POST', '/api/push/test', { token: tok(L.tlA), body: {} });
+    check('a test push reaches the caller own device only', r.status === 200 && r.json.reached === 1 && pushed.length === 1 && pushed[0].endpoint === tlSub.endpoint, r.text);
+
+    pushed.length = 0;
+    r = await book(asAgent(6), '2026-12-05');
+    check('an agent asks for a Saturday off (waits for the TL)', r.status === 200 || r.status === 201, msg(r));
+    check('the TL device gets a push, the agent does not', pushed.length >= 1 && pushed.every((p) => p.endpoint === tlSub.endpoint), JSON.stringify(pushed));
+    const before = pushed.length;
+    await call('GET', '/api/roster/me', { token: tok(asAgent(6)) });
+    await call('POST', '/api/notifications/read', { token: tok(L.tlA), body: {} });
+    check('the same notification is never pushed twice', pushed.length === before, JSON.stringify(pushed));
+
+    failWith = 410;
+    const b2 = await book(asAgent(6), '2026-12-12');
+    check('the second request is accepted', b2.status === 200 || b2.status === 201, msg(b2));
+    failWith = null;
+    check('a device that is gone (410) is removed', !(await subs()).includes(tlSub.endpoint));
+    r = await call('POST', '/api/push/unsubscribe', { token: tok(asAgent(6)), body: { endpoint: agSub.endpoint } });
+    check('turning notifications off removes the device', r.status === 200 && (await subs()).length === 0, r.text);
+    r = await call('POST', '/api/push/subscribe', { token: tok(L.tlA), body: { subscription: tlSub } });
+    r = await call('POST', '/api/push/unsubscribe', { token: tok(asAgent(6)), body: { endpoint: tlSub.endpoint } });
+    check('nobody can remove someone else device', (await subs()).length === 1);
+    setPushSenderForTests(null);
+    delete process.env.VAPID_PUBLIC_KEY;
+    delete process.env.VAPID_PRIVATE_KEY;
 
     // ------------------------------------------------------------------
     section('rostering: a new incentive cycle starts (carry-over of the previous cycle for 14 days)');

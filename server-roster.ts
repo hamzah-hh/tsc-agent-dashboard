@@ -49,6 +49,8 @@ import {
   weekStart,
 } from './src/shared/roster';
 
+import { dispatchPendingPushes, pushConfigured, pushPublicKey, sendTestPush } from './server-push';
+
 // ------------------------------------------------------------------ context from server-routes.ts
 
 type Role = 'superAdmin' | 'manager' | 'tl' | 'agent';
@@ -122,6 +124,16 @@ export function registerRosterRoutes(api: Express, ctx: RosterContext): void {
   const route =
     (fn: (req: Request, res: Response) => Promise<unknown>): RequestHandler =>
     (req: Request, res: Response, next: NextFunction) => {
+      // A change may have written inbox messages: push them to people's devices before answering
+      // (a serverless function can be frozen once the answer is sent)
+      if (req.method !== 'GET' && pushConfigured()) {
+        const answer = res.json.bind(res);
+        res.json = ((body?: any) => {
+          const db = getRosterDb();
+          (db ? dispatchPendingPushes(db) : Promise.resolve(0)).finally(() => answer(body));
+          return res;
+        }) as typeof res.json;
+      }
       fn(req, res).catch((err: any) => {
         if (err instanceof RosterError) return res.status(err.status).json({ error: err.message, code: err.code });
         if (err && typeof err.status === 'number' && err.message) return res.status(err.status).json({ error: err.message });
@@ -1365,6 +1377,59 @@ export function registerRosterRoutes(api: Express, ctx: RosterContext): void {
       );
       const items: RosterNotificationDTO[] = rows.map((r) => ({ id: Number(r.id), kind: r.kind, title: r.title, body: r.body, entryId: r.entry_id, createdAt: r.created_at, read: Boolean(r.read) }));
       return res.json({ items, unread: await unreadCount(db, actor.inboxKeys) });
+    })
+  );
+
+  // ------------------------------------------------------------------ web push
+
+  api.get(
+    '/api/push/config',
+    route(async (req, res) => {
+      await ctx.authenticate(req);
+      return res.json({ enabled: pushConfigured(), publicKey: pushConfigured() ? pushPublicKey() : '' });
+    })
+  );
+
+  api.post(
+    '/api/push/subscribe',
+    route(async (req, res) => {
+      const actor = (await resolveActor(req)) as Actor;
+      const db = needDb();
+      const sub = req.body?.subscription;
+      const endpoint = String(sub?.endpoint || '');
+      const p256dh = String(sub?.keys?.p256dh || '');
+      const auth = String(sub?.keys?.auth || '');
+      if (!endpoint.startsWith('https://') || endpoint.length > 2048 || !p256dh || !auth || p256dh.length > 200 || auth.length > 100) {
+        throw new RosterError(400, 'BAD_SUBSCRIPTION', 'That notification address is not valid.');
+      }
+      await db.query(
+        `INSERT INTO push_subscription (endpoint, p256dh, auth, login_email, keys, user_agent)
+         VALUES ($1::text, $2::text, $3::text, $4::text, $5::text[], $6::text)
+         ON CONFLICT (endpoint) DO UPDATE SET p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth, login_email = EXCLUDED.login_email,
+           keys = EXCLUDED.keys, user_agent = EXCLUDED.user_agent, failed_count = 0, last_seen_at = now()`,
+        [endpoint, p256dh, auth, norm(actor.login), actor.inboxKeys, String(req.headers['user-agent'] || '').slice(0, 200)]
+      );
+      return res.json({ ok: true, receives: actor.inboxKeys.length > 0 });
+    })
+  );
+
+  api.post(
+    '/api/push/unsubscribe',
+    route(async (req, res) => {
+      const actor = (await resolveActor(req)) as Actor;
+      const db = needDb();
+      await db.query(`DELETE FROM push_subscription WHERE endpoint = $1::text AND login_email = $2::text`, [String(req.body?.endpoint || ''), norm(actor.login)]);
+      return res.json({ ok: true });
+    })
+  );
+
+  api.post(
+    '/api/push/test',
+    route(async (req, res) => {
+      const actor = (await resolveActor(req)) as Actor;
+      const db = needDb();
+      if (!pushConfigured()) throw new RosterError(503, 'PUSH_OFF', 'Notifications are not set up on the server yet.');
+      return res.json({ ok: true, reached: await sendTestPush(db, norm(actor.login)) });
     })
   );
 

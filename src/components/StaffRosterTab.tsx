@@ -1,3 +1,4 @@
+import { PushToggle } from './PushToggle';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Download, History, Users } from 'lucide-react';
 import { RosterDayInfo, RosterEntryDTO, RosterSwapDTO, RosterTeamResponse, dayLabel, defaultWeekdayLimit, isWeekend } from '../shared/roster';
@@ -157,6 +158,8 @@ export function StaffRosterTab({ getIdToken, userRole, onChanged }: StaffRosterT
 
   return (
     <div className="space-y-6">
+      <PushToggle getIdToken={getIdToken} />
+
       <div className={`${CARD} !p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3`}>
         <div>
           <h2 className="text-base font-bold text-slate-950 dark:text-fg flex items-center gap-2">

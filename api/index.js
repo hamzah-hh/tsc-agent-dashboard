@@ -4754,6 +4754,85 @@ function swapExpiryMs(dayA, dayB, nowMs) {
   return Math.min(cutoffMs(dayA, "agent"), cutoffMs(dayB, "agent"), nowMs + ROSTER_SWAP.expiryHours * 36e5);
 }
 
+// server-push.ts
+import * as webpush from "web-push";
+var senderOverride = null;
+var pushPublicKey = () => (process.env.VAPID_PUBLIC_KEY || "").trim();
+var pushConfigured = () => Boolean(pushPublicKey() && (process.env.VAPID_PRIVATE_KEY || "").trim());
+var vapidSet = "";
+var realSender = async (target, payload) => {
+  const key = pushPublicKey() + "|" + (process.env.VAPID_PRIVATE_KEY || "").trim();
+  if (vapidSet !== key) {
+    webpush.setVapidDetails((process.env.VAPID_SUBJECT || "https://tsc-agent-dashboard.vercel.app").trim(), pushPublicKey(), (process.env.VAPID_PRIVATE_KEY || "").trim());
+    vapidSet = key;
+  }
+  await webpush.sendNotification({ endpoint: target.endpoint, keys: { p256dh: target.p256dh, auth: target.auth } }, JSON.stringify(payload), { TTL: 6 * 3600, urgency: "high" });
+};
+var send = (target, payload) => (senderOverride ?? realSender)(target, payload);
+async function sendTo(db, sub, payload) {
+  try {
+    await send(sub, payload);
+    await db.query(`UPDATE push_subscription SET failed_count = 0 WHERE id = $1::bigint AND failed_count <> 0`, [sub.id]);
+    return true;
+  } catch (err) {
+    const status = Number(err?.statusCode ?? err?.status);
+    if (status === 404 || status === 410) {
+      await db.query(`DELETE FROM push_subscription WHERE id = $1::bigint`, [sub.id]);
+    } else {
+      await db.query(`UPDATE push_subscription SET failed_count = failed_count + 1 WHERE id = $1::bigint`, [sub.id]);
+      await db.query(`DELETE FROM push_subscription WHERE id = $1::bigint AND failed_count >= 8`, [sub.id]);
+    }
+    return false;
+  }
+}
+async function dispatchPendingPushes(db, budgetMs = 4e3) {
+  if (!pushConfigured() && !senderOverride) return 0;
+  const work = async () => {
+    const claimed = await db.query(
+      `UPDATE app_notification SET pushed_at = now()
+       WHERE pushed_at IS NULL AND created_at > now() - interval '1 hour'
+       RETURNING id, recipient, kind, title, body`
+    );
+    if (!claimed.length) return 0;
+    const recipients = [...new Set(claimed.map((n) => String(n.recipient)))];
+    const subs = await db.query(
+      `SELECT id::int AS id, endpoint, p256dh, auth, keys FROM push_subscription WHERE keys && $1::text[]`,
+      [recipients]
+    );
+    let sent = 0;
+    const jobs = [];
+    for (const sub of subs) {
+      const mine = claimed.filter((n) => sub.keys.includes(String(n.recipient))).sort((a, b) => Number(a.id) - Number(b.id));
+      if (!mine.length) continue;
+      const payloads = mine.length <= 3 ? mine.map((n) => ({ title: String(n.title), body: String(n.body || ""), kind: String(n.kind), url: "/" })) : [{ title: `${mine.length} new roster updates`, body: "Open the Roster tab to see them.", kind: "summary", url: "/" }];
+      jobs.push(
+        (async () => {
+          for (const p of payloads) {
+            if (await sendTo(db, sub, p)) sent++;
+            else break;
+          }
+        })()
+      );
+    }
+    await Promise.all(jobs);
+    return sent;
+  };
+  try {
+    return await Promise.race([work(), new Promise((resolve) => setTimeout(() => resolve(0), budgetMs))]);
+  } catch (err) {
+    console.error("[push] dispatch failed:", err?.message || err);
+    return 0;
+  }
+}
+async function sendTestPush(db, loginEmail) {
+  const subs = await db.query(`SELECT id::int AS id, endpoint, p256dh, auth FROM push_subscription WHERE login_email = $1::text`, [loginEmail]);
+  let n = 0;
+  for (const s of subs) {
+    if (await sendTo(db, s, { title: "Notifications are on", body: "You will get roster updates here.", kind: "test", url: "/" })) n++;
+  }
+  return n;
+}
+
 // server-roster.ts
 var RosterError = class extends Error {
   constructor(status, code, message) {
@@ -4782,6 +4861,14 @@ function pilotAllows(appConfig, actor) {
 }
 function registerRosterRoutes(api, ctx) {
   const route = (fn) => (req, res, next) => {
+    if (req.method !== "GET" && pushConfigured()) {
+      const answer = res.json.bind(res);
+      res.json = ((body) => {
+        const db = getRosterDb();
+        (db ? dispatchPendingPushes(db) : Promise.resolve(0)).finally(() => answer(body));
+        return res;
+      });
+    }
     fn(req, res).catch((err) => {
       if (err instanceof RosterError) return res.status(err.status).json({ error: err.message, code: err.code });
       if (err && typeof err.status === "number" && err.message) return res.status(err.status).json({ error: err.message });
@@ -5904,6 +5991,53 @@ function registerRosterRoutes(api, ctx) {
       );
       const items = rows.map((r) => ({ id: Number(r.id), kind: r.kind, title: r.title, body: r.body, entryId: r.entry_id, createdAt: r.created_at, read: Boolean(r.read) }));
       return res.json({ items, unread: await unreadCount(db, actor.inboxKeys) });
+    })
+  );
+  api.get(
+    "/api/push/config",
+    route(async (req, res) => {
+      await ctx.authenticate(req);
+      return res.json({ enabled: pushConfigured(), publicKey: pushConfigured() ? pushPublicKey() : "" });
+    })
+  );
+  api.post(
+    "/api/push/subscribe",
+    route(async (req, res) => {
+      const actor = await resolveActor(req);
+      const db = needDb();
+      const sub = req.body?.subscription;
+      const endpoint = String(sub?.endpoint || "");
+      const p256dh = String(sub?.keys?.p256dh || "");
+      const auth = String(sub?.keys?.auth || "");
+      if (!endpoint.startsWith("https://") || endpoint.length > 2048 || !p256dh || !auth || p256dh.length > 200 || auth.length > 100) {
+        throw new RosterError(400, "BAD_SUBSCRIPTION", "That notification address is not valid.");
+      }
+      await db.query(
+        `INSERT INTO push_subscription (endpoint, p256dh, auth, login_email, keys, user_agent)
+         VALUES ($1::text, $2::text, $3::text, $4::text, $5::text[], $6::text)
+         ON CONFLICT (endpoint) DO UPDATE SET p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth, login_email = EXCLUDED.login_email,
+           keys = EXCLUDED.keys, user_agent = EXCLUDED.user_agent, failed_count = 0, last_seen_at = now()`,
+        [endpoint, p256dh, auth, norm2(actor.login), actor.inboxKeys, String(req.headers["user-agent"] || "").slice(0, 200)]
+      );
+      return res.json({ ok: true, receives: actor.inboxKeys.length > 0 });
+    })
+  );
+  api.post(
+    "/api/push/unsubscribe",
+    route(async (req, res) => {
+      const actor = await resolveActor(req);
+      const db = needDb();
+      await db.query(`DELETE FROM push_subscription WHERE endpoint = $1::text AND login_email = $2::text`, [String(req.body?.endpoint || ""), norm2(actor.login)]);
+      return res.json({ ok: true });
+    })
+  );
+  api.post(
+    "/api/push/test",
+    route(async (req, res) => {
+      const actor = await resolveActor(req);
+      const db = needDb();
+      if (!pushConfigured()) throw new RosterError(503, "PUSH_OFF", "Notifications are not set up on the server yet.");
+      return res.json({ ok: true, reached: await sendTestPush(db, norm2(actor.login)) });
     })
   );
   api.post(

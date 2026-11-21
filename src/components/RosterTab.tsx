@@ -1,3 +1,4 @@
+import { PushToggle } from './PushToggle';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Bell, CalendarDays, Lock } from 'lucide-react';
 import {
@@ -181,6 +182,8 @@ export function RosterTab({ getIdToken, agentEmail, readOnly = false, onChanged 
           </span>
         )}
       </div>
+
+      {!readOnly && <PushToggle getIdToken={getIdToken} />}
 
       {message && (
         <div role="status" className={`rounded-lg px-4 py-2.5 text-xs font-semibold ${message.ok ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300'}`}>
