@@ -104,6 +104,22 @@ export async function dispatchPendingPushes(db: Queryable, budgetMs = 4000): Pro
   }
 }
 
+/** One message to every registered device (everyone who has turned notifications on). Never throws. */
+export async function broadcastPush(db: Queryable, payload: PushPayload, budgetMs = 4000): Promise<number> {
+  if (!pushConfigured() && !senderOverride) return 0;
+  const work = async () => {
+    const subs = await db.query(`SELECT id::int AS id, endpoint, p256dh, auth FROM push_subscription`);
+    const results = await Promise.all(subs.map((s) => sendTo(db, s as any, payload)));
+    return results.filter(Boolean).length;
+  };
+  try {
+    return await Promise.race([work(), new Promise<number>((resolve) => setTimeout(() => resolve(0), budgetMs))]);
+  } catch (err: any) {
+    console.error('[push] broadcast failed:', err?.message || err);
+    return 0;
+  }
+}
+
 /** A test push to one person's own devices. Returns how many were reached. */
 export async function sendTestPush(db: Queryable, loginEmail: string): Promise<number> {
   return (await sendPushToLogin(db, loginEmail, { title: 'Notifications are on', body: 'You will get roster updates here.', kind: 'test', url: '/' })).reached;

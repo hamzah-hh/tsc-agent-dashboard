@@ -9,6 +9,9 @@ import { generateDummyData } from '../src/shared/dummyData';
 import { AgentRecord, LeaderboardRecord } from '../src/shared/types';
 import { check, section } from './harness';
 import { startFakeFirestore } from './fake-firestore';
+import { setRosterDbForTests } from '../server-roster-db';
+import { setPushSenderForTests } from '../server-push';
+import { createTestRosterDb } from './pglite';
 
 // A token is just "test:<email>:<name>[:unverified]". The fake verifier stands in for Firebase Admin.
 const tok = (email: string, name = email.split('@')[0]) => `test:${email}:${name}`;
@@ -694,6 +697,34 @@ export async function runApiTests() {
     r = await call('GET', '/api/admin/login-tracker/activity', { token: tok(L.admin) });
     const riyaAct = r.json.activities.find((a: any) => a.agentEmail === 'riya@co.in');
     check('admin: riya login time is reset to 0', riyaAct !== undefined && riyaAct.amSecondsUsed === 0 && riyaAct.pmSecondsUsed === 0);
+    // ------------------------------------------------------------------
+    section('push: everyone with notifications on is told after each successful sync');
+    {
+      const pdb = await createTestRosterDb();
+      setRosterDbForTests(pdb);
+      const sent: Array<{ endpoint: string; title: string; body: string; kind: string }> = [];
+      setPushSenderForTests(async (t, p) => {
+        sent.push({ endpoint: t.endpoint, title: p.title, body: p.body, kind: p.kind });
+      });
+      for (const [i, who] of ['a@x.in', 'b@x.in', 'c@x.in'].entries()) {
+        await pdb.query(`INSERT INTO push_subscription (endpoint, p256dh, auth, login_email, keys) VALUES ($1::text, 'p', 'a', $2::text, $3::text[])`, [`https://push.example/d${i}`, who, i === 2 ? [] : [who]]);
+      }
+      r = await call('POST', '/api/sync', { headers: { 'X-Sync-Key': process.env.SYNC_KEY! }, body: { mainRows: realRows(), qualityRows: realQuality } });
+      check('a successful sync pushes "data updated" to every device, whatever the role', r.json.result === 'ok' && sent.length === 3 && sent.every((x) => x.kind === 'data-updated' && x.title === 'Dashboard updated'), JSON.stringify(sent));
+      check('the message says how far the data goes', /latest data is in/i.test(sent[0]?.body || ''), sent[0]?.body);
+      sent.length = 0;
+      r = await call('POST', '/api/sync', { headers: { 'X-Sync-Key': 'wrong' }, body: { mainRows: realRows() } });
+      check('a refused sync sends nothing', r.status === 401 && sent.length === 0);
+      r = await call('POST', '/api/sync', { headers: { 'X-Sync-Key': process.env.SYNC_KEY! }, body: { mainRows: [], qualityRows: [] } });
+      check('a sync that fails sends nothing', r.json.result !== 'ok' && sent.length === 0, r.text.slice(0, 200));
+      r = await call('POST', '/api/import', { token: tok(L.admin), body: { mainRows: realRows(), qualityRows: realQuality, source: 'test' } });
+      check('a test import sends nothing', sent.length === 0, r.text.slice(0, 200));
+      r = await call('POST', '/api/import', { token: tok(L.admin), body: { mainRows: realRows(), qualityRows: realQuality } });
+      check('a Super Admin import is a real sync: everyone is told', r.json.result === 'ok' && sent.length === 3, r.text.slice(0, 200));
+      setPushSenderForTests(null);
+      setRosterDbForTests(null);
+    }
+
     // ------------------------------------------------------------------
     section('raw data sync: failures are reported, not shown as zero orders');
     await adminDb.collection('cycles').doc(CYCLE).collection('data').doc('rawRecords').delete();

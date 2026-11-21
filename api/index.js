@@ -4825,6 +4825,20 @@ async function dispatchPendingPushes(db, budgetMs = 4e3) {
     return 0;
   }
 }
+async function broadcastPush(db, payload, budgetMs = 4e3) {
+  if (!pushConfigured() && !senderOverride) return 0;
+  const work = async () => {
+    const subs = await db.query(`SELECT id::int AS id, endpoint, p256dh, auth FROM push_subscription`);
+    const results = await Promise.all(subs.map((s) => sendTo(db, s, payload)));
+    return results.filter(Boolean).length;
+  };
+  try {
+    return await Promise.race([work(), new Promise((resolve) => setTimeout(() => resolve(0), budgetMs))]);
+  } catch (err) {
+    console.error("[push] broadcast failed:", err?.message || err);
+    return 0;
+  }
+}
 async function sendTestPush(db, loginEmail) {
   return (await sendPushToLogin(db, loginEmail, { title: "Notifications are on", body: "You will get roster updates here.", kind: "test", url: "/" })).reached;
 }
@@ -6501,6 +6515,19 @@ function createApiApp(options = {}) {
       return res.status(status).json(body);
     })
   );
+  const announceDataUpdated = async (result, source) => {
+    if (source === "test" || result?.result !== "ok") return;
+    try {
+      const db = getRosterDb();
+      if (!db) return;
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(result?.lastDataDate || ""));
+      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      const upTo = m ? `${Number(m[3])} ${months[Number(m[2]) - 1]}` : String(result?.lastDataDate || "");
+      await broadcastPush(db, { title: "Dashboard updated", body: upTo ? `The latest data is in, up to ${upTo}.` : "The latest data is in.", kind: "data-updated", url: "/" });
+    } catch (err) {
+      console.error("[push] data-updated notice failed:", err?.message || err);
+    }
+  };
   api.post(
     ["/api/sync", "/api/sync/apps-script"],
     route(async (req, res) => {
@@ -6518,7 +6545,9 @@ function createApiApp(options = {}) {
           throw new HttpError(401, "Unauthorized: Invalid or missing X-Sync-Key header.");
         }
         if (isCleanSheetPayload(req.body)) {
-          return res.json(await processCleanSheetImport("apps-script", req.body));
+          const done = await processCleanSheetImport("apps-script", req.body);
+          await announceDataUpdated(done, "apps-script");
+          return res.json(done);
         }
         if (req.body?.format === "clean-v1" && req.body?.partial === true) {
           return res.json(await processReportTabs(req.body));
@@ -6531,6 +6560,7 @@ function createApiApp(options = {}) {
           rawVisitRows: rawVisitRows || [],
           rawRevenueTabRows: rawRevenueTabRows || []
         });
+        await announceDataUpdated(result, "apps-script");
         return res.json(result);
       } catch (err) {
         if (err instanceof HttpError) throw err;
@@ -6695,7 +6725,9 @@ function createApiApp(options = {}) {
       const { mainRows, qualityRows, revenueRows, leaderMappingRows, excludedAgentsRows, rawVisitRows, rawRevenueTabRows, source } = req.body || {};
       const importSource = source === "test" ? "test" : "import";
       if (isCleanSheetPayload(req.body)) {
-        return res.json(await processCleanSheetImport(importSource, req.body));
+        const done = await processCleanSheetImport(importSource, req.body);
+        await announceDataUpdated(done, importSource);
+        return res.json(done);
       }
       const result = await processImport(importSource, mainRows || [], qualityRows || [], {
         revenueRows: revenueRows || [],
@@ -6704,6 +6736,7 @@ function createApiApp(options = {}) {
         rawVisitRows: rawVisitRows || [],
         rawRevenueTabRows: rawRevenueTabRows || []
       });
+      await announceDataUpdated(result, importSource);
       return res.json(result);
     })
   );

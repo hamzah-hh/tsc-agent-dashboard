@@ -23,6 +23,8 @@ import { generateAiText, isAiConfigured, runBatchAiGeneration } from './server-a
 import { normalizeEmail } from './src/shared/incentive';
 import { isAgentOfTl } from './server-scope';
 import { registerRosterRoutes } from './server-roster';
+import { getRosterDb } from './server-roster-db';
+import { broadcastPush } from './server-push';
 import { buildTeamRevenue } from './src/shared/revenue';
 import { overviewTier } from './src/shared/businessOverview';
 import { loadBusinessOverview } from './server-business-overview';
@@ -318,6 +320,25 @@ export function createApiApp(options: ApiOptions = {}): express.Express {
 
   // ------------------------------------------------------------------ sync (Apps Script)
 
+  /**
+   * After a successful data sync, tell everyone who has notifications on that the latest data is in.
+   * Not sent for failed syncs, test imports or report-tab-only syncs. The same tag replaces an older
+   * "data updated" notice on the device, so a phone never piles them up. Never fails the sync.
+   */
+  const announceDataUpdated = async (result: { result?: string; lastDataDate?: string } | null | undefined, source: string): Promise<void> => {
+    if (source === 'test' || result?.result !== 'ok') return;
+    try {
+      const db = getRosterDb();
+      if (!db) return;
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(result?.lastDataDate || ''));
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const upTo = m ? `${Number(m[3])} ${months[Number(m[2]) - 1]}` : String(result?.lastDataDate || '');
+      await broadcastPush(db, { title: 'Dashboard updated', body: upTo ? `The latest data is in, up to ${upTo}.` : 'The latest data is in.', kind: 'data-updated', url: '/' });
+    } catch (err: any) {
+      console.error('[push] data-updated notice failed:', err?.message || err);
+    }
+  };
+
   api.post(
     ['/api/sync', '/api/sync/apps-script'],
     route(async (req, res) => {
@@ -338,7 +359,9 @@ export function createApiApp(options: ApiOptions = {}): express.Express {
           throw new HttpError(401, 'Unauthorized: Invalid or missing X-Sync-Key header.');
         }
         if (isCleanSheetPayload(req.body)) {
-          return res.json(await processCleanSheetImport('apps-script', req.body));
+          const done = await processCleanSheetImport('apps-script', req.body);
+          await announceDataUpdated(done, 'apps-script');
+          return res.json(done);
         }
         // "Sync selected sheets" without the incentive data: only the report tabs that were sent are saved
         if (req.body?.format === 'clean-v1' && req.body?.partial === true) {
@@ -352,6 +375,7 @@ export function createApiApp(options: ApiOptions = {}): express.Express {
           rawVisitRows: rawVisitRows || [],
           rawRevenueTabRows: rawRevenueTabRows || [],
         });
+        await announceDataUpdated(result, 'apps-script');
         return res.json(result);
       } catch (err: any) {
         if (err instanceof HttpError) throw err;
@@ -556,7 +580,9 @@ export function createApiApp(options: ApiOptions = {}): express.Express {
       const { mainRows, qualityRows, revenueRows, leaderMappingRows, excludedAgentsRows, rawVisitRows, rawRevenueTabRows, source } = req.body || {};
       const importSource = source === 'test' ? 'test' : 'import';
       if (isCleanSheetPayload(req.body)) {
-        return res.json(await processCleanSheetImport(importSource, req.body));
+        const done = await processCleanSheetImport(importSource, req.body);
+        await announceDataUpdated(done, importSource);
+        return res.json(done);
       }
       const result = await processImport(importSource, mainRows || [], qualityRows || [], {
         revenueRows: revenueRows || [],
@@ -565,6 +591,7 @@ export function createApiApp(options: ApiOptions = {}): express.Express {
         rawVisitRows: rawVisitRows || [],
         rawRevenueTabRows: rawRevenueTabRows || [],
       });
+      await announceDataUpdated(result, importSource);
       return res.json(result);
     })
   );
